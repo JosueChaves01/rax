@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Experiment, ExperimentResult, Hypothesis, ResultOutcome, Task, Uncertainty } from "@/types/domain";
 import {
   createExperimentAction,
@@ -9,6 +9,8 @@ import {
   proposeHypothesisAction,
   recordResultAction,
   reformulateHypothesisAction,
+  suggestExperimentAction,
+  suggestHypothesesAction,
   updateExperimentAction,
 } from "@/app/actions";
 import { EXPERIMENT_STATUS_LABEL, HYPOTHESIS_STATUS_LABEL, OUTCOME_LABEL, UNCERTAINTY_LABEL } from "@/features/labels";
@@ -17,6 +19,7 @@ import { missingForReady } from "@/features/experiments/rules";
 import { Button, Card, Field, Notice, Tag, cx, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
 import { ExperimentWork } from "./experiment-work";
+import type { SuggestedHypothesis } from "@/lib/ai/schema";
 
 type Problem = { id: string; title: string; rank?: number };
 type People = Record<string, { id: string; name: string; role: string }>;
@@ -50,6 +53,11 @@ const EMPTY_H: HForm = { statement: "", segment: "", whyItMatters: "", currentEv
 
 function HypothesisForm({ initial, problems, submitLabel, onSubmit, pending, error }: { initial: HForm; problems: Problem[]; submitLabel: string; onSubmit: (h: HForm) => void; pending: boolean; error: string | null }) {
   const [h, setH] = useState<HForm>(initial);
+
+  useEffect(() => {
+    setH(initial);
+  }, [initial]);
+
   const issues = h.statement ? hypothesisIssues(h) : [];
   const set = (k: keyof HForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setH({ ...h, [k]: e.target.value || (k === "relatedItemId" ? undefined : "") });
   const uid = initial.statement ? "hr" : "hn";
@@ -122,20 +130,155 @@ function HypothesisForm({ initial, problems, submitLabel, onSubmit, pending, err
 
 export function NewHypothesis({ projectId, problems }: { projectId: string; problems: Problem[] }) {
   const [open, setOpen] = useState(false);
-  const { run, pending, error } = useAction();
+  const [suggestions, setSuggestions] = useState<SuggestedHypothesis[]>([]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const top = problems.find((p) => p.rank === 1);
+  const [formInitial, setFormInitial] = useState<HForm>({ ...EMPTY_H, relatedItemId: top?.id });
+  const { run, pending, error } = useAction();
+
+  const handleSuggest = async () => {
+    setIsAiLoading(true);
+    setAiError(null);
+    setAiNotice(null);
+    try {
+      const res = await suggestHypothesesAction(projectId);
+      if (res.ok && res.data) {
+        setSuggestions(res.data.suggestions);
+        setAiNotice(res.data.contextSummary ?? "Sugerencias generadas a partir del diagnóstico y problemas priorizados.");
+      } else if (!res.ok) {
+        setAiError(res.error);
+      }
+    } catch {
+      setAiError("No se pudo conectar con el asistente de IA.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleUseInForm = (s: SuggestedHypothesis) => {
+    setFormInitial({
+      statement: s.statement,
+      segment: s.segment,
+      whyItMatters: s.whyItMatters,
+      currentEvidence: s.currentEvidence,
+      uncertainty: s.uncertainty,
+      costOfBeingWrong: s.costOfBeingWrong,
+      evaluationCriterion: s.evaluationCriterion,
+      relatedItemId: s.relatedItemId ?? top?.id,
+    });
+    setOpen(true);
+  };
+
+  const handleSaveDraftDirectly = (s: SuggestedHypothesis) => {
+    run(
+      () =>
+        proposeHypothesisAction(projectId, {
+          statement: s.statement,
+          segment: s.segment,
+          whyItMatters: s.whyItMatters,
+          currentEvidence: s.currentEvidence,
+          uncertainty: s.uncertainty,
+          costOfBeingWrong: s.costOfBeingWrong,
+          evaluationCriterion: s.evaluationCriterion,
+          relatedItemId: s.relatedItemId ?? top?.id,
+        }),
+      () => {
+        setSuggestions((prev) => prev.filter((item) => item !== s));
+      },
+    );
+  };
+
   return (
     <Card className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="eyebrow">Nueva hipótesis {top && <span className="normal-case tracking-normal text-faint">· problema prioritario: {top.title}</span>}</p>
-        <Button size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          {open ? "Cerrar" : "+ Proponer hipótesis"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            type="button"
+            disabled={isAiLoading || pending}
+            onClick={handleSuggest}
+          >
+            {isAiLoading ? "✨ Analizando..." : "✨ Sugerir con IA"}
+          </Button>
+          <Button size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+            {open ? "Cerrar" : "+ Proponer hipótesis"}
+          </Button>
+        </div>
       </div>
+
+      {aiNotice && <p className="mt-3 text-xs text-[var(--color-ok)] font-medium">✨ {aiNotice}</p>}
+      {aiError && (
+        <div className="mt-3">
+          <Notice tone="error">{aiError}</Notice>
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <div className="mt-4 space-y-3 rounded-xl border border-accent/40 bg-accent/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent flex items-center gap-1.5">
+                <span>✨</span> Hipótesis sugeridas por IA ({suggestions.length})
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                Basadas en el contexto acumulado. Cargalas en el formulario para editarlas o guardalas como borrador directamente.
+              </p>
+            </div>
+            <Button size="sm" variant="ghost" type="button" onClick={() => setSuggestions([])}>
+              Ocultar sugerencias
+            </Button>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {suggestions.map((s, idx) => (
+              <div key={idx} className="flex flex-col justify-between rounded-lg border border-line bg-panel p-3.5 space-y-3">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Tag>{UNCERTAINTY_LABEL[s.uncertainty]}</Tag>
+                    {s.relatedItemId && (
+                      <span className="text-[0.6875rem] text-faint">
+                        Problema: {problems.find((p) => p.id === s.relatedItemId)?.title ?? "Asociado"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-semibold text-sm text-ink leading-snug">{s.statement}</p>
+                  <dl className="grid gap-1.5 text-xs">
+                    <div>
+                      <dt className="text-faint font-semibold uppercase tracking-wider text-[0.625rem]">Segmento:</dt>
+                      <dd className="text-muted">{s.segment}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-faint font-semibold uppercase tracking-wider text-[0.625rem]">Criterio de evaluación:</dt>
+                      <dd className="text-muted">{s.evaluationCriterion}</dd>
+                    </div>
+                    {s.rationale && (
+                      <div className="rounded bg-accent/10 p-2 text-accent text-xs">
+                        💡 <span className="font-medium">Fundamento:</span> {s.rationale}
+                      </div>
+                    )}
+                  </dl>
+                </div>
+                <div className="flex flex-wrap gap-2 border-t border-line/60 pt-2.5">
+                  <Button size="sm" type="button" onClick={() => handleUseInForm(s)}>
+                    Cargar en formulario
+                  </Button>
+                  <Button size="sm" variant="primary" type="button" disabled={pending} onClick={() => handleSaveDraftDirectly(s)}>
+                    Guardar como borrador
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {open && (
         <div className="mt-4">
           <HypothesisForm
-            initial={{ ...EMPTY_H, relatedItemId: top?.id }}
+            initial={formInitial}
             problems={problems}
             submitLabel="Guardar como borrador"
             pending={pending}
@@ -162,11 +305,46 @@ export function HypothesisCard(props: {
 }) {
   const { projectId, hypothesis: h, perms } = props;
   const [mode, setMode] = useState<null | "reformulate" | "experiment">(null);
+  const [isAiExpLoading, setIsAiExpLoading] = useState(false);
+  const [aiExpError, setAiExpError] = useState<string | null>(null);
+  const [expInitial, setExpInitial] = useState<EForm>(EMPTY_E);
   const { run, pending, error } = useAction();
   const go = (to: "submit" | "approve" | "return" | "discard") => run(() => hypothesisTransitionAction(projectId, h.id, to));
   const closed = h.status === "discarded" || h.status === "reformulated";
   const successor = h.supersededBy ? props.all.find((x) => x.id === h.supersededBy) : undefined;
   const canDesign = perms["experiment.design"] && ["approved", "testing", "inconclusive", "supported", "weakened"].includes(h.status);
+
+  const handleSuggestExperiment = async () => {
+    setIsAiExpLoading(true);
+    setAiExpError(null);
+    try {
+      const res = await suggestExperimentAction(projectId, h.id);
+      if (res.ok && res.data) {
+        const s = res.data;
+        setExpInitial({
+          question: s.question,
+          method: s.method,
+          participants: s.participants,
+          activities: s.activities ?? [],
+          resources: s.resources ?? "",
+          budget: s.budget ?? null,
+          durationDays: s.durationDays ?? null,
+          metric: s.metric,
+          successCriterion: s.successCriterion,
+          rejectionCriterion: s.rejectionCriterion,
+          risks: s.risks ?? "",
+          evidencePlan: s.evidencePlan,
+        });
+        setMode("experiment");
+      } else if (!res.ok) {
+        setAiExpError(res.error);
+      }
+    } catch {
+      setAiExpError("No se pudo conectar con el asistente de IA para experimentos.");
+    } finally {
+      setIsAiExpLoading(false);
+    }
+  };
 
   return (
     <Card as="li" className={cx("p-5", closed && "opacity-70")}>
@@ -207,9 +385,20 @@ export function HypothesisCard(props: {
         )}
         {h.status === "pending_approval" && !perms["hypothesis.approve"] && <span className="text-xs text-muted">Esperando la aprobación del mentor asignado.</span>}
         {canDesign && (
-          <Button size="sm" aria-expanded={mode === "experiment"} onClick={() => setMode(mode === "experiment" ? null : "experiment")}>
-            + Diseñar experimento
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              type="button"
+              disabled={isAiExpLoading || pending}
+              onClick={handleSuggestExperiment}
+            >
+              {isAiExpLoading ? "✨ Diseñando..." : "✨ Diseñar experimento con IA"}
+            </Button>
+            <Button size="sm" aria-expanded={mode === "experiment"} onClick={() => { setExpInitial(EMPTY_E); setMode(mode === "experiment" ? null : "experiment"); }}>
+              + Diseñar experimento
+            </Button>
+          </>
         )}
         {["supported", "weakened", "inconclusive"].includes(h.status) && perms["hypothesis.propose"] && (
           <Button size="sm" aria-expanded={mode === "reformulate"} onClick={() => setMode(mode === "reformulate" ? null : "reformulate")}>
@@ -222,6 +411,13 @@ export function HypothesisCard(props: {
           </Button>
         )}
       </div>
+
+      {aiExpError && (
+        <div className="mt-3">
+          <Notice tone="error">{aiExpError}</Notice>
+        </div>
+      )}
+
       {error && (
         <div className="mt-3">
           <Notice tone="error">{error}</Notice>
@@ -235,8 +431,23 @@ export function HypothesisCard(props: {
         </div>
       )}
       {mode === "experiment" && (
-        <div className="mt-4 rounded-xl border border-line p-4">
+        <div className="mt-4 rounded-xl border border-line p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
+              Diseño del experimento (se creará como borrador para que el mentor pueda editarlo y confirmarlo)
+            </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              type="button"
+              disabled={isAiExpLoading || pending}
+              onClick={handleSuggestExperiment}
+            >
+              {isAiExpLoading ? "✨ Analizando..." : "✨ Autocompletar con IA"}
+            </Button>
+          </div>
           <ExperimentForm
+            initial={expInitial}
             submitLabel="Crear experimento en diseño"
             onSubmit={(input, done) => run(() => createExperimentAction(projectId, h.id, input), () => (done(), setMode(null)))}
             pending={pending}
@@ -309,6 +520,12 @@ const EMPTY_E: EForm = { question: "", method: "", participants: "", activities:
 function ExperimentForm({ initial = EMPTY_E, submitLabel, onSubmit, pending, lockedCriteria }: { initial?: EForm; submitLabel: string; onSubmit: (e: EForm, done: () => void) => void; pending: boolean; lockedCriteria?: boolean }) {
   const [f, setF] = useState<EForm>(initial);
   const [acts, setActs] = useState(initial.activities.join("\n"));
+
+  useEffect(() => {
+    setF(initial);
+    setActs(initial.activities.join("\n"));
+  }, [initial]);
+
   const [uid] = useState(() => `ef${Math.random().toString(36).slice(2, 7)}`);
   const t = (k: keyof EForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const num = (k: "budget" | "durationDays") => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value === "" ? null : Number(e.target.value) });

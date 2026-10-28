@@ -1,7 +1,7 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type {
   Comment,
@@ -42,6 +42,8 @@ import {
   setTaskStatus,
   startExperiment,
   submitHypothesis,
+  suggestExperiment,
+  suggestHypotheses,
   updateExperiment,
   type ExperimentInput,
   type HypothesisInput,
@@ -278,6 +280,11 @@ export const completeSecondReviewAction = async (
 
 /* ── Hipótesis y experimentos ── */
 
+export const suggestHypothesesAction = async (projectId: string) =>
+  run(projectId, async (d) => {
+    return suggestHypotheses(d, V.parse(V.Ids, projectId));
+  });
+
 export const proposeHypothesisAction = async (projectId: string, input: HypothesisInput) =>
   run(projectId, async (d) => {
     await proposeHypothesis(d, V.parse(V.Ids, projectId), V.parse(V.HypothesisInput, input));
@@ -292,6 +299,12 @@ export const reformulateHypothesisAction = async (projectId: string, id: string,
   run(projectId, async (d) => {
     await reformulateHypothesis(d, V.parse(V.Ids, id), V.parse(V.HypothesisInput, input));
   });
+
+export const suggestExperimentAction = async (projectId: string, hypothesisId: string) =>
+  run(projectId, async (d) => {
+    return suggestExperiment(d, V.parse(V.Ids, projectId), V.parse(V.Ids, hypothesisId));
+  });
+
 export const createExperimentAction = async (projectId: string, hypothesisId: string, input: ExperimentInput) =>
   run(projectId, async (d) => {
     await createExperiment(d, V.parse(V.Ids, hypothesisId), V.parse(V.ExperimentInput, input));

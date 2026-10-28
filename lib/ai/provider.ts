@@ -1,5 +1,5 @@
 import type { DiagnosisItem, InterviewDimension, Message } from "@/types/domain";
-import type { AiTurn, FirstReviewSuggestion } from "./schema";
+import type { AiTurn, FirstReviewSuggestion, HypothesesSuggestion, SuggestedExperiment } from "./schema";
 
 /**
  * Contexto seleccionado para una invocación. No se envía todo el historial:
@@ -72,12 +72,74 @@ export interface FirstReviewResult {
   usage?: AiUsage;
 }
 
+export interface HypothesisSuggestionContext {
+  projectName: string;
+  projectNature: string;
+  projectSummary: string;
+  founderContext?: {
+    stage?: string;
+    sector?: string;
+    goals?: string[];
+  };
+  prioritizedProblems: Array<{ id: string; title: string; content: string; rank?: number; justification?: string }>;
+  otherProblems: Array<{ id: string; title: string; content: string }>;
+  keyAssumptions: Array<{ id: string; title: string; content: string; uncertainty: string }>;
+  openQuestions: Array<{ id: string; title: string; content: string }>;
+  mentorAgreement?: string;
+  mentorNotes?: string[];
+  existingHypotheses: Array<{ id: string; statement: string; segment: string; status: string }>;
+  experimentLearnings?: Array<{ hypothesisStatement: string; outcome: string; learnings: string }>;
+}
+
+export interface HypothesesSuggestionResult {
+  suggestion: HypothesesSuggestion;
+  provider: "simulated" | "openrouter";
+  usage?: AiUsage;
+}
+
+export interface ExperimentSuggestionContext {
+  projectName: string;
+  projectNature: string;
+  projectSummary: string;
+  hypothesis: {
+    id: string;
+    statement: string;
+    segment: string;
+    whyItMatters: string;
+    currentEvidence: string;
+    evaluationCriterion: string;
+    costOfBeingWrong: string;
+    uncertainty: string;
+    relatedProblemTitle?: string;
+    relatedProblemContent?: string;
+  };
+  founderContext?: {
+    stage?: string;
+    sector?: string;
+    weeklyHours?: string;
+  };
+  previousExperiments?: Array<{
+    question: string;
+    method: string;
+    outcome?: string;
+    learnings?: string;
+  }>;
+}
+
+export interface ExperimentSuggestionResult {
+  suggestion: SuggestedExperiment;
+  provider: "simulated" | "openrouter";
+  usage?: AiUsage;
+}
+
 export interface AiProvider {
   readonly id: "simulated" | "openrouter";
   /** Texto visible que describe el proveedor (la simulación se declara como tal). */
   readonly label: string;
   interpret(ctx: InterviewContext): Promise<AiResult>;
   suggestFirstReview(ctx: FirstReviewContext): Promise<FirstReviewResult>;
+  suggestHypotheses(ctx: HypothesisSuggestionContext): Promise<HypothesesSuggestionResult>;
+  suggestExperiment(ctx: ExperimentSuggestionContext): Promise<ExperimentSuggestionResult>;
 }
 
 export class AiUnavailableError extends Error {

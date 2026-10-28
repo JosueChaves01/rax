@@ -4,6 +4,10 @@ import { assertCriteriaEditable, assertExperimentTransition, assertReady } from 
 import { notFound, validation } from "@/lib/errors";
 import { audit, guard, type ServiceDeps } from "./base";
 import { touch } from "./projects";
+import { isCurrent } from "@/features/diagnosis/rules";
+import { GOAL_LABEL, NATURE_LABEL } from "@/features/labels";
+import { AiUnavailableError, type ExperimentSuggestionContext, type HypothesisSuggestionContext } from "@/lib/ai/provider";
+import type { HypothesesSuggestion, SuggestedExperiment } from "@/lib/ai/schema";
 
 /* ───────────── Hipótesis ───────────── */
 
@@ -79,6 +83,93 @@ export async function reformulateHypothesis(d: ServiceDeps, id: string, input: H
   await d.repo.hypotheses.update(id, { status: "reformulated", supersededBy: fresh.id, updatedAt: d.now() }, latest.version);
   await audit(d, "hypothesis.status_changed", { projectId: old.projectId, targetId: id, meta: { from: old.status, to: "reformulated" } });
   return fresh;
+}
+
+/** Sugerencia de hipótesis basada en el contexto global acumulado del proyecto */
+export async function suggestHypotheses(d: ServiceDeps, projectId: string): Promise<HypothesesSuggestion> {
+  await guard(d, projectId, "hypothesis.propose");
+  const r = d.repo;
+  const where = { projectId };
+  const [project, diagnoses, items, sessions, notes, hypotheses] = await Promise.all([
+    r.projects.get(projectId),
+    r.diagnoses.list(where),
+    r.diagnosisItems.list(where),
+    r.mentorSessions.list(where),
+    r.sessionNotes.list(where),
+    r.hypotheses.list(where),
+  ]);
+  if (!project) throw notFound("El proyecto no existe.");
+  const diagnosis = diagnoses[0];
+  const ownerProfile = await r.profiles.get(project.ownerId);
+
+  const currentItems = items.filter(isCurrent);
+  const prioritizedProblems = currentItems
+    .filter((i) => i.category === "problem" && i.priority && i.reviewStatus !== "rejected")
+    .sort((a, b) => (a.priority?.rank ?? 99) - (b.priority?.rank ?? 99))
+    .map((i) => ({ id: i.id, title: i.title, content: i.content, rank: i.priority?.rank, justification: i.priority?.rationale }));
+
+  const otherProblems = currentItems
+    .filter((i) => i.category === "problem" && !i.priority && i.reviewStatus !== "rejected")
+    .map((i) => ({ id: i.id, title: i.title, content: i.content }));
+
+  const keyAssumptions = currentItems
+    .filter((i) => (i.infoType === "hypothesis" || i.uncertainty === "high" || i.category === "risk") && i.reviewStatus !== "rejected")
+    .map((i) => ({ id: i.id, title: i.title, content: i.content, uncertainty: i.uncertainty }));
+
+  const openQuestions = currentItems
+    .filter((i) => (i.category === "open_question" || i.infoType === "unknown") && i.reviewStatus !== "rejected")
+    .map((i) => ({ id: i.id, title: i.title, content: i.content }));
+
+  const firstSession = sessions.find((s) => s.kind === "first_review" && s.status === "completed");
+  const firstSessionNotes = firstSession ? notes.filter((n) => n.sessionId === firstSession.id) : [];
+  const mentorAgreement = firstSessionNotes.find((n) => n.kind === "agreement")?.body;
+
+  const existingHypotheses = hypotheses.map((h) => ({
+    id: h.id,
+    statement: h.statement,
+    segment: h.segment,
+    status: h.status,
+  }));
+
+  const founderOnboarding = ownerProfile?.onboarding?.intent === "entrepreneur" ? ownerProfile.onboarding : undefined;
+
+  const ctx: HypothesisSuggestionContext = {
+    projectName: project.name,
+    projectNature: NATURE_LABEL[project.nature] ?? project.nature,
+    projectSummary: diagnosis?.summary ?? project.description,
+    founderContext: founderOnboarding
+      ? {
+          stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
+          sector: founderOnboarding.sector,
+          goals: founderOnboarding.goals.map((g) => GOAL_LABEL[g] ?? g),
+        }
+      : undefined,
+    prioritizedProblems,
+    otherProblems,
+    keyAssumptions,
+    openQuestions,
+    mentorAgreement,
+    mentorNotes: firstSessionNotes.map((n) => `[${n.kind}] ${n.body}`),
+    existingHypotheses,
+  };
+
+  try {
+    const result = await d.ai.suggestHypotheses(ctx);
+    await audit(d, "ai.invoked", {
+      projectId,
+      meta: { task: "hypothesis_suggestion", provider: result.provider },
+    });
+    return result.suggestion;
+  } catch (e) {
+    await audit(d, "ai.failed", {
+      projectId,
+      meta: {
+        task: "hypothesis_suggestion",
+        reason: e instanceof AiUnavailableError ? e.reason : "unknown",
+      },
+    });
+    throw e;
+  }
 }
 
 /* ───────────── Experimentos ───────────── */
@@ -203,6 +294,71 @@ export async function recordResult(
   }
   await audit(d, "experiment.result_recorded", { projectId: e.projectId, targetId: experimentId, meta: { outcome: input.outcome } });
   return result;
+}
+
+/** Sugiere el diseño de un experimento con IA para una hipótesis testeable */
+export async function suggestExperiment(d: ServiceDeps, projectId: string, hypothesisId: string): Promise<SuggestedExperiment> {
+  await guard(d, projectId, "experiment.design");
+  const h = await d.repo.hypotheses.get(hypothesisId);
+  if (!h || h.projectId !== projectId) throw notFound("La hipótesis no pertenece a este proyecto.");
+  if (!["approved", "testing", "inconclusive", "supported", "weakened"].includes(h.status)) {
+    throw validation("Diseñá experimentos sobre hipótesis aprobadas por el mentor.");
+  }
+
+  const [project, items, experiments] = await Promise.all([
+    d.repo.projects.get(projectId),
+    h.relatedItemId ? d.repo.diagnosisItems.get(h.relatedItemId) : null,
+    d.repo.experiments.list({ projectId, hypothesisId }),
+  ]);
+
+  const ownerProfile = project ? await d.repo.profiles.get(project.ownerId) : null;
+  const founderOnboarding = ownerProfile?.onboarding?.intent === "entrepreneur" ? ownerProfile.onboarding : undefined;
+
+  const ctx: ExperimentSuggestionContext = {
+    projectName: project?.name ?? "",
+    projectNature: project ? (NATURE_LABEL[project.nature] ?? project.nature) : "",
+    projectSummary: project?.description ?? "",
+    hypothesis: {
+      id: h.id,
+      statement: h.statement,
+      segment: h.segment,
+      whyItMatters: h.whyItMatters,
+      currentEvidence: h.currentEvidence,
+      evaluationCriterion: h.evaluationCriterion,
+      costOfBeingWrong: h.costOfBeingWrong,
+      uncertainty: h.uncertainty,
+      relatedProblemTitle: items?.title,
+      relatedProblemContent: items?.content,
+    },
+    founderContext: founderOnboarding
+      ? {
+          stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
+          sector: founderOnboarding.sector,
+          weeklyHours: founderOnboarding.weeklyHours,
+        }
+      : undefined,
+    previousExperiments: experiments.map((e) => ({ question: e.question, method: e.method })),
+  };
+
+  try {
+    const result = await d.ai.suggestExperiment(ctx);
+    await audit(d, "ai.invoked", {
+      projectId,
+      targetId: hypothesisId,
+      meta: { task: "experiment_suggestion", provider: result.provider },
+    });
+    return result.suggestion;
+  } catch (e) {
+    await audit(d, "ai.failed", {
+      projectId,
+      targetId: hypothesisId,
+      meta: {
+        task: "experiment_suggestion",
+        reason: e instanceof AiUnavailableError ? e.reason : "unknown",
+      },
+    });
+    throw e;
+  }
 }
 
 /* ───────────── Evidencia ───────────── */

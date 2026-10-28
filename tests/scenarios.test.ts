@@ -270,6 +270,12 @@ describe("Escenario G · proveedor de IA no disponible", () => {
       interpret: async () => {
         throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
       },
+      suggestHypotheses: async () => {
+        throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
+      },
+      suggestExperiment: async () => {
+        throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
+      },
     };
     const { as, repo } = await world(failing);
     const d = as("ent1");

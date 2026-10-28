@@ -1,7 +1,28 @@
 import "server-only";
-import { AiTurnSchema, FirstReviewSuggestionSchema } from "./schema";
-import { AiUnavailableError, type AiProvider, type AiResult, type FirstReviewContext, type FirstReviewResult, type InterviewContext } from "./provider";
-import { FIRST_REVIEW_SYSTEM_PROMPT, renderContext, renderFirstReviewContext, SYSTEM_PROMPT } from "./prompt";
+import { AiTurnSchema, FirstReviewSuggestionSchema, HypothesesSuggestionSchema, SuggestedExperimentSchema } from "./schema";
+import {
+  AiUnavailableError,
+  type AiProvider,
+  type AiResult,
+  type ExperimentSuggestionContext,
+  type ExperimentSuggestionResult,
+  type FirstReviewContext,
+  type FirstReviewResult,
+  type HypothesisSuggestionContext,
+  type HypothesesSuggestionResult,
+  type InterviewContext,
+} from "./provider";
+import {
+  EXPERIMENT_SUGGESTION_SYSTEM_PROMPT,
+  FIRST_REVIEW_SYSTEM_PROMPT,
+  HYPOTHESIS_SUGGESTION_SYSTEM_PROMPT,
+  renderContext,
+  renderExperimentSuggestionContext,
+  renderFirstReviewContext,
+  renderHypothesisSuggestionContext,
+  SYSTEM_PROMPT,
+} from "./prompt";
+import { hypothesisIssues } from "@/features/hypotheses/rules";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 /** Modelo gratuito por defecto; se cambia con OPENROUTER_MODEL sin tocar código. */
@@ -90,6 +111,119 @@ export class OpenRouterProvider implements AiProvider {
     }
     const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
     throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  async suggestHypotheses(ctx: HypothesisSuggestionContext): Promise<HypothesesSuggestionResult> {
+    const base: ChatMessage[] = [
+      { role: "system", content: HYPOTHESIS_SUGGESTION_SYSTEM_PROMPT },
+      { role: "user", content: renderHypothesisSuggestionContext(ctx) },
+    ];
+    let last: ModelFailure | null = null;
+    for (const model of this.models) {
+      try {
+        return await this.suggestHypothesesWith(model, base);
+      } catch (e) {
+        if (!(e instanceof ModelFailure)) throw e;
+        last = e;
+        if (!e.retryOther) break;
+      }
+    }
+    const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
+    throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  async suggestExperiment(ctx: ExperimentSuggestionContext): Promise<ExperimentSuggestionResult> {
+    const base: ChatMessage[] = [
+      { role: "system", content: EXPERIMENT_SUGGESTION_SYSTEM_PROMPT },
+      { role: "user", content: renderExperimentSuggestionContext(ctx) },
+    ];
+    let last: ModelFailure | null = null;
+    for (const model of this.models) {
+      try {
+        return await this.suggestExperimentWith(model, base);
+      } catch (e) {
+        if (!(e instanceof ModelFailure)) throw e;
+        last = e;
+        if (!e.retryOther) break;
+      }
+    }
+    const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
+    throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  private async suggestHypothesesWith(model: string, base: ChatMessage[]): Promise<HypothesesSuggestionResult> {
+    const messages = [...base];
+    const opts = { mergeSystem: false, jsonMode: true };
+    let lastProblem = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const data = await this.callAdapting(model, messages, opts);
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const parsed = safeJson(raw);
+      const result = HypothesesSuggestionSchema.safeParse(parsed);
+      if (result.success) {
+        // Validación adicional con hypothesisIssues para garantizar calidad metodológica
+        const validSuggestions = result.data.suggestions.filter((s) => hypothesisIssues(s).length === 0);
+        if (validSuggestions.length > 0) {
+          return {
+            suggestion: {
+              ...result.data,
+              suggestions: validSuggestions,
+            },
+            provider: "openrouter",
+            usage: {
+              model: data.model ?? model,
+              inputTokens: data.usage?.prompt_tokens ?? 0,
+              outputTokens: data.usage?.completion_tokens ?? 0,
+            },
+          };
+        }
+        lastProblem = "Las hipótesis devueltas contienen fórmulas vagas o no cumplen los criterios de contrastabilidad.";
+      } else {
+        lastProblem = result.error.issues
+          .slice(0, 5)
+          .map((i) => `${i.path.join(".")}: ${i.message}`)
+          .join("; ");
+      }
+      messages.push(
+        { role: "assistant", content: raw.slice(0, 4000) },
+        { role: "user", content: `Tu respuesta no cumple los requisitos (${lastProblem}). Recordá: afirmaciones observables de más de 25 caracteres sin fórmulas vagas. Respondé solo con el JSON corregido.` },
+      );
+    }
+    console.error(`[openrouter] ${model}: salida inválida tras ${MAX_ATTEMPTS} intentos: ${lastProblem}`);
+    throw new ModelFailure("invalid_output", `El modelo devolvió una respuesta inválida: ${lastProblem}`, true);
+  }
+
+  private async suggestExperimentWith(model: string, base: ChatMessage[]): Promise<ExperimentSuggestionResult> {
+    const messages = [...base];
+    const opts = { mergeSystem: false, jsonMode: true };
+    let lastProblem = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const data = await this.callAdapting(model, messages, opts);
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const parsed = safeJson(raw);
+      const result = SuggestedExperimentSchema.safeParse(parsed);
+      if (result.success) {
+        return {
+          suggestion: result.data,
+          provider: "openrouter",
+          usage: {
+            model: data.model ?? model,
+            inputTokens: data.usage?.prompt_tokens ?? 0,
+            outputTokens: data.usage?.completion_tokens ?? 0,
+          },
+        };
+      }
+      lastProblem = result.error.issues
+        .slice(0, 5)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      messages.push(
+        { role: "assistant", content: raw.slice(0, 4000) },
+        { role: "user", content: `Tu respuesta no cumple el esquema (${lastProblem}). Respondé solo con el JSON corregido.` },
+      );
+    }
+    console.error(`[openrouter] ${model}: salida inválida tras ${MAX_ATTEMPTS} intentos: ${lastProblem}`);
+    throw new ModelFailure("invalid_output", `El modelo devolvió una respuesta inválida: ${lastProblem}`, true);
   }
 
   private async suggestFirstReviewWith(model: string, base: ChatMessage[]): Promise<FirstReviewResult> {

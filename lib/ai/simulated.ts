@@ -7,8 +7,24 @@ import {
   splitSentences,
 } from "@/features/conversation/interview";
 import type { InterviewDimension } from "@/types/domain";
-import type { AiProvider, AiResult, FirstReviewContext, FirstReviewResult, InterviewContext } from "./provider";
-import type { AiProposal, AiTurn, SuggestedNote } from "./schema";
+import type {
+  AiProvider,
+  AiResult,
+  ExperimentSuggestionContext,
+  ExperimentSuggestionResult,
+  FirstReviewContext,
+  FirstReviewResult,
+  HypothesisSuggestionContext,
+  HypothesesSuggestionResult,
+  InterviewContext,
+} from "./provider";
+import type {
+  AiProposal,
+  AiTurn,
+  SuggestedExperiment,
+  SuggestedHypothesis,
+  SuggestedNote,
+} from "./schema";
 
 const MAX_QUOTE = 280;
 
@@ -59,32 +75,23 @@ export class SimulatedProvider implements AiProvider {
           uncertainty: run.unknown ? "unknown" : kind.uncertainty,
           sourceMessageId: ctx.latestMessage.id,
           quote,
-          reason: run.unknown
-            ? "La persona indicó que todavía no lo sabe; queda registrado como pregunta abierta."
-            : `Respuesta a la pregunta sobre ${DIMENSION_TITLE[asked].toLowerCase()}.`,
+          reason: `Registrado a partir de la respuesta sobre ${DIMENSION_TITLE[asked].toLowerCase()}.`,
         });
       }
     }
 
-    const covered = new Set<InterviewDimension>(ctx.coveredDimensions);
-    if (asked) covered.add(asked);
-    const next = ctx.pendingDimensions.find((d) => !covered.has(d)) ?? null;
+    const next = ctx.pendingDimensions[0];
+    const summaryDraft = ctx.summaryReady && !ctx.projectSummary ? draftSummary(ctx, proposals) : null;
 
-    const enough = covered.has("problem") && covered.has("people") && covered.size >= 4;
-    const summaryDraft = enough && !ctx.projectSummary ? draftSummary(ctx, proposals) : null;
-
-    let reply: string;
-    if (signal.changeOfMind) {
-      reply = "Entendido, actualizo el enfoque sin borrar lo anterior: queda en el historial. ";
-    } else if (isUnknownSentence(text)) {
-      reply = "No pasa nada por no saberlo todavía: lo dejo registrado como pregunta abierta. ";
-    } else {
-      reply = "";
+    let reply = "";
+    if (signal.kind === "unknown") {
+      reply = "Entendido, lo dejamos registrado como incógnita a explorar. ";
+    } else if (signal.kind === "assumption") {
+      reply = "Queda anotado como un supuesto a comprobar. ";
     }
+
     if (summaryDraft) {
-      reply +=
-        "Ya tengo una primera lectura y te preparé un resumen en el panel de diagnóstico: ¿esto representa lo que querés hacer o hay algo que debemos corregir?";
-      if (next) reply += ` Mientras lo revisás, sigamos: ${DIMENSION_QUESTION[next]}`;
+      reply += "Con lo que me contaste armé un borrador inicial del diagnóstico. ¿Esto representa lo que querés hacer o hay algo que debemos corregir?";
     } else if (next) {
       reply += DIMENSION_QUESTION[next];
     } else {
@@ -150,6 +157,94 @@ export class SimulatedProvider implements AiProvider {
         agreement: agreement.slice(0, 2000),
         suggestedNotes,
       },
+      provider: "simulated",
+    };
+  }
+
+  async suggestHypotheses(ctx: HypothesisSuggestionContext): Promise<HypothesesSuggestionResult> {
+    const targetProblem = ctx.prioritizedProblems[0] ?? ctx.otherProblems[0];
+    const targetTitle = targetProblem?.title ?? ctx.projectName;
+    const segment = ctx.founderContext?.sector
+      ? `Clientes y usuarios potenciales en el sector ${ctx.founderContext.sector}`
+      : "Personas afectadas directamente por el problema identificado";
+
+    const suggestions: SuggestedHypothesis[] = [
+      {
+        statement: `Al menos 6 de cada 15 personas del segmento objetivo contactadas confirmarán que experimentan "${targetTitle}" semanalmente y agendarán una sesión de demostración.`,
+        segment,
+        relatedItemId: targetProblem?.id ?? null,
+        whyItMatters: "Permite comprobar empíricamente la frecuencia y severidad del problema antes de construir una solución.",
+        currentEvidence: "Declaraciones y observaciones registradas durante la etapa inicial de diagnóstico.",
+        uncertainty: "high",
+        costOfBeingWrong: "Invertir tiempo y recursos en resolver una situación que los clientes no perciben como prioritaria.",
+        evaluationCriterion: "Alcanzar al menos un 40% de conversiones a entrevistas o pilotos demostrativos.",
+        rationale: "Basada en el problema priorizado para validar la demanda real antes de desarrollar producto.",
+      },
+      {
+        statement: `Al menos 4 de 12 clientes potenciales que sufren "${targetTitle}" manifestarán disposición explícita a pagar un abono periódico por resolverlo.`,
+        segment: "Decisores económicos y responsables de presupuesto",
+        relatedItemId: targetProblem?.id ?? null,
+        whyItMatters: "Verifica si existe viabilidad comercial y disposición de pago real frente al costo de oportunidad.",
+        currentEvidence: "No hay evidencia transaccional previa ni acuerdos de pago registrados.",
+        uncertainty: "high",
+        costOfBeingWrong: "Diseñar una solución que resulta atractiva pero por la cual nadie tiene presupuesto para pagar.",
+        evaluationCriterion: "Obtener al menos un 30% de cartas de intención o pre-reservas comerciales.",
+        rationale: "Permite contrastar la hipótesis de modelo comercial temprano.",
+      },
+    ];
+
+    if (ctx.keyAssumptions[0]) {
+      const asm = ctx.keyAssumptions[0];
+      suggestions.push({
+        statement: `Al menos el 50% de los usuarios evaluados considerará que "${asm.title}" es un factor indispensable para sustituir su alternativa actual.`,
+        segment,
+        relatedItemId: asm.id,
+        whyItMatters: "Comprueba el supuesto más crítico e incierto registrado en el diagnóstico.",
+        currentEvidence: "Mencionado como supuesto por el equipo emprendedor sin validación directa.",
+        uncertainty: "high",
+        costOfBeingWrong: "Construir la propuesta de valor sobre una premisa no contrastada.",
+        evaluationCriterion: "Mayoría simple de respuestas afirmativas en pruebas de concepto estructuradas.",
+        rationale: "Aborda el supuesto con mayor incertidumbre detectado en la investigación.",
+      });
+    }
+
+    return {
+      suggestion: {
+        suggestions,
+        contextSummary: `Sugerencias estructuradas sobre el problema "${targetTitle}".`,
+      },
+      provider: "simulated",
+    };
+  }
+
+  async suggestExperiment(ctx: ExperimentSuggestionContext): Promise<ExperimentSuggestionResult> {
+    const hyp = ctx.hypothesis;
+    const segment = hyp.segment || "Usuarios potenciales del segmento objetivo";
+
+    const suggestion: SuggestedExperiment = {
+      question: `¿Al menos 5 de cada 15 participantes del segmento «${segment}» confirmarán la necesidad y agendarán una prueba piloto?`,
+      method: "Entrevistas estructuradas de descubrimiento con presentación de prototipo interactivo o flujo visual.",
+      participants: `15 participantes calificados del segmento: ${segment}.`,
+      activities: [
+        "Reclutar a 15 candidatos activos y representativos del segmento definido.",
+        "Conducir entrevistas individuales semiestructuradas de 30 minutos explorando sus hábitos actuales.",
+        "Presentar el concepto clave o flujo prototipado sin inducir respuestas positivas.",
+        "Solicitar un compromiso observable al finalizar la sesión (carta de intención o agendamiento de piloto).",
+        "Documentar aprendizajes y tabular resultados objetivos.",
+      ],
+      resources: "Guía de entrevista estandarizada, prototipo visual interactivo, planilla de registro de respuestas.",
+      budget: 0,
+      durationDays: 10,
+      metric: "Cantidad y porcentaje de participantes que realizan una acción concreta de compromiso formal.",
+      successCriterion: "Al menos 5 de los 15 participantes (≥33%) asumen un compromiso verificable.",
+      rejectionCriterion: "Menos de 2 participantes (<15%) demuestran interés en coordinar un siguiente paso.",
+      risks: "Sesgo de cortesía por parte de los entrevistados; dificultad para coordinar agendas dentro de la ventana de tiempo.",
+      evidencePlan: "Grabaciones o notas de las entrevistas, formulario de registro y confirmaciones por correo o mensaje.",
+      rationale: "Diseño pragmático, rápido y sin costo monetario para validar la hipótesis antes de programar o invertir capital.",
+    };
+
+    return {
+      suggestion,
       provider: "simulated",
     };
   }
