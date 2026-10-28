@@ -7,7 +7,8 @@ import { applyHumanChange } from "@/features/diagnosis/rules";
 import { parse, ItemChange } from "@/lib/validation/inputs";
 import { PHASE_ORDER } from "@/features/labels";
 import { SECTIONS, STAGES, phasesDone, sectionOfSlug, stageOf, stageState, turnOf } from "@/features/projects/stages";
-import type { DiagnosisItem } from "@/types/domain";
+import { mentorInbox, suggestMentor } from "@/features/mentoring/inbox";
+import type { DiagnosisItem, Hypothesis, MentorSession } from "@/types/domain";
 
 const [ent, , mentor, , admin] = PEOPLE;
 const owner = { ...NO_RELATION, isOwner: true };
@@ -98,5 +99,45 @@ describe("etapas del proyecto", () => {
     expect(sectionOfSlug("validacion").id).toBe("probar");
     expect(sectionOfSlug("tareas").id).toBe("archivo");
     expect(sectionOfSlug("").id).toBe("inicio");
+  });
+});
+
+describe("bandeja del mentor y sugerencia de asignación", () => {
+  const session = (over: Partial<MentorSession>): MentorSession => ({
+    id: "s",
+    projectId: "p",
+    mentorId: "m1",
+    kind: "first_review",
+    status: "pending",
+    createdAt: "2026-10-02T00:00:00.000Z",
+    ...over,
+  });
+
+  it("junta lo que espera al mentor, más viejo primero, y deja afuera lo de otros mentores", () => {
+    const items = mentorInbox("m1", [
+      { id: "a", name: "A", sessions: [session({ createdAt: "2026-10-05T00:00:00.000Z" })], hypotheses: [] },
+      {
+        id: "b",
+        name: "B",
+        sessions: [session({ kind: "second_review", createdAt: "2026-10-01T00:00:00.000Z" }), session({ mentorId: "m2" }), session({ status: "completed" })],
+        hypotheses: [{ status: "pending_approval", statement: "Algo", updatedAt: "2026-10-03T00:00:00.000Z" } as Hypothesis],
+      },
+    ]);
+    expect(items.map((i) => [i.projectId, i.kind, i.tab])).toEqual([
+      ["b", "second_review", "decidir"],
+      ["b", "hypothesis", "validacion"],
+      ["a", "first_review", "orientar"],
+    ]);
+  });
+
+  it("sugiere a alguien con cupo, primero por rubro y después por cupo libre", () => {
+    const mentors = [
+      { id: "lleno", sectors: "Gastronomía", active: 2, max: 2 },
+      { id: "rubro", sectors: "gastronomia, turismo", active: 1, max: 2 },
+      { id: "libre", sectors: "tecnología", active: 0, max: 5 },
+    ];
+    expect(suggestMentor("Gastronomía saludable", mentors)).toBe("rubro");
+    expect(suggestMentor("Educación", mentors)).toBe("libre");
+    expect(suggestMentor("x", [mentors[0]])).toBeUndefined();
   });
 });
