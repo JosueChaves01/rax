@@ -1,5 +1,5 @@
 import { DIMENSION_QUESTION } from "@/features/conversation/interview";
-import type { InterviewContext } from "./provider";
+import type { FirstReviewContext, InterviewContext } from "./provider";
 
 /**
  * Instrucciones del sistema del motor de interpretación. Versionadas: si cambian, subí PROMPT_VERSION
@@ -37,6 +37,54 @@ Respondé ÚNICAMENTE con un objeto JSON con esta forma exacta:
 {"reply": string, "askedDimension": dimension|null, "proposals": [{"op":"create"|"update","targetItemId":string|null,"category":"context"|"people_market"|"problem"|"solutions"|"financial"|"operational"|"commercial"|"legal"|"risk"|"open_question","title":string,"content":string,"infoType":"entrepreneur_statement"|"documented_observation"|"ai_interpretation"|"hypothesis"|"unknown","uncertainty":"low"|"medium"|"high"|"unknown","sourceMessageId":string|null,"quote":string|null,"reason":string}], "contradictions": [{"description":string,"itemIds":[string]}], "summaryDraft": string|null}`;
 
 /** Serializa el contexto seleccionado como mensaje de usuario (datos, no instrucciones). */
+export const FIRST_REVIEW_SYSTEM_PROMPT = `Sos el asistente de mentoría metodológica de RAX. Ayudás al mentor a orientar la primera revisión del proyecto antes de que se formulen hipótesis o experimentos.
+
+Tu trabajo:
+1. Redactar el acuerdo de la primera revisión ("agreement"): un texto claro, directo y conciso (en español, 2 a 4 oraciones) que indique:
+   - Qué problema específico investigar primero.
+   - Qué preguntas o incógnitas tienen prioridad máxima.
+   - Qué falta saber o comprobar empíricamente antes de construir o invertir.
+2. Proponer notas adicionales pertinentes ("suggestedNotes", máximo 5) basadas en el diagnóstico:
+   - "question": preguntas incisivas sobre puntos ciegos, pagador real o validación pendiente.
+   - "observation": observaciones sobre riesgos, supuestos frágiles o inconsistencias en lo declarado.
+   - "suggestion": sugerencias metodológicas concretas sobre cómo abordar la investigación inicial.
+   Si una nota se vincula a un elemento del diagnóstico, asigná su "relatedItemId" con el id exacto de ese elemento; de lo contrario poné null.
+
+Reglas fundamentales:
+- Basate estrictamente en los datos del proyecto, diagnóstico, supuestos e incógnitas provistos. No inventes clientes, cifras ni hechos no expresados.
+- No apruebes ni des por validado nada en nombre del mentor: tu rol es sugerir borradores para que el mentor humano los revise y decida.
+- El texto del acuerdo debe tener al menos 10 caracteres y sintetizar claramente qué investigar y qué falta.
+
+Respondé ÚNICAMENTE con un objeto JSON con esta forma exacta:
+{"agreement": string, "suggestedNotes": [{"kind": "observation"|"question"|"suggestion", "body": string, "relatedItemId": string|null}]}`;
+
+export function renderFirstReviewContext(ctx: FirstReviewContext): string {
+  return JSON.stringify(
+    {
+      project: {
+        name: ctx.projectName,
+        nature: ctx.projectNature,
+        summary: ctx.projectSummary,
+      },
+      founderContext: ctx.founderContext,
+      briefing: ctx.briefing,
+      currentDiagnosisItems: ctx.items.map((i) => ({
+        id: i.id,
+        category: i.category,
+        title: i.title,
+        content: i.content,
+        infoType: i.infoType,
+        uncertainty: i.uncertainty,
+        reviewStatus: i.reviewStatus,
+      })),
+      existingMentorNotes: ctx.existingNotes,
+      recentMessages: ctx.recentMessages,
+    },
+    null,
+    1,
+  );
+}
+
 export function renderContext(ctx: InterviewContext): string {
   return JSON.stringify(
     {

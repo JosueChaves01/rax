@@ -11,7 +11,9 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPrivate = path.startsWith("/app") || path.startsWith("/bienvenida");
   if (!cfg) {
-    return isPrivate ? NextResponse.redirect(new URL("/configuracion", request.url)) : NextResponse.next();
+    const to = request.nextUrl.clone();
+    to.pathname = "/configuracion";
+    return isPrivate ? NextResponse.redirect(to) : NextResponse.next();
   }
 
   let response = NextResponse.next({ request });
@@ -30,7 +32,8 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (isPrivate && !user) {
-    const to = new URL("/entrar", request.url);
+    const to = request.nextUrl.clone();
+    to.pathname = "/entrar";
     to.searchParams.set("next", path);
     return NextResponse.redirect(to);
   }

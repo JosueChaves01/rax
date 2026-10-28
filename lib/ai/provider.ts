@@ -1,5 +1,5 @@
 import type { DiagnosisItem, InterviewDimension, Message } from "@/types/domain";
-import type { AiTurn } from "./schema";
+import type { AiTurn, FirstReviewSuggestion } from "./schema";
 
 /**
  * Contexto seleccionado para una invocación. No se envía todo el historial:
@@ -34,11 +34,50 @@ export interface AiResult {
   usage?: AiUsage;
 }
 
+export interface FirstReviewContext {
+  projectName: string;
+  projectNature: string;
+  projectSummary: string;
+  founderContext?: {
+    stage?: string;
+    sector?: string;
+    goals?: string[];
+    mentorExpectation?: string;
+    weeklyHours?: string;
+  };
+  briefing: {
+    whatTheyBuild: string;
+    mainProblem: string;
+    evidence: string[];
+    openAssumptions: string[];
+    resourcesAndLimits: string[];
+    questionsForMentor: string[];
+  };
+  items: Array<{
+    id: string;
+    category: string;
+    title: string;
+    content: string;
+    infoType: string;
+    reviewStatus: string;
+    uncertainty: string;
+  }>;
+  existingNotes: string[];
+  recentMessages?: Array<{ author: string; content: string }>;
+}
+
+export interface FirstReviewResult {
+  suggestion: FirstReviewSuggestion;
+  provider: "simulated" | "openrouter";
+  usage?: AiUsage;
+}
+
 export interface AiProvider {
   readonly id: "simulated" | "openrouter";
   /** Texto visible que describe el proveedor (la simulación se declara como tal). */
   readonly label: string;
   interpret(ctx: InterviewContext): Promise<AiResult>;
+  suggestFirstReview(ctx: FirstReviewContext): Promise<FirstReviewResult>;
 }
 
 export class AiUnavailableError extends Error {

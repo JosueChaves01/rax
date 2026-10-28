@@ -70,3 +70,19 @@ export const AiTurnSchema = z.object({
 
 export type AiProposal = z.infer<typeof ProposalSchema>;
 export type AiTurn = z.infer<typeof AiTurnSchema>;
+
+export const FirstReviewNoteKindEnum = z.enum(["observation", "question", "suggestion"]);
+
+export const SuggestedNoteSchema = z.object({
+  kind: FirstReviewNoteKindEnum,
+  body: z.string().min(5).max(2000),
+  relatedItemId: z.string().nullable().optional(),
+});
+
+export const FirstReviewSuggestionSchema = z.object({
+  agreement: z.string().min(10).max(2000),
+  suggestedNotes: z.array(SuggestedNoteSchema).max(8),
+});
+
+export type SuggestedNote = z.infer<typeof SuggestedNoteSchema>;
+export type FirstReviewSuggestion = z.infer<typeof FirstReviewSuggestionSchema>;

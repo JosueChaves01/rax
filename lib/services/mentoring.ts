@@ -1,5 +1,9 @@
 import type { MentorDecision, MentorSession, MentorSessionKind, SessionNote, SessionNoteKind } from "@/types/domain";
 import { buildBriefing } from "@/features/mentoring/briefing";
+import { isCurrent } from "@/features/diagnosis/rules";
+import { GOAL_LABEL, NATURE_LABEL } from "@/features/labels";
+import { AiUnavailableError, type FirstReviewContext } from "@/lib/ai/provider";
+import type { FirstReviewSuggestion } from "@/lib/ai/schema";
 import { assertHypothesisTransition } from "@/features/hypotheses/rules";
 import { forbidden, notFound, validation } from "@/lib/errors";
 import { audit, guard, sysRepo, type ServiceDeps } from "./base";
@@ -71,6 +75,106 @@ export async function addNote(d: ServiceDeps, sessionId: string, kind: SessionNo
   await d.repo.sessionNotes.insert(note);
   await touch(d, s.projectId);
   return note;
+}
+
+export async function addNotesBatch(
+  d: ServiceDeps,
+  sessionId: string,
+  notes: Array<{ kind: SessionNoteKind; body: string; relatedItemId?: string | null }>,
+): Promise<SessionNote[]> {
+  const created: SessionNote[] = [];
+  for (const n of notes) {
+    const note = await addNote(d, sessionId, n.kind, n.body, n.relatedItemId ?? undefined);
+    created.push(note);
+  }
+  return created;
+}
+
+/**
+ * Sugerencia con IA para la primera revisión (orientar el enfoque):
+ * recopila todos los datos disponibles hasta la etapa actual (proyecto, onboarding del emprendedor,
+ * resumen confirmado, elementos de diagnóstico, briefing y notas existentes) y le pide al modelo
+ * que redacte una propuesta de acuerdo y notas/preguntas/observaciones clave.
+ */
+export async function suggestFirstReview(d: ServiceDeps, sessionId: string): Promise<FirstReviewSuggestion> {
+  const s = await loadSession(d, sessionId);
+  await guard(d, s.projectId, "mentor.note");
+  if (s.mentorId !== d.actor.id) throw forbidden("Esta sesión está asignada a otra persona.");
+  if (s.kind !== "first_review") throw validation("Esta no es una primera revisión.");
+  if (s.status === "completed") throw validation("La sesión ya terminó.");
+
+  const project = await d.repo.projects.get(s.projectId);
+  if (!project) throw notFound("Proyecto no encontrado.");
+
+  const [dx] = await d.repo.diagnoses.list({ projectId: s.projectId });
+  const items = await d.repo.diagnosisItems.list({ projectId: s.projectId });
+  const sessionNotes = await d.repo.sessionNotes.list({ sessionId });
+  const existingNotes = sessionNotes.map((n) => `${n.kind}: ${n.body}`);
+
+  const owner = await d.repo.profiles.get(project.ownerId);
+  const founderOnboarding = owner?.onboarding?.intent === "entrepreneur" ? owner.onboarding : undefined;
+
+  let recentMessages: Array<{ author: string; content: string }> | undefined;
+  if (project.shareConversationWithMentor) {
+    const msgs = await d.repo.messages.list({ projectId: s.projectId });
+    recentMessages = msgs.slice(-10).map((m) => ({ author: m.author, content: m.content }));
+  }
+
+  const briefing = s.briefing ?? buildBriefing(project, dx, items, d.now());
+
+  const ctx: FirstReviewContext = {
+    projectName: project.name,
+    projectNature: NATURE_LABEL[project.nature] ?? project.nature,
+    projectSummary: dx?.summary ?? project.description,
+    founderContext: founderOnboarding
+      ? {
+          stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
+          sector: founderOnboarding.sector,
+          goals: founderOnboarding.goals.map((g) => GOAL_LABEL[g] ?? g),
+          mentorExpectation: founderOnboarding.mentorExpectation,
+          weeklyHours: founderOnboarding.weeklyHours,
+        }
+      : undefined,
+    briefing: {
+      whatTheyBuild: briefing.whatTheyBuild,
+      mainProblem: briefing.mainProblem,
+      evidence: briefing.evidence,
+      openAssumptions: briefing.openAssumptions,
+      resourcesAndLimits: briefing.resourcesAndLimits,
+      questionsForMentor: briefing.questionsForMentor,
+    },
+    items: items.filter(isCurrent).map((i) => ({
+      id: i.id,
+      category: i.category,
+      title: i.title,
+      content: i.content,
+      infoType: i.infoType,
+      reviewStatus: i.reviewStatus,
+      uncertainty: i.uncertainty,
+    })),
+    existingNotes,
+    recentMessages,
+  };
+
+  try {
+    const result = await d.ai.suggestFirstReview(ctx);
+    await audit(d, "ai.invoked", {
+      projectId: s.projectId,
+      targetId: sessionId,
+      meta: { task: "first_review_suggestion", provider: result.provider },
+    });
+    return result.suggestion;
+  } catch (e) {
+    await audit(d, "ai.failed", {
+      projectId: s.projectId,
+      targetId: sessionId,
+      meta: {
+        task: "first_review_suggestion",
+        reason: e instanceof AiUnavailableError ? e.reason : "unknown",
+      },
+    });
+    throw e;
+  }
 }
 
 /** Primera revisión: termina con un acuerdo explícito sobre qué investigar. */

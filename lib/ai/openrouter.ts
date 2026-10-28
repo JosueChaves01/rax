@@ -1,7 +1,7 @@
 import "server-only";
-import { AiTurnSchema } from "./schema";
-import { AiUnavailableError, type AiProvider, type AiResult, type InterviewContext } from "./provider";
-import { renderContext, SYSTEM_PROMPT } from "./prompt";
+import { AiTurnSchema, FirstReviewSuggestionSchema } from "./schema";
+import { AiUnavailableError, type AiProvider, type AiResult, type FirstReviewContext, type FirstReviewResult, type InterviewContext } from "./provider";
+import { FIRST_REVIEW_SYSTEM_PROMPT, renderContext, renderFirstReviewContext, SYSTEM_PROMPT } from "./prompt";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 /** Modelo gratuito por defecto; se cambia con OPENROUTER_MODEL sin tocar código. */
@@ -71,6 +71,58 @@ export class OpenRouterProvider implements AiProvider {
     }
     const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
     throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  async suggestFirstReview(ctx: FirstReviewContext): Promise<FirstReviewResult> {
+    const base: ChatMessage[] = [
+      { role: "system", content: FIRST_REVIEW_SYSTEM_PROMPT },
+      { role: "user", content: renderFirstReviewContext(ctx) },
+    ];
+    let last: ModelFailure | null = null;
+    for (const model of this.models) {
+      try {
+        return await this.suggestFirstReviewWith(model, base);
+      } catch (e) {
+        if (!(e instanceof ModelFailure)) throw e;
+        last = e;
+        if (!e.retryOther) break;
+      }
+    }
+    const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
+    throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  private async suggestFirstReviewWith(model: string, base: ChatMessage[]): Promise<FirstReviewResult> {
+    const messages = [...base];
+    const opts = { mergeSystem: false, jsonMode: true };
+    let lastProblem = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const data = await this.callAdapting(model, messages, opts);
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const parsed = safeJson(raw);
+      const result = FirstReviewSuggestionSchema.safeParse(parsed);
+      if (result.success) {
+        return {
+          suggestion: result.data,
+          provider: "openrouter",
+          usage: {
+            model: data.model ?? model,
+            inputTokens: data.usage?.prompt_tokens ?? 0,
+            outputTokens: data.usage?.completion_tokens ?? 0,
+          },
+        };
+      }
+      lastProblem = result.error.issues
+        .slice(0, 5)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      messages.push(
+        { role: "assistant", content: raw.slice(0, 4000) },
+        { role: "user", content: `Tu respuesta no cumple el esquema (${lastProblem}). Respondé solo con el JSON corregido.` },
+      );
+    }
+    console.error(`[openrouter] ${model}: salida inválida tras ${MAX_ATTEMPTS} intentos: ${lastProblem}`);
+    throw new ModelFailure("invalid_output", `El modelo devolvió una respuesta inválida: ${lastProblem}`, true);
   }
 
   private async interpretWith(model: string, base: ChatMessage[]): Promise<AiResult> {

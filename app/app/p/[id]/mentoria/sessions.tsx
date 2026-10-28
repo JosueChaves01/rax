@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { Experiment, ExperimentResult, Hypothesis, MentorDecision, MentorSession, SessionNote, SessionNoteKind } from "@/types/domain";
 import {
   addNoteAction,
+  addNotesBatchAction,
+  suggestFirstReviewAction,
   completeFirstReviewAction,
   completeSecondReviewAction,
   requestReviewAction,
@@ -230,10 +232,142 @@ function MentorTools({ projectId, session: s, items, hypotheses }: { projectId: 
   const [decision, setDecision] = useState<MentorDecision>("continue");
   const decidable = hypotheses.filter((h) => !["draft", "pending_approval", "discarded", "reformulated"].includes(h.status));
   const [hyp, setHyp] = useState(decidable[0]?.id ?? "");
+  const [suggestedNotes, setSuggestedNotes] = useState<Array<{ kind: SessionNoteKind; body: string; relatedItemId?: string }>>([]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const itemTitle = (id?: string) => items.find((i) => i.id === id)?.title;
+
+  const handleSuggest = async () => {
+    setIsAiLoading(true);
+    setAiError(null);
+    setAiNotice(null);
+    try {
+      const res = await suggestFirstReviewAction(projectId, s.id);
+      if (res.ok && res.data) {
+        setClosing(res.data.agreement);
+        const mappedNotes = (res.data.suggestedNotes ?? []).map((n) => ({
+          kind: n.kind as SessionNoteKind,
+          body: n.body,
+          relatedItemId: n.relatedItemId ?? undefined,
+        }));
+        setSuggestedNotes(mappedNotes);
+        setAiNotice("Propuesta de acuerdo y notas generadas a partir del diagnóstico y contexto actual.");
+      } else if (!res.ok) {
+        setAiError(res.error);
+      }
+    } catch {
+      setAiError("No se pudo conectar con el asistente de IA.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
   const fid = (x: string) => `${s.id}-${x}`;
 
   return (
     <div className="mt-5 grid gap-4 border-t border-line pt-5 lg:grid-cols-2">
+      {s.kind === "first_review" && (
+        <div className="rounded-xl border border-accent/40 bg-accent/5 p-4 lg:col-span-2 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent flex items-center gap-1.5">
+                <span>✨</span> Asistir con IA · Orientar y acordar
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Lee el diagnóstico confirmado, supuestos, incógnitas y datos del proyecto para autocompletar el acuerdo y sugerir preguntas u observaciones clave.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="primary"
+              type="button"
+              disabled={isAiLoading || pending}
+              onClick={handleSuggest}
+            >
+              {isAiLoading ? "Analizando y redactando..." : "✨ Autocompletar con IA"}
+            </Button>
+          </div>
+          {aiNotice && <p className="text-xs text-[var(--color-ok)] font-medium">{aiNotice}</p>}
+          {aiError && <Notice tone="error">{aiError}</Notice>}
+
+          {suggestedNotes.length > 0 && (
+            <div className="mt-3 rounded-lg border border-line bg-panel p-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
+                  Preguntas, notas y observaciones sugeridas ({suggestedNotes.length})
+                </p>
+                <Button
+                  size="sm"
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    run(
+                      () => addNotesBatchAction(projectId, s.id, suggestedNotes),
+                      () => {
+                        setSuggestedNotes([]);
+                        setAiNotice("Todas las notas sugeridas se guardaron en la sesión.");
+                      },
+                    );
+                  }}
+                >
+                  Guardar todas como notas
+                </Button>
+              </div>
+              <ul className="space-y-2">
+                {suggestedNotes.map((n, idx) => (
+                  <li key={idx} className="rounded-lg border border-line bg-bg p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <Tag color={n.kind === "question" ? "var(--color-highlight)" : n.kind === "observation" ? "var(--color-cyan)" : "var(--color-ok)"}>
+                        {NOTE_KIND_LABEL[n.kind]}
+                      </Tag>
+                      {n.relatedItemId && (
+                        <span className="text-faint text-[0.6875rem]">· sobre «{itemTitle(n.relatedItemId) ?? "elemento"}»</span>
+                      )}
+                      <div className="ml-auto flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="text-xs text-muted hover:text-ink underline"
+                          onClick={() => {
+                            setKind(n.kind);
+                            setBody(n.body);
+                            setRelated(n.relatedItemId ?? "");
+                            setSuggestedNotes((prev) => prev.filter((_, i) => i !== idx));
+                          }}
+                        >
+                          Cargar en editor
+                        </button>
+                        <span className="text-faint">·</span>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-accent hover:text-accent-strong"
+                          disabled={pending}
+                          onClick={() => {
+                            run(
+                              () => addNoteAction(projectId, s.id, n.kind, n.body, n.relatedItemId),
+                              () => setSuggestedNotes((prev) => prev.filter((_, i) => i !== idx)),
+                            );
+                          }}
+                        >
+                          Guardar
+                        </button>
+                        <span className="text-faint">·</span>
+                        <button
+                          type="button"
+                          className="text-xs text-danger hover:underline"
+                          onClick={() => setSuggestedNotes((prev) => prev.filter((_, i) => i !== idx))}
+                        >
+                          Descartar
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-ink">{n.body}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
       <form
         className="space-y-3"
         onSubmit={(e) => {

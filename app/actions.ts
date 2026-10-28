@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type {
   Comment,
@@ -26,7 +27,7 @@ import type { ItemChange } from "@/features/diagnosis/rules";
 import { createProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
 import { sendMessage } from "@/lib/services/conversation";
 import { addComment, addItem, changeItem, confirmSummary, editSummary } from "@/lib/services/diagnosis";
-import { addNote, completeFirstReview, completeSecondReview, requestReview, startSession } from "@/lib/services/mentoring";
+import { addNote, addNotesBatch, completeFirstReview, completeSecondReview, requestReview, startSession, suggestFirstReview } from "@/lib/services/mentoring";
 import {
   addEvidence,
   approveHypothesis,
@@ -103,11 +104,26 @@ export async function signInAction(_: AuthState, form: FormData): Promise<AuthSt
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
   if (!email || !password) return { error: "Completá correo y contraseña.", email };
+  const origin = await resolveRequestOrigin();
   const supabase = await createUserClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: authMessage(error.code, "No pudimos iniciar sesión. Probá de nuevo."), email };
   const d = await getDeps();
   redirect(safeNext(form.get("next")) ?? (d ? homeFor(d.actor) : "/bienvenida"));
+}
+
+async function resolveRequestOrigin(): Promise<string> {
+  try {
+    const list = await headers();
+    const forwardedHost = list.get("x-forwarded-host") ?? list.get("host");
+    const forwardedProto = list.get("x-forwarded-proto") ?? "https";
+    if (forwardedHost && !forwardedHost.includes("localhost")) {
+      return `${forwardedProto}://${forwardedHost}`;
+    }
+  } catch {
+    // Fuera de un contexto HTTP (ej. pruebas unitarias)
+  }
+  return appUrl();
 }
 
 export async function signUpAction(_: AuthState, form: FormData): Promise<AuthState> {
@@ -118,6 +134,7 @@ export async function signUpAction(_: AuthState, form: FormData): Promise<AuthSt
   if (name.length < 2) return { error: "Contanos cómo te llamás.", name, email };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Revisá el correo.", name, email };
   if (password.length < 8) return { error: "La contraseña necesita al menos 8 caracteres.", name, email };
+  const origin = await resolveRequestOrigin();
   const supabase = await createUserClient();
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -132,6 +149,7 @@ export async function signUpAction(_: AuthState, form: FormData): Promise<AuthSt
 
 export async function signOutAction() {
   if (!missingConfig().length) {
+    const origin = await resolveRequestOrigin();
     const supabase = await createUserClient();
     await supabase.auth.signOut();
   }
@@ -204,6 +222,26 @@ export const startSessionAction = async (projectId: string, sessionId: string) =
 export const addNoteAction = async (projectId: string, sessionId: string, kind: SessionNoteKind, body: string, relatedItemId?: string) =>
   run(projectId, async (d) => {
     await addNote(d, V.parse(V.Ids, sessionId), V.parse(V.NoteKind, kind), V.parse(V.Text(2000), body), relatedItemId ? V.parse(V.Ids, relatedItemId) : undefined);
+  });
+export const suggestFirstReviewAction = async (projectId: string, sessionId: string) =>
+  run(projectId, async (d) => {
+    return suggestFirstReview(d, V.parse(V.Ids, sessionId));
+  });
+export const addNotesBatchAction = async (
+  projectId: string,
+  sessionId: string,
+  notes: Array<{ kind: SessionNoteKind; body: string; relatedItemId?: string | null }>,
+) =>
+  run(projectId, async (d) => {
+    return addNotesBatch(
+      d,
+      V.parse(V.Ids, sessionId),
+      notes.map((n) => ({
+        kind: V.parse(V.NoteKind, n.kind),
+        body: V.parse(V.Text(2000), n.body),
+        relatedItemId: n.relatedItemId ? V.parse(V.Ids, n.relatedItemId) : undefined,
+      })),
+    );
   });
 export const completeFirstReviewAction = async (projectId: string, sessionId: string, agreement: string) =>
   run(projectId, (d) => completeFirstReview(d, V.parse(V.Ids, sessionId), V.parse(V.Text(2000), agreement)));

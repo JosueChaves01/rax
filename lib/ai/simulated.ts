@@ -7,8 +7,8 @@ import {
   splitSentences,
 } from "@/features/conversation/interview";
 import type { InterviewDimension } from "@/types/domain";
-import type { AiProvider, AiResult, InterviewContext } from "./provider";
-import type { AiProposal, AiTurn } from "./schema";
+import type { AiProvider, AiResult, FirstReviewContext, FirstReviewResult, InterviewContext } from "./provider";
+import type { AiProposal, AiTurn, SuggestedNote } from "./schema";
 
 const MAX_QUOTE = 280;
 
@@ -99,6 +99,59 @@ export class SimulatedProvider implements AiProvider {
       summaryDraft,
     };
     return { turn, provider: "simulated" };
+  }
+
+  async suggestFirstReview(ctx: FirstReviewContext): Promise<FirstReviewResult> {
+    const mainProblem = ctx.briefing.mainProblem || "Validar la necesidad principal del cliente";
+    const openQuestionItems = ctx.items.filter((i) => i.infoType === "unknown" || i.category === "open_question");
+    const assumptions = ctx.items.filter((i) => i.infoType === "hypothesis" || i.uncertainty === "high");
+    const problemItems = ctx.items.filter((i) => i.category === "problem");
+
+    const targetProblem = problemItems[0]?.content ?? mainProblem;
+    const priorityQuestion = openQuestionItems[0]?.content ?? "quién es el pagador real y cuánto está dispuesto a pagar";
+    const missingEvidence = assumptions[0]?.content ?? "evidencia directa de clientes experimentando el problema";
+
+    const agreement = `Investigar primero el problema central: "${targetProblem}". Priorizar responder: "${priorityQuestion}". Falta validar con evidencia: "${missingEvidence}".`;
+
+    const suggestedNotes: SuggestedNote[] = [];
+
+    if (openQuestionItems[0]) {
+      suggestedNotes.push({
+        kind: "question",
+        body: `¿Cómo podemos responder a corto plazo la incógnita sobre "${openQuestionItems[0].title}" sin requerir inversión previa?`,
+        relatedItemId: openQuestionItems[0].id,
+      });
+    }
+
+    if (assumptions[0]) {
+      suggestedNotes.push({
+        kind: "observation",
+        body: `Se identificó el supuesto crítico: "${assumptions[0].content}". Requiere comprobarse antes de diseñar experimentos costosos.`,
+        relatedItemId: assumptions[0].id,
+      });
+    }
+
+    if (problemItems[0]) {
+      suggestedNotes.push({
+        kind: "suggestion",
+        body: `Realizar al menos 5 entrevistas de descubrimiento enfocadas exclusivamente en "${problemItems[0].title}", evitando proponer soluciones prematuras.`,
+        relatedItemId: problemItems[0].id,
+      });
+    } else {
+      suggestedNotes.push({
+        kind: "suggestion",
+        body: "Iniciar entrevistas de descubrimiento con potenciales usuarios para caracterizar la frecuencia y gravedad del problema.",
+        relatedItemId: null,
+      });
+    }
+
+    return {
+      suggestion: {
+        agreement: agreement.slice(0, 2000),
+        suggestedNotes,
+      },
+      provider: "simulated",
+    };
   }
 }
 

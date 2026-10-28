@@ -264,6 +264,9 @@ describe("Escenario G · proveedor de IA no disponible", () => {
     const failing: AiProvider = {
       id: "openrouter",
       label: "falla",
+      suggestFirstReview: async () => {
+        throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
+      },
       interpret: async () => {
         throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
       },
