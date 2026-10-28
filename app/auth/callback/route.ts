@@ -28,6 +28,6 @@ export async function GET(request: NextRequest) {
     if (!error) return NextResponse.redirect(new URL(target, origin));
   }
   // Google devuelve ?error=... si la persona cancela o el proveedor no está configurado.
-  const fromProvider = url.searchParams.has("error") && !code;
-  return NextResponse.redirect(new URL(`/entrar?error=${fromProvider ? "google" : "enlace"}`, url.origin));
+  const fromProvider = request.nextUrl.searchParams.has("error") && !code;
+  return NextResponse.redirect(new URL(`/entrar?error=${fromProvider ? "google" : "enlace"}`, origin));
 }

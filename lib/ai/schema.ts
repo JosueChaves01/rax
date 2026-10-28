@@ -86,3 +86,43 @@ export const FirstReviewSuggestionSchema = z.object({
 
 export type SuggestedNote = z.infer<typeof SuggestedNoteSchema>;
 export type FirstReviewSuggestion = z.infer<typeof FirstReviewSuggestionSchema>;
+
+/* ───────────── Hipótesis y Experimentos (Etapa 3) ───────────── */
+
+export const SuggestedHypothesisSchema = z.object({
+  statement: z.string().min(25).max(600),
+  segment: z.string().min(2).max(200),
+  relatedItemId: z.string().nullable().optional(),
+  whyItMatters: z.string().max(600).default(""),
+  currentEvidence: z.string().max(600).default(""),
+  uncertainty: UncertaintyEnum.default("high"),
+  costOfBeingWrong: z.string().max(600).default(""),
+  evaluationCriterion: z.string().min(5).max(600),
+  rationale: z.string().max(400).optional(),
+});
+
+export const HypothesesSuggestionSchema = z.object({
+  suggestions: z.array(SuggestedHypothesisSchema).min(1).max(5),
+  contextSummary: z.string().max(400).optional(),
+});
+
+export type SuggestedHypothesis = z.infer<typeof SuggestedHypothesisSchema>;
+export type HypothesesSuggestion = z.infer<typeof HypothesesSuggestionSchema>;
+
+export const SuggestedExperimentSchema = z.object({
+  question: z.string().min(5).max(600),
+  method: z.string().min(3).max(600),
+  participants: z.string().min(3).max(600),
+  activities: z.array(z.string().max(200)).max(20).default([]),
+  resources: z.string().max(600).default(""),
+  budget: z.number().min(0).max(1e10).nullable().default(null),
+  durationDays: z.number().int().min(1).max(365).nullable().default(null),
+  metric: z.string().min(3).max(300),
+  successCriterion: z.string().min(5).max(600),
+  rejectionCriterion: z.string().min(5).max(600),
+  risks: z.string().max(600).default(""),
+  evidencePlan: z.string().min(5).max(600),
+  rationale: z.string().max(400).optional(),
+});
+
+export type SuggestedExperiment = z.infer<typeof SuggestedExperimentSchema>;
