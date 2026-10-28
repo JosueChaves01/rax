@@ -32,6 +32,13 @@ El proyecto se navega por 4 etapas que agrupan las 10 fases (`features/projects/
 
 `/mentoria` redirige a la revisión que corresponde. `turnOf` dice a quién le toca mover el proyecto (emprendedor, mentor o administración, por ejemplo cuando falta asignar mentor). En celular, Inicio y las etapas van en una barra inferior.
 
+## Entrada por rol
+
+- **Emprendedor**: `/app` lista sus proyectos con la etapa y a quién le toca.
+- **Mentor**: `/app` abre con la bandeja (`features/mentoring/inbox.ts`): revisiones pedidas e hipótesis por aprobar, más viejo primero, cada una con enlace a la acción. Debajo, sus proyectos y su cupo.
+- **Postulante a mentor**: ve el estado de la solicitud y lo que envió.
+- **Administración**: `/app/admin` es un panel con contadores (proyectos esperando mentor, solicitudes, cupos libres) y pestañas (`?ver=asignaciones|solicitudes|personas|auditoria`). Los proyectos sin mentor van primero, con un mentor sugerido por rubro y cupo.
+
 ## Fase del proyecto (derivada)
 
 La fase no se guarda: se calcula en `features/projects/phase.ts` a partir del estado real (mensajes, resumen confirmado, sesiones, hipótesis, experimentos). Así no puede desincronizarse.
