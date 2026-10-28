@@ -2,7 +2,7 @@ import Link from "next/link";
 import { DIAGNOSIS_STATUS_LABEL, NATURE_LABEL, PHASE_LABEL, PHASE_ORDER } from "@/features/labels";
 import { NEXT_STEP } from "@/features/projects/next-step";
 import { openQuestions, pendingReview } from "@/features/diagnosis/rules";
-import { DemoTag, Meter, Notice, Tag, cx } from "@/shared/ui/primitives";
+import { Meter, Notice, Tag, cx } from "@/shared/ui/primitives";
 import { loadWorkspace } from "./data";
 import { Tabs } from "./tabs";
 
@@ -23,7 +23,6 @@ export default async function WorkspaceLayout({ children, params }: { children: 
       <aside aria-label="Contexto del proyecto" className="space-y-4 lg:sticky lg:top-20 lg:h-fit">
         <div className="rounded-2xl border border-line bg-panel p-5">
           <div className="flex flex-wrap items-center gap-2">
-            {w.project.isDemo && <DemoTag />}
             {w.isMentorView && <Tag color="var(--color-cyan)">Vista de mentor</Tag>}
           </div>
           <h1 className="display mt-3 text-3xl leading-[0.95]">{w.project.name}</h1>

@@ -4,7 +4,7 @@
 
 | # | Paso | Quién | Dónde | Estado |
 |---|---|---|---|---|
-| 1 | Entrar con un perfil | Todos | `/entrar` | PARTIAL: acceso DEMO, sin autenticación real |
+| 1 | Crear cuenta, confirmar correo y hacer el onboarding | Todos | `/entrar`, `/bienvenida` | IMPLEMENTED (Auth sin verificación en vivo) |
 | 2 | Crear proyecto (nombre, descripción, naturaleza) | Emprendedor | `/app` | IMPLEMENTED |
 | 3 | Entrevista guiada por 9 dimensiones | Emprendedor + IA | `/app/p/[id]` | IMPLEMENTED (simulación); OpenRouter IMPLEMENTED sin verificación en vivo |
 | 4 | La IA archiva cada respuesta como elementos con cita | IA | conversación → diagnóstico | IMPLEMENTED |
@@ -25,13 +25,15 @@ La fase no se guarda: se calcula en `features/projects/phase.ts` a partir del es
 
 Cada fase tiene un "siguiente paso" por tipo de persona (`features/projects/next-step.ts`), visible en la barra lateral del proyecto.
 
-## Recorrido DEMO
+## Onboarding por tipo de persona
 
-- **Ana Rojas** (emprendedora) tiene "Almuerzos saludables para oficinas" con todo el flujo hecho hasta pedir la segunda revisión: dos elementos pendientes, una corrección, dos desconocidos, primera revisión de Carla, hipótesis aprobada, experimento con resultado negativo.
-- **Luis Mora** tiene "Taller de bicicletas a domicilio" con un solo mensaje: sirve para probar la entrevista desde cero.
-- **Carla Jiménez** (mentora asignada a Ana) puede hacer la segunda revisión.
-- **Diego** (mentor sin asignación) no ve ningún proyecto.
-- **Administración** asigna mentores y ve solo metadatos.
+Toda cuenta empieza en `/bienvenida` y elige cómo va a usar RAX.
+
+| Persona | Qué se le pregunta | Para qué se usa | Después |
+|---|---|---|---|
+| Emprendedor | Etapa y sector; objetivos con RAX, horas por semana, qué espera del mentor; primer proyecto | El mentor lo ve en mentoría; la administración lo usa para asignar | Se crea el proyecto y entra directo a la conversación |
+| Mentor | Años de experiencia, bio, LinkedIn; especialidades, sectores, horas por mes, máximo de proyectos | El emprendedor ve sus especialidades; la administración ve su cupo al asignar | Queda como postulación: ve una pantalla de estado hasta que la administración la aprueba o la rechaza (puede volver a postularse) |
+| Administración | Organización y programa | Contexto del panel | Solo cuentas que ya son admin (asignado por SQL); va a `/app/admin` |
 
 ## Casos límite cubiertos
 

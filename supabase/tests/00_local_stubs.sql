@@ -7,6 +7,13 @@ do $$ begin
 end $$;
 
 create extension if not exists pgcrypto;
+
+-- Igual que Supabase: los objetos nuevos de public quedan con todos los privilegios para
+-- anon, authenticated y service_role; RLS y los revoke de las migraciones restringen.
+grant usage on schema public to anon, authenticated, service_role;
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 create schema if not exists auth;
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
@@ -34,3 +41,5 @@ create or replace function storage.foldername(name text) returns text[] language
 $$;
 grant usage on schema storage to authenticated;
 grant select, insert on storage.objects to authenticated;
+grant all on storage.objects, storage.buckets to service_role;
+grant usage on schema storage to service_role;

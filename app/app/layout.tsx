@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getActor } from "@/lib/runtime";
+import { getActor, homeFor } from "@/lib/runtime";
 import { ROLE_LABEL } from "@/features/labels";
-import { leaveDemo } from "@/app/actions";
-import { DemoTag } from "@/shared/ui/primitives";
+import { signOutAction } from "@/app/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const actor = await getActor();
   if (!actor) redirect("/entrar");
+  if (homeFor(actor) === "/bienvenida") redirect("/bienvenida");
   return (
     <div className="min-h-dvh">
       <a href="#contenido" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-highlight focus:px-3 focus:py-2 focus:text-black">
@@ -32,10 +32,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <p className="text-sm font-semibold leading-tight">{actor.name}</p>
               <p className="text-[0.6875rem] text-muted">{ROLE_LABEL[actor.role]}</p>
             </div>
-            <DemoTag />
-            <form action={leaveDemo}>
+            <form action={signOutAction}>
               <button type="submit" className="rounded-full px-3 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted hover:bg-white/5 hover:text-ink">
-                Cambiar
+                Salir
               </button>
             </form>
           </div>

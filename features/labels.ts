@@ -1,4 +1,9 @@
 import type {
+  EntrepreneurGoal,
+  ExperienceBand,
+  Expertise,
+  MentorStatus,
+  WeeklyHours,
   Project,
   DiagnosisCategory,
   DiagnosisStatus,
@@ -183,4 +188,46 @@ export const DIMENSION_LABEL: Record<InterviewDimension, string> = {
   assumptions: "Supuestos",
   resources: "Recursos y restricciones",
   immediate_goal: "Objetivo inmediato",
+};
+
+/* ── Onboarding ── */
+
+export const GOAL_LABEL: Record<EntrepreneurGoal, string> = {
+  order_idea: "Ordenar mi idea y lo que sé",
+  what_to_test: "Saber qué probar primero",
+  find_mentor: "Que un mentor me acompañe",
+  first_customers: "Conseguir mis primeros clientes",
+  prepare_funding: "Prepararme para buscar financiamiento",
+};
+
+export const WEEKLY_HOURS_LABEL: Record<WeeklyHours, string> = {
+  lt2: "Menos de 2 horas",
+  "2to5": "Entre 2 y 5 horas",
+  "5to10": "Entre 5 y 10 horas",
+  gt10: "Más de 10 horas",
+};
+
+export const EXPERTISE_LABEL: Record<Expertise, string> = {
+  strategy: "Estrategia y modelo de negocio",
+  finance: "Finanzas y costos",
+  marketing_sales: "Marketing y ventas",
+  product: "Producto y experiencia",
+  operations: "Operaciones y logística",
+  legal: "Legal y permisos",
+  technology: "Tecnología",
+  social_impact: "Impacto social y ambiental",
+};
+
+export const EXPERIENCE_LABEL: Record<ExperienceBand, string> = {
+  lt3: "Menos de 3 años",
+  "3to7": "Entre 3 y 7 años",
+  "8to15": "Entre 8 y 15 años",
+  gt15: "Más de 15 años",
+};
+
+export const MENTOR_STATUS_LABEL: Record<MentorStatus, string> = {
+  none: "—",
+  pending: "Solicitud pendiente",
+  approved: "Aprobado",
+  rejected: "No aprobada",
 };

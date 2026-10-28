@@ -4,7 +4,7 @@ import { buildInterviewContext } from "@/lib/ai/context";
 import { vetProposals } from "@/lib/ai/apply";
 import { AiUnavailableError } from "@/lib/ai/provider";
 import { PROMPT_VERSION } from "@/lib/ai/prompt";
-import { audit, guard, recordHistory, type ServiceDeps } from "./base";
+import { audit, guard, recordHistory, sysRepo, type ServiceDeps } from "./base";
 import { touch } from "./projects";
 
 export const MAX_MESSAGE_LENGTH = 4000;
@@ -69,6 +69,8 @@ export async function sendMessage(d: ServiceDeps, projectId: string, content: st
     },
   });
 
+  // Lo que propone la IA lo escribe el sistema: en Supabase los triggers impiden que pise contenido humano.
+  const sys = sysRepo(d);
   const vetted = vetProposals(result.turn.proposals, items, messages);
   let created = 0;
   for (const v of vetted) {
@@ -76,7 +78,7 @@ export async function sendMessage(d: ServiceDeps, projectId: string, content: st
     const reason = [p.reason, ...v.adjustments].filter(Boolean).join(" · ");
     if (v.target) {
       const before = v.target;
-      const after = await d.repo.diagnosisItems.update(
+      const after = await sys.diagnosisItems.update(
         before.id,
         { title: p.title, content: p.content, category: p.category, infoType: p.infoType, uncertainty: p.uncertainty, updatedAt: d.now() },
         before.version,
@@ -100,7 +102,7 @@ export async function sendMessage(d: ServiceDeps, projectId: string, content: st
         createdAt: d.now(),
         updatedAt: d.now(),
       };
-      await d.repo.diagnosisItems.insert(item);
+      await sys.diagnosisItems.insert(item);
       await recordHistory(d, null, item, "created", "ai", reason);
     }
     created++;
@@ -126,17 +128,17 @@ export async function sendMessage(d: ServiceDeps, projectId: string, content: st
       createdAt: d.now(),
       updatedAt: d.now(),
     };
-    await d.repo.diagnosisItems.insert(item);
+    await sys.diagnosisItems.insert(item);
     await recordHistory(d, null, item, "created", "ai", "Contradicción detectada");
   }
 
   // El borrador de resumen nunca se confirma solo: queda pendiente de la persona.
   const summaryDrafted = !!result.turn.summaryDraft && !diagnosis.summary;
   if (summaryDrafted) {
-    await d.repo.diagnoses.update(diagnosis.id, { summary: result.turn.summaryDraft!.slice(0, 3000), updatedAt: d.now() });
+    await sys.diagnoses.update(diagnosis.id, { summary: result.turn.summaryDraft!.slice(0, 3000), updatedAt: d.now() });
   }
 
-  const reply = await d.repo.messages.insert({
+  const reply = await sys.messages.insert({
     id: d.newId("msg"),
     conversationId: conversation.id,
     projectId,

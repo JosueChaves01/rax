@@ -90,3 +90,43 @@ export function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   if (!r.success) throw validation("Los datos enviados no son válidos. Revisá los campos e intentá de nuevo.");
   return r.data;
 }
+
+/* ── Onboarding ── */
+
+const EntrepreneurGoal = z.enum(["order_idea", "what_to_test", "find_mentor", "first_customers", "prepare_funding"]);
+const Expertise = z.enum(["strategy", "finance", "marketing_sales", "product", "operations", "legal", "technology", "social_impact"]);
+
+export const OnboardingInput = z.discriminatedUnion("intent", [
+  z.object({
+    intent: z.literal("entrepreneur"),
+    name: str(120),
+    profile: z.object({
+      intent: z.literal("entrepreneur"),
+      sector: str(120),
+      stage: Nature,
+      goals: z.array(EntrepreneurGoal).min(1).max(5),
+      weeklyHours: z.enum(["lt2", "2to5", "5to10", "gt10"]),
+      mentorExpectation: str(600),
+    }),
+    firstProject: NewProject,
+  }),
+  z.object({
+    intent: z.literal("mentor"),
+    name: str(120),
+    profile: z.object({
+      intent: z.literal("mentor"),
+      expertise: z.array(Expertise).min(1).max(8),
+      sectors: str(300),
+      yearsExperience: z.enum(["lt3", "3to7", "8to15", "gt15"]),
+      monthlyHours: z.number().int().min(1).max(80),
+      maxProjects: z.number().int().min(1).max(10),
+      bio: str(1200),
+      linkedinUrl: z.string().url().max(300).regex(/^https:\/\//).optional(),
+    }),
+  }),
+  z.object({
+    intent: z.literal("admin"),
+    name: str(120),
+    profile: z.object({ intent: z.literal("admin"), organization: str(160), program: str(600) }),
+  }),
+]);

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { world, INTERVIEW } from "./helpers";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { BACKEND, closeWorlds, world, INTERVIEW } from "./helpers";
 import { createProject, getWorkspace } from "@/lib/services/projects";
 import { sendMessage } from "@/lib/services/conversation";
 import { addComment, addItem, changeItem, confirmSummary } from "@/lib/services/diagnosis";
@@ -22,6 +22,11 @@ import { buildInterviewContext } from "@/lib/ai/context";
 import { vetProposals } from "@/lib/ai/apply";
 import { OpenRouterProvider } from "@/lib/ai/openrouter";
 import type { ServiceDeps } from "@/lib/services/base";
+
+afterAll(closeWorlds);
+
+/** Pruebas del adaptador de IA: no dependen de la base, corren solo en memoria. */
+const memoryOnly = BACKEND === "memory";
 
 async function projectWithInterview(d: ServiceDeps) {
   const p = await createProject(d, { name: "Lavandería", description: "", nature: "exploring_idea" });
@@ -90,12 +95,12 @@ describe("Escenario B · corrección del diagnóstico", () => {
     expect(hist.some((h) => h.before?.content === target.content && h.after.content === corrected.content)).toBe(true);
 
     // Una interpretación de la IA corregida por una persona pasa a ser "corrección humana".
-    const ai = await repo.diagnosisItems.insert({ ...target, id: "ai_x", infoType: "ai_interpretation", reviewStatus: "proposed", authorId: "ai", version: 1, content: "El negocio es B2B" });
+    const ai = await repo.diagnosisItems.insert({ ...target, id: d.newId("ai"), infoType: "ai_interpretation", reviewStatus: "proposed", authorId: "ai", version: 1, content: "El negocio es B2B" });
     const fixed = await changeItem(d, ai.id, { kind: "edit", content: "Es B2C" }, 1);
     expect(fixed.infoType).toBe("human_correction");
 
     // Rechazar otra interpretación: deja de ser vigente pero queda trazable.
-    const other = await repo.diagnosisItems.insert({ ...ai, id: "ai_y", content: "Los estudiantes tienen dinero de sobra", version: 1, reviewStatus: "proposed", infoType: "ai_interpretation" });
+    const other = await repo.diagnosisItems.insert({ ...ai, id: d.newId("ai"), content: "Los estudiantes tienen dinero de sobra", version: 1, reviewStatus: "proposed", infoType: "ai_interpretation" });
     await changeItem(d, other.id, { kind: "reject", reason: "No es cierto" }, 1);
     const ws = await getWorkspace(d, p.id);
     expect(ws.items.find((i) => i.id === other.id)?.reviewStatus).toBe("rejected");
@@ -139,14 +144,14 @@ describe("Escenario B · corrección del diagnóstico", () => {
 
 describe("Escenario C · mentoría temprana", () => {
   it("el mentor recibe contexto, registra observaciones y orienta sin editar el diagnóstico", async () => {
-    const { as, repo } = await world();
+    const { as, repo, id } = await world();
     const d = as("ent1");
     const m = as("men1");
     const p = await projectWithInterview(d);
     await expect(requestReview(d, p.id, "first_review")).rejects.toThrow(/confirmá el resumen/);
     await confirmSummary(d, p.id);
     await expect(requestReview(d, p.id, "first_review")).rejects.toThrow(/mentor asignado/);
-    await assignMentor(as("adm"), p.id, "men1");
+    await assignMentor(as("adm"), p.id, id("men1"));
     const s = await requestReview(d, p.id, "first_review");
     expect(s.briefing?.whatTheyBuild).toBeTruthy();
     expect(s.briefing?.mainProblem).not.toMatch(/Sin problema/);
@@ -187,12 +192,12 @@ describe("Escenario D · información financiera desconocida", () => {
 
 describe("Escenario E · experimento con resultado negativo", () => {
   it("contrasta con criterios, debilita la hipótesis y permite reformular sin borrar evidencia", async () => {
-    const { as, repo } = await world();
+    const { as, repo, id } = await world();
     const d = as("ent1");
     const m = as("men1");
     const p = await projectWithInterview(d);
     await confirmSummary(d, p.id);
-    await assignMentor(as("adm"), p.id, "men1");
+    await assignMentor(as("adm"), p.id, id("men1"));
     const s1 = await requestReview(d, p.id, "first_review");
     await completeFirstReview(m, s1.id, "Investigar disposición a prepagar.");
 
@@ -230,7 +235,7 @@ describe("Escenario E · experimento con resultado negativo", () => {
 
 describe("Escenario F · acceso no autorizado", () => {
   it("bloquea a otros emprendedores, mentores no asignados, mentores revocados y al admin", async () => {
-    const { as, repo } = await world();
+    const { as, repo, id } = await world();
     const owner = as("ent1");
     const p = await projectWithInterview(owner);
     const item = (await repo.diagnosisItems.list({ projectId: p.id }))[0];
@@ -241,12 +246,12 @@ describe("Escenario F · acceso no autorizado", () => {
       await expect(sendMessage(d, p.id, "hola")).rejects.toMatchObject({ code: "not_found" });
       await expect(changeItem(d, item.id, { kind: "confirm" }, item.version)).rejects.toMatchObject({ code: "not_found" });
     }
-    const asg = await assignMentor(as("adm"), p.id, "men1");
+    const asg = await assignMentor(as("adm"), p.id, id("men1"));
     await expect(getWorkspace(as("men1"), p.id)).resolves.toBeTruthy();
     await revokeMentor(as("adm"), asg.id);
     await expect(getWorkspace(as("men1"), p.id)).rejects.toMatchObject({ code: "not_found" });
     // Solo el admin asigna.
-    await expect(assignMentor(owner, p.id, "men1")).rejects.toMatchObject({ code: "forbidden" });
+    await expect(assignMentor(owner, p.id, id("men1"))).rejects.toMatchObject({ code: "forbidden" });
     const denied = await repo.auditEvents.list({ action: "access.denied" });
     expect(denied.length).toBeGreaterThan(0);
     // El servidor no confía en el elemento: no se puede confirmar con una versión inventada.
@@ -276,7 +281,7 @@ describe("Escenario G · proveedor de IA no disponible", () => {
     expect(await repo.auditEvents.list({ action: "ai.failed" })).toHaveLength(1);
   });
 
-  it("el adaptador OpenRouter traduce errores y rechaza salidas inválidas", async () => {
+  it.runIf(memoryOnly)("el adaptador OpenRouter traduce errores y rechaza salidas inválidas", async () => {
     const { as, repo } = await world();
     const d = as("ent1");
     const p = await createProject(d, { name: "Prueba", description: "", nature: "unknown" });
@@ -303,7 +308,7 @@ describe("Escenario G · proveedor de IA no disponible", () => {
   });
 });
 
-describe("OpenRouter · modelos gratuitos", () => {
+describe.runIf(memoryOnly)("OpenRouter · modelos gratuitos", () => {
   const good = { reply: "¿Quién pagaría?", askedDimension: "people", proposals: [], contradictions: [], summaryDraft: null };
   const ok = (model: string) => new Response(JSON.stringify({ model, choices: [{ message: { content: JSON.stringify(good) } }] }), { status: 200 });
   const err = (status: number, message: string, raw?: string) =>
@@ -369,11 +374,11 @@ describe("OpenRouter · modelos gratuitos", () => {
 
 describe("Escenario H · actualización concurrente", () => {
   it("rechaza la escritura con versión vieja sin perder el cambio del otro", async () => {
-    const { as, repo } = await world();
+    const { as, repo, id } = await world();
     const d = as("ent1");
     const m = as("men1");
     const p = await projectWithInterview(d);
-    await assignMentor(as("adm"), p.id, "men1");
+    await assignMentor(as("adm"), p.id, id("men1"));
     const problem = (await repo.diagnosisItems.list({ projectId: p.id })).find((i) => i.category === "problem" && i.infoType !== "unknown")!;
     const seenByOwner = problem.version;
     await changeItem(m, problem.id, { kind: "prioritize", rank: 1, rationale: "Más evidencia" }, problem.version);
