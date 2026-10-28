@@ -11,13 +11,67 @@ export type ISODate = string;
 
 export type Role = "entrepreneur" | "mentor" | "admin";
 
+/** Solicitud para ser mentor: la aprueba la administración, nadie se autodeclara mentor. */
+export type MentorStatus = "none" | "pending" | "approved" | "rejected";
+
 export interface Profile {
   id: Id;
   name: string;
   email: string;
   role: Role;
+  mentorStatus: MentorStatus;
+  /** Respuestas del onboarding según cómo la persona dijo que usará RAX. */
+  onboarding?: Onboarding;
+  onboardedAt?: ISODate;
   createdAt: ISODate;
 }
+
+/* ───────────── Onboarding ───────────── */
+
+export type OnboardingIntent = "entrepreneur" | "mentor" | "admin";
+
+export type EntrepreneurGoal = "order_idea" | "what_to_test" | "find_mentor" | "first_customers" | "prepare_funding";
+export type WeeklyHours = "lt2" | "2to5" | "5to10" | "gt10";
+
+export interface EntrepreneurOnboarding {
+  intent: "entrepreneur";
+  sector: string;
+  stage: InitiativeNature;
+  goals: EntrepreneurGoal[];
+  weeklyHours: WeeklyHours;
+  /** Qué espera de un mentor, con sus palabras. */
+  mentorExpectation: string;
+}
+
+export type Expertise =
+  | "strategy"
+  | "finance"
+  | "marketing_sales"
+  | "product"
+  | "operations"
+  | "legal"
+  | "technology"
+  | "social_impact";
+export type ExperienceBand = "lt3" | "3to7" | "8to15" | "gt15";
+
+export interface MentorOnboarding {
+  intent: "mentor";
+  expertise: Expertise[];
+  sectors: string;
+  yearsExperience: ExperienceBand;
+  monthlyHours: number;
+  maxProjects: number;
+  bio: string;
+  linkedinUrl?: string;
+}
+
+export interface AdminOnboarding {
+  intent: "admin";
+  organization: string;
+  program: string;
+}
+
+export type Onboarding = EntrepreneurOnboarding | MentorOnboarding | AdminOnboarding;
 
 export type ProjectMemberRole = "owner" | "collaborator";
 
@@ -67,8 +121,6 @@ export interface Project {
   description: string;
   nature: InitiativeNature;
   status: ProjectStatus;
-  /** Marca explícita: los proyectos de demostración nunca se mezclan con datos reales. */
-  isDemo: boolean;
   /** Control del emprendedor: el mentor ve la conversación completa solo si se comparte explícitamente. */
   shareConversationWithMentor: boolean;
   createdAt: ISODate;
@@ -397,7 +449,11 @@ export type AuditAction =
   | "evidence.added"
   | "access.denied"
   | "ai.invoked"
-  | "ai.failed";
+  | "ai.failed"
+  | "profile.onboarded"
+  | "mentor.applied"
+  | "mentor.approved"
+  | "mentor.rejected";
 
 export interface AuditEvent {
   id: Id;

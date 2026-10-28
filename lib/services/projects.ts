@@ -1,10 +1,10 @@
-import type { InitiativeNature, Project, ProjectStatus } from "@/types/domain";
+import type { InitiativeNature, MentorOnboarding, Project, ProjectStatus } from "@/types/domain";
 import { can } from "@/lib/authz";
 import { validation } from "@/lib/errors";
 import { derivePhase } from "@/features/projects/phase";
 import { deriveDiagnosisStatus, isCurrent } from "@/features/diagnosis/rules";
 import { DIMENSION_QUESTION } from "@/features/conversation/interview";
-import { audit, guard, relationOf, type ServiceDeps } from "./base";
+import { audit, guard, relationOf, sysRepo, type ServiceDeps } from "./base";
 
 export async function listMyProjects(d: ServiceDeps): Promise<Project[]> {
   const owned = await d.repo.projects.list({ ownerId: d.actor.id });
@@ -20,6 +20,8 @@ export async function createProject(
   input: { name: string; description: string; nature: InitiativeNature },
 ): Promise<Project> {
   if (d.actor.role !== "entrepreneur") throw validation("Solo las personas emprendedoras crean proyectos.");
+  if (!d.actor.onboardedAt) throw validation("Completá la bienvenida antes de crear un proyecto.");
+  if (d.actor.onboarding?.intent === "mentor") throw validation("Tu cuenta está registrada para mentoría.");
   const name = input.name.trim();
   if (name.length < 2) throw validation("Poné al menos un nombre provisional (2 caracteres o más).");
   if (name.length > 80) throw validation("El nombre es demasiado largo (máximo 80 caracteres).");
@@ -31,17 +33,18 @@ export async function createProject(
     description: input.description.trim().slice(0, 1000),
     nature: input.nature,
     status: "active",
-    isDemo: false,
     shareConversationWithMentor: false,
     createdAt: now,
     updatedAt: now,
   };
   await d.repo.projects.insert(project);
-  await d.repo.projectMembers.insert({ id: `${project.id}:${d.actor.id}`, projectId: project.id, profileId: d.actor.id, role: "owner", createdAt: now });
-  const conv = await d.repo.conversations.insert({ id: d.newId("conv"), projectId: project.id, createdAt: now });
-  await d.repo.diagnoses.insert({ id: d.newId("dx"), projectId: project.id, status: "exploring", updatedAt: now });
+  // Armado inicial: lo hace el sistema una vez creado el proyecto por su dueño.
+  const sys = sysRepo(d);
+  await sys.projectMembers.insert({ id: `${project.id}:${d.actor.id}`, projectId: project.id, profileId: d.actor.id, role: "owner", createdAt: now });
+  const conv = await sys.conversations.insert({ id: d.newId("conv"), projectId: project.id, createdAt: now });
+  await sys.diagnoses.insert({ id: d.newId("dx"), projectId: project.id, status: "exploring", updatedAt: now });
   // Primera pregunta de la guía. Es texto fijo de la plataforma, no generado por un modelo.
-  await d.repo.messages.insert({
+  await sys.messages.insert({
     id: d.newId("msg"),
     conversationId: conv.id,
     projectId: project.id,
@@ -66,8 +69,9 @@ export async function setConversationSharing(d: ServiceDeps, projectId: string, 
   await audit(d, "project.status_changed", { projectId, meta: { shareConversationWithMentor: share } });
 }
 
+/** Marca actividad reciente. La hace el sistema: también la provocan mentores, que no editan el proyecto. */
 export async function touch(d: ServiceDeps, projectId: string) {
-  await d.repo.projects.update(projectId, { updatedAt: d.now() });
+  await sysRepo(d).projects.update(projectId, { updatedAt: d.now() });
 }
 
 /** Vista agregada del espacio de trabajo. Los permisos se calculan aquí, en el servidor. */
@@ -108,6 +112,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
 
   const peopleIds = new Set<string>([project.ownerId, ...assignments.map((a) => a.mentorId)]);
   const people = (await Promise.all([...peopleIds].map((id) => r.profiles.get(id)))).filter(Boolean);
+  const ownerProfile = people.find((p) => p!.id === project.ownerId);
 
   const permissions = Object.fromEntries(
     (
@@ -155,6 +160,12 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
     evidence: byTime(evidence),
     mentors: assignments.map((a) => a.mentorId),
     people: Object.fromEntries(people.map((p) => [p!.id, { id: p!.id, name: p!.name, role: p!.role }])),
+    /** Lo que el emprendedor contó en su bienvenida: orienta al mentor desde la primera revisión. */
+    founderContext: ownerProfile?.onboarding?.intent === "entrepreneur" ? ownerProfile.onboarding : undefined,
+    /** Experiencia de los mentores asignados, para que el emprendedor sepa quién lo acompaña. */
+    mentorContext: Object.fromEntries(
+      people.filter((p) => p!.onboarding?.intent === "mentor").map((p) => [p!.id, p!.onboarding as MentorOnboarding]),
+    ),
     audit: isMentorView ? [] : byTime(auditEvents).slice(-50),
     permissions,
     ai: { id: d.ai.id, label: d.ai.label },

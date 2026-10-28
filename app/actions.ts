@@ -1,6 +1,5 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type {
@@ -17,7 +16,10 @@ import type {
   TaskStatus,
   Uncertainty,
 } from "@/types/domain";
-import { DEMO_SESSION_COOKIE, getDeps, getRepository } from "@/lib/runtime";
+import { getDeps, homeFor } from "@/lib/runtime";
+import { createUserClient } from "@/lib/supabase/server";
+import { appUrl, missingConfig } from "@/lib/supabase/config";
+import { completeOnboarding } from "@/lib/services/onboarding";
 import { isDomainError } from "@/lib/errors";
 import type { ServiceDeps } from "@/lib/services/base";
 import type { ItemChange } from "@/features/diagnosis/rules";
@@ -43,7 +45,7 @@ import {
   type ExperimentInput,
   type HypothesisInput,
 } from "@/lib/services/validation";
-import { assignMentor, revokeMentor } from "@/lib/services/admin";
+import { assignMentor, reviewMentorApplication, revokeMentor } from "@/lib/services/admin";
 import * as V from "@/lib/validation/inputs";
 
 export type ActionResult<T = undefined> = { ok: true; data?: T; notice?: string } | { ok: false; error: string; code?: string };
@@ -67,19 +69,84 @@ async function run<T>(projectId: string | null, fn: (d: ServiceDeps) => Promise<
   }
 }
 
-/* ── Sesión DEMO ── */
+/* ── Cuenta (Supabase Auth) ── */
 
-export async function enterAsDemo(profileId: string) {
-  const repo = await getRepository();
-  const profile = await repo.profiles.get(profileId);
-  if (!profile) return;
-  (await cookies()).set(DEMO_SESSION_COOKIE, profile.id, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 8 });
-  redirect(profile.role === "admin" ? "/app/admin" : "/app");
+export type AuthState = { error?: string; notice?: string; name?: string; email?: string } | undefined;
+
+const safeNext = (next: FormDataEntryValue | null) => {
+  const n = typeof next === "string" ? next : "";
+  return n.startsWith("/app") || n.startsWith("/bienvenida") ? n : null;
+};
+
+/** Mensajes de Supabase Auth traducidos; nunca se muestra el error crudo. */
+function authMessage(code: string | undefined, fallback: string) {
+  switch (code) {
+    case "invalid_credentials":
+      return "Correo o contraseña incorrectos.";
+    case "email_not_confirmed":
+      return "Todavía no confirmaste tu correo. Revisá tu bandeja (y la carpeta de spam).";
+    case "user_already_exists":
+    case "email_exists":
+      return "Ya hay una cuenta con ese correo. Probá entrar.";
+    case "weak_password":
+      return "La contraseña es muy débil: usá al menos 8 caracteres.";
+    case "over_email_send_rate_limit":
+    case "over_request_rate_limit":
+      return "Demasiados intentos seguidos. Esperá unos minutos y probá de nuevo.";
+    default:
+      return fallback;
+  }
 }
 
-export async function leaveDemo() {
-  (await cookies()).delete(DEMO_SESSION_COOKIE);
+export async function signInAction(_: AuthState, form: FormData): Promise<AuthState> {
+  if (missingConfig().length) return { error: "RAX todavía no está conectado a Supabase." };
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  const password = String(form.get("password") ?? "");
+  if (!email || !password) return { error: "Completá correo y contraseña.", email };
+  const supabase = await createUserClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { error: authMessage(error.code, "No pudimos iniciar sesión. Probá de nuevo."), email };
+  const d = await getDeps();
+  redirect(safeNext(form.get("next")) ?? (d ? homeFor(d.actor) : "/bienvenida"));
+}
+
+export async function signUpAction(_: AuthState, form: FormData): Promise<AuthState> {
+  if (missingConfig().length) return { error: "RAX todavía no está conectado a Supabase." };
+  const name = String(form.get("name") ?? "").trim();
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  const password = String(form.get("password") ?? "");
+  if (name.length < 2) return { error: "Contanos cómo te llamás.", name, email };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Revisá el correo.", name, email };
+  if (password.length < 8) return { error: "La contraseña necesita al menos 8 caracteres.", name, email };
+  const supabase = await createUserClient();
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { name: name.slice(0, 120) }, emailRedirectTo: `${appUrl()}/auth/callback?next=/bienvenida` },
+  });
+  if (error) return { error: authMessage(error.code, "No pudimos crear la cuenta. Probá de nuevo."), name, email };
+  // Si el proyecto pide confirmar el correo, no hay sesión todavía.
+  if (!data.session) return { notice: `Te enviamos un correo a ${email}. Abrí el enlace para confirmar tu cuenta y seguimos.` };
+  redirect("/bienvenida");
+}
+
+export async function signOutAction() {
+  if (!missingConfig().length) {
+    const supabase = await createUserClient();
+    await supabase.auth.signOut();
+  }
   redirect("/entrar");
+}
+
+/* ── Onboarding ── */
+
+export async function completeOnboardingAction(input: unknown) {
+  const res = await run(null, async (d) => {
+    const r = await completeOnboarding(d, V.parse(V.OnboardingInput, input));
+    return { home: r.project ? `/app/p/${r.project.id}` : homeFor(r.profile) };
+  });
+  if (res.ok && res.data) redirect(res.data.home);
+  return res;
 }
 
 /* ── Proyectos ── */
@@ -212,6 +279,10 @@ export const setTaskStatusAction = async (projectId: string, taskId: string, sta
 export const assignMentorAction = async (projectId: string, mentorId: string) =>
   run(null, async (d) => {
     await assignMentor(d, V.parse(V.Ids, projectId), V.parse(V.Ids, mentorId));
+  });
+export const reviewMentorAction = async (profileId: string, approve: boolean) =>
+  run(null, async (d) => {
+    await reviewMentorApplication(d, V.parse(V.Ids, profileId), approve === true);
   });
 export const revokeMentorAction = async (assignmentId: string) =>
   run(null, async (d) => {

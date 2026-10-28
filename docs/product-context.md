@@ -23,13 +23,13 @@ RAX ordena la información del emprendedor sin perder trazabilidad y lleva a la 
 
 ## Alcance de la Fase Cero
 
-Dentro: los 12 pasos del flujo (ver [user-flows.md](user-flows.md)), un proyecto por persona emprendedora en la demo, un mentor asignado por proyecto, IA en español.
+Dentro: los 12 pasos del flujo (ver [user-flows.md](user-flows.md)), un mentor asignado por proyecto, IA en español.
 
 Fuera (por ahora): pagos, marketplace de mentores, agenda o videollamadas, notificaciones por correo, colaboración en tiempo real, analítica avanzada, RAG sobre documentos, n8n o colas (no hay caso de uso que lo justifique todavía).
 
 ## Principios de producto
 
-- Honestidad visible: lo simulado, lo DEMO y lo no verificado se etiquetan en la interfaz.
+- Honestidad visible: lo simulado y lo no verificado se etiquetan en la interfaz.
 - Ninguna aprobación del mentor se simula.
 - Lo confirmado o corregido por una persona prevalece sobre cualquier interpretación de la IA.
 - Español claro, sin jerga de consultoría.

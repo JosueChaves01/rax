@@ -1,5 +1,5 @@
 import type { Profile } from "@/types/domain";
-import type { Repository } from "./repository";
+import type { Repository } from "@/lib/data/repository";
 import { SimulatedProvider } from "@/lib/ai/simulated";
 import type { ServiceDeps } from "@/lib/services/base";
 import { createProject } from "@/lib/services/projects";
@@ -20,16 +20,15 @@ import {
 } from "@/lib/services/validation";
 
 /**
- * DATOS DE DEMOSTRACIÓN. Personas, proyectos y conversaciones ficticias.
- * Se generan llamando a los MISMOS servicios que usa la aplicación (no hay lógica duplicada),
- * con un reloj determinista. Todo proyecto creado aquí queda marcado isDemo=true.
+ * Fixture de pruebas: recorre el flujo completo de Fase Cero llamando a los MISMOS servicios
+ * que usa la aplicación, con un reloj determinista. Personas y proyectos ficticios; solo para tests.
  */
 export const DEMO_PROFILES: Profile[] = [
-  { id: "u_ana", name: "Ana Rojas", email: "ana@demo.rax", role: "entrepreneur", createdAt: "2026-09-01T12:00:00.000Z" },
-  { id: "u_luis", name: "Luis Mora", email: "luis@demo.rax", role: "entrepreneur", createdAt: "2026-09-01T12:00:00.000Z" },
-  { id: "u_carla", name: "Carla Jiménez", email: "carla@demo.rax", role: "mentor", createdAt: "2026-09-01T12:00:00.000Z" },
-  { id: "u_diego", name: "Diego Vargas", email: "diego@demo.rax", role: "mentor", createdAt: "2026-09-01T12:00:00.000Z" },
-  { id: "u_admin", name: "Equipo RAX", email: "admin@demo.rax", role: "admin", createdAt: "2026-09-01T12:00:00.000Z" },
+  { id: "u_ana", name: "Ana Rojas", email: "ana@demo.rax", role: "entrepreneur", mentorStatus: "none", onboardedAt: "2026-09-01T12:00:00.000Z", createdAt: "2026-09-01T12:00:00.000Z" },
+  { id: "u_luis", name: "Luis Mora", email: "luis@demo.rax", role: "entrepreneur", mentorStatus: "none", onboardedAt: "2026-09-01T12:00:00.000Z", createdAt: "2026-09-01T12:00:00.000Z" },
+  { id: "u_carla", name: "Carla Jiménez", email: "carla@demo.rax", role: "mentor", mentorStatus: "approved", onboardedAt: "2026-09-01T12:00:00.000Z", createdAt: "2026-09-01T12:00:00.000Z" },
+  { id: "u_diego", name: "Diego Vargas", email: "diego@demo.rax", role: "mentor", mentorStatus: "approved", onboardedAt: "2026-09-01T12:00:00.000Z", createdAt: "2026-09-01T12:00:00.000Z" },
+  { id: "u_admin", name: "Equipo RAX", email: "admin@demo.rax", role: "admin", mentorStatus: "none", onboardedAt: "2026-09-01T12:00:00.000Z", createdAt: "2026-09-01T12:00:00.000Z" },
 ];
 
 export const DEMO_DESCRIPTIONS: Record<string, string> = {
@@ -59,7 +58,6 @@ export async function seedDemo(repo: Repository): Promise<void> {
     description: "Viandas caseras con entrega en oficinas pequeñas de San José.",
     nature: "exploring_idea",
   });
-  await repo.projects.update(p1.id, { isDemo: true });
   const answers = [
     "Estoy explorando la idea. Cocino bien y varias compañeras me piden comida casera.",
     "Hice almuerzos para 6 compañeras durante dos semanas, me pagaban lo que creían justo.",
@@ -164,6 +162,5 @@ export async function seedDemo(repo: Repository): Promise<void> {
     description: "Reparar bicicletas en la casa del cliente.",
     nature: "unknown",
   });
-  await repo.projects.update(p2.id, { isDemo: true });
   await sendMessage(luis, p2.id, "No sé bien todavía, creo que es una idea. Arreglo bicis de amigos los fines de semana.");
 }

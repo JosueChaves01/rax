@@ -6,8 +6,8 @@ Tipos en `types/domain.ts`; tablas equivalentes (snake_case, ids uuid) en `supab
 
 | Entidad | Propósito | Notas |
 |---|---|---|
-| Profile | Persona y su rol (`entrepreneur`, `mentor`, `admin`) | El rol solo lo cambia la administración |
-| Project | Iniciativa del emprendedor | `isDemo`, `shareConversationWithMentor`, `status` (active/paused/archived) |
+| Profile | Persona y su rol (`entrepreneur`, `mentor`, `admin`) | `mentorStatus` (none/pending/approved/rejected), `onboarding` (respuestas según el tipo), `onboardedAt`. El rol y la aprobación de mentores solo los cambia la administración |
+| Project | Iniciativa del emprendedor | `shareConversationWithMentor`, `status` (active/paused/archived) |
 | ProjectMember | Dueño o colaborador | El dueño se crea al crear el proyecto |
 | MentorAssignment | Mentor asignado a un proyecto | `active` / `revoked`; la revocación conserva la fila |
 | Conversation, Message | Entrevista | `Message.provider` (simulated/openrouter) y `dimension` preguntada |

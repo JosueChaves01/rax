@@ -2,12 +2,12 @@
 
 ## Visión general
 
-Monolito Next.js 15 (App Router) en TypeScript estricto. Sin servicios externos obligatorios.
+Monolito Next.js 15 (App Router) en TypeScript estricto, con Supabase (Auth + Postgres) como único servicio obligatorio.
 
 ```
 navegador ──► Server Components (lectura) ──► lib/services ──► Repository (puerto)
-          └─► Server Actions (app/actions.ts)  │                 ├─ memoria (hoy)
-                 zod (lib/validation)          │                 └─ Supabase (pendiente)
+          └─► Server Actions (app/actions.ts)  │                 ├─ Postgres/Supabase (app)
+                 zod (lib/validation)          │                 └─ memoria (pruebas)
                                                ├─► lib/authz (permisos)
                                                ├─► features/* (reglas puras)
                                                └─► lib/ai (simulación | OpenRouter)
@@ -16,19 +16,18 @@ navegador ──► Server Components (lectura) ──► lib/services ──►
 - **features/** contiene reglas de dominio puras y probadas (sin E/S): entrevista, diagnóstico, hipótesis, experimentos, briefing, fase y siguiente paso.
 - **lib/services/** son los casos de uso. Cada uno resuelve la relación del actor con el proyecto desde los datos (`relationOf`), verifica el permiso con `guard()` y escribe auditoría. Un proyecto ajeno responde `not_found` (no revela su existencia) y deja un evento `access.denied`.
 - **app/actions.ts** valida toda entrada con zod, llama al servicio y transforma errores en mensajes seguros; nunca devuelve trazas.
-- **lib/runtime.ts** arma las dependencias (`ServiceDeps`: repo, ia, actor, reloj, ids). Inyectarlas permite probar los servicios sin Next.
+- **lib/runtime.ts** lee la sesión de Supabase Auth y arma las dependencias (`ServiceDeps`: repo de la persona, repo del sistema `sys`, ia, actor, reloj, ids). `homeFor()` decide si la persona va a `/bienvenida`, `/app` o `/app/admin`. Inyectar las dependencias permite probar los servicios sin Next.
+- **middleware.ts** refresca la sesión y manda a `/entrar` (o a `/configuracion` si faltan variables) a quien entra a una ruta privada.
 
 ## Persistencia
 
 `lib/data/repository.ts` define `Table<T>` (get, list con filtro de igualdad, insert, update con `expectedVersion`) y un `Repository` con una tabla por entidad.
 
-- **Hoy**: `memory-repository.ts`, en memoria del proceso, sembrado con datos DEMO (`demo-seed.ts`) ejecutando los servicios reales. Se reinicia con el servidor; en serverless, cada instancia tiene su propia copia.
-- **Supabase**: `supabase/migrations/` está listo y probado (ver [testing.md](testing.md)). Falta (PLANNED):
-  1. Adaptador `createSupabaseRepository()` que implemente `Repository` con `@supabase/ssr`, mapeando camelCase ↔ snake_case. Los ids pasan de texto (`p_1`) a uuid.
-  2. Autenticación real con Supabase Auth reemplazando la cookie `rax_demo_user`; `getActor` leería `auth.getUser()`.
-  3. Escrituras de la IA con el cliente `service_role` (sin `auth.uid()`), que los triggers distinguen para impedir que pise contenido humano.
-  4. `history` e `audit_events` hoy se escriben desde los servicios; en Supabase el historial lo escribe un trigger, por lo que el adaptador debe omitir esa inserción.
-  5. Subida real de archivos al bucket `evidence` con URL firmada.
+- **Postgres/Supabase** (`supabase-repository.ts`): `createPgRepository(db)` implementa el puerto sobre una interfaz mínima `Db` (select, insert, update por columnas en snake_case). Hay dos drivers: `supabase-db.ts` (supabase-js, en la app) y `tests/pg-db.ts` (pg, en las pruebas, fijando rol y `auth.uid()` por transacción). Un `update` con `expectedVersion` filtra por versión: si no cambia ninguna fila, responde `conflict` o `not_found`. Los errores de Postgres se traducen a los códigos del dominio (`fromPgError`).
+- **Repo del sistema**: `ServiceDeps.sys` usa la clave secreta para lo que RLS no permite al cliente (ver [security.md](security.md#dos-clientes-de-supabase) y [ADR 0006](decisions/0006-supabase-auth-and-system-repo.md)).
+- **Historial**: lo escribe un trigger; `HistoryTable` completa esa fila (cambio exacto, actor, motivo) en lugar de insertar otra.
+- **Memoria** (`memory-repository.ts`): solo para pruebas rápidas; `tests/fixtures/flow-seed.ts` arma un recorrido completo ejecutando los servicios reales.
+- Pendiente: subida real de archivos al bucket `evidence` con URL firmada.
 
 ## IA
 
@@ -37,7 +36,7 @@ Puerto `AiProvider` (`lib/ai/provider.ts`) con dos implementaciones: `SimulatedP
 ## Interfaz
 
 - Tailwind v4 con tokens en `app/globals.css` (fondo #0b0b0c, grafito, amarillo #ffd21f, naranja #ff4a1c, cian #3fd8ff) y tipografías Anton / Inter / JetBrains Mono, heredadas del landing original.
-- Rutas: `/` landing, `/entrar`, `/app` (proyectos), `/app/admin`, `/app/p/[id]` con pestañas conversación, diagnóstico, mentoría, validación, tareas e historial.
+- Rutas: `/` landing, `/entrar`, `/auth/callback`, `/bienvenida` (onboarding), `/configuracion`, `/app` (proyectos), `/app/admin`, `/app/p/[id]` con pestañas conversación, diagnóstico, mentoría, validación, tareas e historial.
 - Componentes compartidos en `shared/ui/`. Fechas con formato determinista (UTC−6) para evitar errores de hidratación.
 
 ## Decisiones

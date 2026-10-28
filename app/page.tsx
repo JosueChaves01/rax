@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DemoTag } from "@/shared/ui/primitives";
 
 const STAGES = [
   { n: "01", title: "Contá", hi: "tu idea.", body: "Conversás con RAX con tus palabras. Una pregunta a la vez. «No sé» también es una respuesta válida." },
@@ -40,7 +39,7 @@ export default function Home() {
           <Beams />
           <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-24 sm:px-6 sm:pt-32">
             <p className="eyebrow flex items-center gap-3">
-              Diagnóstico · Mentoría · Validación <DemoTag>PROTOTIPO</DemoTag>
+              Diagnóstico · Mentoría · Validación
             </p>
             <h1 className="display mt-6 text-[clamp(3.25rem,10vw,8.5rem)]">
               Tu idea,
@@ -55,8 +54,8 @@ export default function Home() {
               RAX combina inteligencia artificial y mentoría humana para que entiendas tu negocio, separes hechos de supuestos y conviertas lo que no sabés en experimentos pequeños y medibles.
             </p>
             <div className="mt-10 flex flex-wrap items-center gap-4">
-              <Link href="/entrar" className="inline-flex h-12 items-center rounded-full bg-accent px-7 text-sm font-semibold uppercase tracking-[0.08em] text-white shadow-[0_10px_40px_-10px_rgb(255_74_28/0.8)] hover:bg-accent-strong">
-                Abrir el espacio de trabajo
+              <Link href="/entrar?modo=registro" className="inline-flex h-12 items-center rounded-full bg-accent px-7 text-sm font-semibold uppercase tracking-[0.08em] text-white shadow-[0_10px_40px_-10px_rgb(255_74_28/0.8)] hover:bg-accent-strong">
+                Crear mi cuenta
               </Link>
               <a href="#recorrido" className="text-sm font-semibold uppercase tracking-[0.12em] text-muted hover:text-ink">
                 Ver el recorrido ↓
@@ -103,11 +102,9 @@ export default function Home() {
 
       <footer className="sticky bottom-0 z-20 border-t border-line bg-bg/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs text-muted sm:px-6">
-          <p className="flex items-center gap-2">
-            Prototipo navegable de Fase Cero. Personas y proyectos de ejemplo. <DemoTag />
-          </p>
-          <Link href="/entrar" className="inline-flex h-9 items-center rounded-full bg-accent px-4 font-semibold uppercase tracking-[0.08em] text-white hover:bg-accent-strong">
-            Probar RAX
+          <p>¿Querés acompañar como mentor/a? Creá tu cuenta y elegilo en la bienvenida.</p>
+          <Link href="/entrar?modo=registro" className="inline-flex h-9 items-center rounded-full bg-accent px-4 font-semibold uppercase tracking-[0.08em] text-white hover:bg-accent-strong">
+            Empezar
           </Link>
         </div>
       </footer>

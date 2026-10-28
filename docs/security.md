@@ -1,6 +1,18 @@
 # Seguridad
 
-> El prototipo usa acceso DEMO (cookie `rax_demo_user`) que **no es autenticación**: cualquiera puede elegir cualquier perfil. No exponer con datos reales.
+> Prototipo, no listo para producción. La autenticación es Supabase Auth (correo y contraseña con confirmación); la sesión vive en cookies httpOnly que refresca `middleware.ts`.
+
+## Dos clientes de Supabase
+
+- **Cliente de la persona** (`createUserClient`, clave publishable + su sesión): toda lectura y toda escritura de la persona. RLS se aplica siempre.
+- **Cliente del sistema** (`createSystemClient`, clave secreta, solo servidor): escrituras que ninguna persona debe poder hacer desde el navegador: respuestas y propuestas de la IA, auditoría, detalle del historial, alta de miembro/conversación/diagnóstico al crear un proyecto y pausar un proyecto desde mentoría. Solo se usa *después* de que `guard()` autorizó al actor; los triggers siguen impidiendo que la IA pise contenido humano.
+
+## Roles y onboarding
+
+- Toda cuenta nace como `entrepreneur`. Ver `guard_profile_role` (migración 0004): la persona puede editar su nombre y su onboarding, y pedir ser mentora (`mentor_status = 'pending'`), pero no cambiar su rol, su correo ni aprobarse.
+- Solo la administración aprueba (`role = 'mentor'`, `mentor_status = 'approved'`) o rechaza; queda en auditoría (`mentor.approved` / `mentor.rejected`).
+- La primera cuenta admin se crea a mano en SQL; no hay forma de volverse admin desde la app.
+- Crear proyectos exige rol emprendedor y onboarding completo (política `projects_insert`).
 
 ## Autorización en dos capas
 
@@ -35,7 +47,7 @@ Un mentor sin asignación activa no ve nada. La administración no lee contenido
 - `guard_diagnosis_item`: el mentor solo cambia prioridad o pide aclaración; las escrituras del servidor (IA) no pisan contenido revisado ni registran evidencia/decisiones/correcciones.
 - `guard_hypothesis`: solo el mentor asignado aprueba, y queda en `approved_by`.
 - `guard_experiment`: métrica y criterios inmutables tras iniciar; solo el dueño inicia.
-- `guard_profile_role`: solo la administración cambia roles.
+- `guard_profile_role`: solo la administración cambia roles y aprueba mentores.
 - Storage: bucket `evidence` privado, ruta `<project_id>/archivo`, 10 MB, tipos permitidos; lectura para quien puede leer el proyecto, subida para miembros.
 
 ## Entradas
@@ -46,12 +58,14 @@ Un mentor sin asignación activa no ve nada. La administración no lee contenido
 
 ## Secretos
 
-- `OPENROUTER_API_KEY` y `SUPABASE_SERVICE_ROLE_KEY` solo en servidor; `lib/ai/openrouter.ts` importa `server-only`.
+- `OPENROUTER_API_KEY` y `SUPABASE_SECRET_KEY` solo en servidor; `lib/ai/openrouter.ts`, `lib/supabase/server.ts` y `lib/data/supabase-db.ts` importan `server-only`.
+- `/configuracion` nombra las variables que faltan, nunca sus valores.
 - La auditoría no guarda claves, cabeceras ni prompts completos.
 
 ## Pendiente antes de usar con personas reales
 
-- Autenticación real (Supabase Auth) y eliminar el acceso DEMO en producción.
+- Recuperación de contraseña, y SMTP propio para los correos de Auth.
+- Verificar el flujo de Auth en el proyecto Supabase real.
 - Rate limiting por usuario en la conversación (costo y abuso).
 - Política de privacidad y consentimiento para enviar texto a un proveedor de IA externo.
 - Escaneo de archivos subidos.

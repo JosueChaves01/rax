@@ -38,18 +38,41 @@ insert into auth.users (id, email, raw_user_meta_data) values
 update public.profiles set role = 'mentor' where email in ('carla@test', 'diego@test');
 update public.profiles set role = 'admin' where email = 'admin@test';
 
--- Ana crea su proyecto.
+-- Sin onboarding no se crean proyectos.
 select pg_temp.act('00000000-0000-0000-0000-00000000000a');
+select pg_temp.expect_denied('sin onboarding no se crean proyectos',
+  $$insert into public.projects (owner_id, name) values ('00000000-0000-0000-0000-00000000000a', 'Prematuro')$$);
+update public.profiles set onboarded_at = now(), onboarding = '{"intent":"entrepreneur"}' where id = auth.uid();
+
+-- Ana crea su proyecto; el servidor (service role) crea conversación, diagnóstico y membresía.
 insert into public.projects (id, owner_id, name) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'Almuerzos saludables');
-select pg_temp.expect('el trigger crea membresía, conversación y diagnóstico',
-  (select count(*) from public.project_members where project_id = '10000000-0000-0000-0000-000000000001') = 1
-  and (select count(*) from public.conversations where project_id = '10000000-0000-0000-0000-000000000001') = 1
-  and (select count(*) from public.diagnoses where project_id = '10000000-0000-0000-0000-000000000001') = 1);
+select pg_temp.expect_denied('el cliente no crea la conversación',
+  $$insert into public.conversations (project_id) values ('10000000-0000-0000-0000-000000000001')$$);
+select pg_temp.expect_denied('el cliente no se agrega como dueño de otro proyecto',
+  $$insert into public.project_members (project_id, profile_id, role) values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b', 'owner')$$);
+select pg_temp.act(null);
+insert into public.project_members (project_id, profile_id, role) values
+  ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'owner');
+insert into public.conversations (project_id) values ('10000000-0000-0000-0000-000000000001');
+insert into public.diagnoses (project_id) values ('10000000-0000-0000-0000-000000000001');
+insert into public.messages (conversation_id, project_id, author, content)
+select id, project_id, 'assistant', 'Hola. Texto fijo de la plataforma.' from public.conversations;
+select pg_temp.act('00000000-0000-0000-0000-00000000000a');
+select pg_temp.expect('Ana ve su proyecto con conversación y diagnóstico',
+  (select count(*) from public.conversations) = 1 and (select count(*) from public.diagnoses) = 1);
+select pg_temp.expect_denied('el cliente no escribe respuestas del asistente',
+  $$insert into public.messages (conversation_id, project_id, author, content, provider)
+    select id, project_id, 'assistant', 'inventado', 'openrouter' from public.conversations$$);
 select pg_temp.expect_denied('Ana no puede crear proyectos a nombre de Luis',
   $$insert into public.projects (owner_id, name) values ('00000000-0000-0000-0000-00000000000b', 'Ajeno')$$);
 select pg_temp.expect_denied('Ana no puede ascenderse a admin (trigger)',
   $$update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-00000000000a'$$);
+select pg_temp.expect_denied('Ana no se aprueba como mentora',
+  $$update public.profiles set mentor_status = 'approved' where id = '00000000-0000-0000-0000-00000000000a'$$);
+update public.profiles set mentor_status = 'pending' where id = '00000000-0000-0000-0000-00000000000a';
+select pg_temp.expect('Ana sí puede pedir ser mentora',
+  (select mentor_status from public.profiles where id = '00000000-0000-0000-0000-00000000000a') = 'pending');
 insert into public.messages (conversation_id, project_id, author, author_id, content)
 select id, project_id, 'entrepreneur', '00000000-0000-0000-0000-00000000000a', 'Vendo almuerzos a oficinas'
 from public.conversations where project_id = '10000000-0000-0000-0000-000000000001';
@@ -102,7 +125,7 @@ select pg_temp.expect('la mentora sí puede priorizar y la versión sube',
 select pg_temp.act('00000000-0000-0000-0000-00000000000a');
 update public.projects set share_conversation_with_mentor = true where id = '10000000-0000-0000-0000-000000000001';
 select pg_temp.act('00000000-0000-0000-0000-00000000000c');
-select pg_temp.expect('con permiso, Carla ve la conversación', (select count(*) from public.messages) = 1);
+select pg_temp.expect('con permiso, Carla ve la conversación', (select count(*) from public.messages) = 2);
 
 -- Hipótesis: solo la mentora asignada aprueba.
 select pg_temp.act('00000000-0000-0000-0000-00000000000a');

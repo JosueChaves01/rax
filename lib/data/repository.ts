@@ -21,7 +21,7 @@ import type {
 
 /**
  * Puerto de persistencia. Los servicios de dominio solo conocen esta interfaz:
- * la implementación en memoria (demo) y la de Supabase son intercambiables.
+ * la implementación en memoria (pruebas) y la de Supabase son intercambiables.
  * Los filtros son de igualdad para que se traduzcan 1:1 a `.match()` de PostgREST.
  */
 export interface Table<T extends { id: string }> {

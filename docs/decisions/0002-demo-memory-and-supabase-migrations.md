@@ -1,6 +1,6 @@
 # 0002 · Datos DEMO en memoria y migraciones Supabase listas
 
-Fecha: 2026-10-28 · Estado: aceptada
+Fecha: 2026-10-28 · Estado: reemplazada por [0006](0006-supabase-auth-and-system-repo.md)
 
 ## Contexto
 Se pidió dejar las migraciones listas para conectar a un proyecto Supabase, sin crear el proyecto todavía.

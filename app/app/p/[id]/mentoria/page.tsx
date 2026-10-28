@@ -1,4 +1,5 @@
-import { Empty, Notice } from "@/shared/ui/primitives";
+import { Empty, Notice, Tag } from "@/shared/ui/primitives";
+import { EXPERTISE_LABEL, GOAL_LABEL, WEEKLY_HOURS_LABEL } from "@/features/labels";
 import { loadWorkspace } from "../data";
 import { ReviewRequests, SessionCard, SharingToggle } from "./sessions";
 
@@ -19,7 +20,18 @@ export default async function MentoringPage({ params }: { params: Promise<{ id: 
           <div className="rounded-2xl border border-line bg-panel p-5">
             <p className="eyebrow">Mentor asignado</p>
             {mentorNames.length ? (
-              <p className="display mt-2 text-2xl">{mentorNames.join(", ")}</p>
+              <>
+                <p className="display mt-2 text-2xl">{mentorNames.join(", ")}</p>
+                {w.mentors.map((m) =>
+                  w.mentorContext[m] ? (
+                    <div key={m} className="mt-2 flex flex-wrap gap-1.5">
+                      {w.mentorContext[m].expertise.map((e) => (
+                        <Tag key={e} color="var(--color-cyan)">{EXPERTISE_LABEL[e]}</Tag>
+                      ))}
+                    </div>
+                  ) : null,
+                )}
+              </>
             ) : (
               <p className="mt-2 text-sm text-muted">
                 Todavía no tenés mentor. Podés seguir conversando y ordenando información; las decisiones que requieren revisión humana quedan
@@ -29,6 +41,21 @@ export default async function MentoringPage({ params }: { params: Promise<{ id: 
             {w.permissions["project.update"] && <SharingToggle projectId={id} shared={w.project.shareConversationWithMentor} />}
           </div>
           {w.permissions["mentor.request_review"] && <ReviewRequests projectId={id} sessions={w.sessions} summaryConfirmed={!!w.diagnosis.summaryConfirmedAt} hasResults={w.results.length > 0} />}
+        </div>
+      )}
+
+      {w.isMentorView && w.founderContext && (
+        <div className="rounded-2xl border border-line bg-panel p-5">
+          <p className="eyebrow">Lo que {w.people[w.project.ownerId]?.name.split(" ")[0] ?? "la persona"} espera de RAX</p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {w.founderContext.goals.map((g) => (
+              <Tag key={g} color="var(--color-highlight)">{GOAL_LABEL[g]}</Tag>
+            ))}
+          </div>
+          {w.founderContext.mentorExpectation && <p className="mt-3 text-sm">«{w.founderContext.mentorExpectation}»</p>}
+          <p className="mt-2 text-xs text-muted">
+            {w.founderContext.sector || "Rubro sin indicar"} · {WEEKLY_HOURS_LABEL[w.founderContext.weeklyHours].toLowerCase()} por semana
+          </p>
         </div>
       )}
 

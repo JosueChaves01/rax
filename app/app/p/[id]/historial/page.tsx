@@ -1,5 +1,5 @@
 import { CHANGE_TEXT, AUDIT_TEXT } from "./timeline-labels";
-import { Card, DemoTag, Empty, Tag, formatDate } from "@/shared/ui/primitives";
+import { Card, Empty, Tag, formatDate } from "@/shared/ui/primitives";
 import { loadWorkspace } from "../data";
 import { EvidenceForm } from "./evidence-form";
 
@@ -33,7 +33,6 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
               <Card as="li" key={e.id} className="p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <Tag color="var(--color-ok)">{e.kind === "note" ? "Nota" : e.kind === "link" ? "Enlace" : "Archivo"}</Tag>
-                  {e.title.includes("DEMO") && <DemoTag />}
                   <span className="ml-auto text-[0.6875rem] text-faint">{name(e.uploadedBy)} · {formatDate(e.createdAt)}</span>
                 </div>
                 <p className="mt-2 font-semibold">{e.title}</p>

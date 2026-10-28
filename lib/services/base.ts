@@ -5,12 +5,21 @@ import { assertCan, type Action, type ProjectRelation } from "@/lib/authz";
 import { forbidden, notFound } from "@/lib/errors";
 
 export interface ServiceDeps {
+  /** Acceso con la identidad de la persona: en Supabase, sujeto a RLS y triggers. */
   repo: Repository;
+  /**
+   * Escrituras del sistema que no son de la persona: respuestas y propuestas de la IA, auditoría,
+   * historial y armado inicial del proyecto. En Supabase usa la service role, siempre DESPUÉS de que
+   * el servicio verificó el permiso. Sin `sys` (memoria, pruebas) se usa `repo`.
+   */
+  sys?: Repository;
   ai: AiProvider;
   actor: Profile;
   now: () => string;
   newId: (prefix: string) => string;
 }
+
+export const sysRepo = (d: ServiceDeps): Repository => d.sys ?? d.repo;
 
 export const defaultClock = () => new Date().toISOString();
 export const randomId = (prefix: string) => `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
@@ -56,7 +65,7 @@ export async function audit(
   action: AuditAction,
   opts: { projectId?: Id; targetId?: Id; meta?: AuditEvent["meta"]; actorId?: AuditEvent["actorId"] } = {},
 ) {
-  await d.repo.auditEvents.insert({
+  await sysRepo(d).auditEvents.insert({
     id: d.newId("aud"),
     action,
     actorId: opts.actorId ?? d.actor.id,
@@ -94,7 +103,7 @@ export async function recordHistory(
     reason,
     createdAt: d.now(),
   };
-  await d.repo.diagnosisItemHistory.insert(row);
+  await sysRepo(d).diagnosisItemHistory.insert(row);
 }
 
 export function requireRole(d: ServiceDeps, role: Profile["role"]) {

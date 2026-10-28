@@ -2,7 +2,7 @@ import { conflict, notFound } from "@/lib/errors";
 import type { Repository, Table } from "./repository";
 
 /**
- * Implementación en memoria del repositorio. Se usa para el prototipo (datos DEMO) y para las pruebas.
+ * Implementación en memoria del repositorio. Se usa en las pruebas.
  * Devuelve copias para que nadie mute el estado almacenado por referencia.
  */
 class MemoryTable<T extends { id: string }> implements Table<T> {

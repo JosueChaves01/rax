@@ -2,7 +2,7 @@ import type { MentorDecision, MentorSession, MentorSessionKind, SessionNote, Ses
 import { buildBriefing } from "@/features/mentoring/briefing";
 import { assertHypothesisTransition } from "@/features/hypotheses/rules";
 import { forbidden, notFound, validation } from "@/lib/errors";
-import { audit, guard, type ServiceDeps } from "./base";
+import { audit, guard, sysRepo, type ServiceDeps } from "./base";
 import { touch } from "./projects";
 
 /**
@@ -107,7 +107,8 @@ export async function completeSecondReview(d: ServiceDeps, sessionId: string, de
     await audit(d, "hypothesis.status_changed", { projectId: s.projectId, targetId: h.id, meta: { from: h.status, to: nextStatus, by: "mentor_decision" } });
   }
   if (decision === "pause") {
-    await d.repo.projects.update(s.projectId, { status: "paused", updatedAt: d.now() });
+    // La decisión del mentor pausa el proyecto: el permiso ya se verificó (mentor.decide).
+    await sysRepo(d).projects.update(s.projectId, { status: "paused", updatedAt: d.now() });
     await audit(d, "project.status_changed", { projectId: s.projectId, meta: { to: "paused", by: "mentor_decision" } });
   }
   const experiments = await d.repo.experiments.list({ projectId: s.projectId, hypothesisId });

@@ -49,15 +49,6 @@ export function Tag({ children, color, dashed, title }: { children: ReactNode; c
   );
 }
 
-/** Marca visible para todo lo que es demostración o simulación. */
-export function DemoTag({ children = "DEMO" }: { children?: ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-sm bg-highlight px-1.5 py-px font-mono text-[0.625rem] font-bold tracking-wider text-black">
-      {children}
-    </span>
-  );
-}
-
 export function Card({ children, className, as: As = "section" }: { children: ReactNode; className?: string; as?: "section" | "article" | "div" | "li" }) {
   return <As className={cx("rounded-2xl border border-line bg-panel", className)}>{children}</As>;
 }

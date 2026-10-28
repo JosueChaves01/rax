@@ -1,45 +1,49 @@
 import "server-only";
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { randomUUID } from "node:crypto";
+import { connection } from "next/server";
 import type { Profile } from "@/types/domain";
-import type { Repository } from "@/lib/data/repository";
-import { createMemoryRepository } from "@/lib/data/memory-repository";
-import { seedDemo } from "@/lib/data/demo-seed";
 import { getAiProvider } from "@/lib/ai";
-import { defaultClock, randomId, type ServiceDeps } from "@/lib/services/base";
+import { defaultClock, type ServiceDeps } from "@/lib/services/base";
+import { createPgRepository } from "@/lib/data/supabase-repository";
+import { supabaseDb } from "@/lib/data/supabase-db";
+import { missingConfig } from "@/lib/supabase/config";
+import { createSystemClient, createUserClient } from "@/lib/supabase/server";
 
-export const DEMO_SESSION_COOKIE = "rax_demo_user";
-
-/**
- * Modo de datos. Hoy solo "demo": repositorio en memoria del servidor, sembrado con datos DEMO.
- * Se reinicia al reiniciar el servidor (y en Vercel, por instancia). La implementación Supabase
- * se conecta aquí cuando existan credenciales (ver docs/architecture.md §Persistencia).
- */
-export const DATA_MODE = "demo" as const;
-
-const g = globalThis as unknown as { __raxRepo?: Promise<Repository> };
-
-export function getRepository(): Promise<Repository> {
-  if (!g.__raxRepo) {
-    g.__raxRepo = (async () => {
-      const repo = createMemoryRepository();
-      await seedDemo(repo);
-      return repo;
-    })();
-  }
-  return g.__raxRepo;
-}
-
-/** Acceso de demostración: el perfil se elige en /entrar. NO es autenticación real. */
-export const getActor = cache(async (): Promise<Profile | null> => {
-  const id = (await cookies()).get(DEMO_SESSION_COOKIE)?.value;
-  if (!id) return null;
-  const repo = await getRepository();
-  return (await repo.profiles.get(id)) ?? null;
+/** Sesión real de Supabase Auth: la persona y su perfil, o null si no hay sesión. */
+const getSession = cache(async () => {
+  // Siempre por pedido: sin esto, una build sin variables prerenderiza las páginas privadas.
+  await connection();
+  if (missingConfig().length) return null;
+  const supabase = await createUserClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const repo = createPgRepository(supabaseDb(supabase));
+  const profile = await repo.profiles.get(user.id);
+  return profile ? { repo, profile } : null;
 });
 
+export const getActor = cache(async (): Promise<Profile | null> => (await getSession())?.profile ?? null);
+
+/** Dependencias de los servicios para la persona con sesión. */
 export async function getDeps(): Promise<ServiceDeps | null> {
-  const actor = await getActor();
-  if (!actor) return null;
-  return { repo: await getRepository(), ai: getAiProvider(), actor, now: defaultClock, newId: randomId };
+  const session = await getSession();
+  if (!session) return null;
+  return {
+    repo: session.repo,
+    sys: createPgRepository(supabaseDb(createSystemClient())),
+    ai: getAiProvider(),
+    actor: session.profile,
+    now: defaultClock,
+    newId: () => randomUUID(),
+  };
+}
+
+/** Adónde va cada persona según su rol y su onboarding. */
+export function homeFor(p: Profile): string {
+  if (!p.onboardedAt || (p.role === "admin" && p.onboarding?.intent !== "admin")) return "/bienvenida";
+  if (p.role === "admin") return "/app/admin";
+  return "/app";
 }
