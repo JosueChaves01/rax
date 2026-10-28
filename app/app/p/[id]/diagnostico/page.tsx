@@ -10,6 +10,7 @@ export default async function DiagnosisPage({ params }: { params: Promise<{ id: 
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="display text-4xl">
+          <span className="eyebrow mb-2 block font-sans normal-case">Etapa 1 · Entender</span>
           Diagnóstico <span className="text-highlight">vivo.</span>
         </h2>
         <Tag color="var(--color-cyan)">{DIAGNOSIS_STATUS_LABEL[w.diagnosis.status]}</Tag>

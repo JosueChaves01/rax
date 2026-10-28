@@ -15,7 +15,7 @@ function resolveOrigin(request: NextRequest): string {
   return request.nextUrl.origin;
 }
 
-/** Destino del enlace de confirmación de correo: canjea el código por una sesión. */
+/** Destino del enlace de confirmación de correo y del regreso desde Google: canjea el código por una sesión. */
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const next = request.nextUrl.searchParams.get("next");
@@ -27,5 +27,7 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return NextResponse.redirect(new URL(target, origin));
   }
-  return NextResponse.redirect(new URL("/entrar?error=enlace", origin));
+  // Google devuelve ?error=... si la persona cancela o el proveedor no está configurado.
+  const fromProvider = url.searchParams.has("error") && !code;
+  return NextResponse.redirect(new URL(`/entrar?error=${fromProvider ? "google" : "enlace"}`, url.origin));
 }

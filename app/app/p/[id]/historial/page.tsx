@@ -19,6 +19,7 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-8">
       <h2 className="display text-4xl">
+        <span className="eyebrow mb-2 block font-sans normal-case">Archivo</span>
         Evidencia e <span className="text-highlight">historial.</span>
       </h2>
 

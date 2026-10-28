@@ -7,8 +7,10 @@ export default async function TasksPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="space-y-6">
       <h2 className="display text-4xl">
-        Tareas y <span className="text-highlight">seguimiento.</span>
+        <span className="eyebrow mb-2 block font-sans normal-case">Archivo</span>
+        Todas las <span className="text-highlight">tareas.</span>
       </h2>
+      <p className="max-w-3xl text-sm text-muted">Vista de consulta. Las tareas de cada experimento también se manejan desde su tarjeta, en Probar.</p>
       <TaskBoard
         projectId={id}
         tasks={w.tasks}

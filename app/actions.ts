@@ -147,6 +147,26 @@ export async function signUpAction(_: AuthState, form: FormData): Promise<AuthSt
   redirect("/bienvenida");
 }
 
+/**
+ * Entrar o registrarse con Google (Supabase OAuth). La primera vez crea la cuenta;
+ * el callback lleva a /bienvenida, que manda al onboarding o a la casa de cada rol.
+ */
+export async function googleSignInAction(_: AuthState, form: FormData): Promise<AuthState> {
+  if (missingConfig().length) return { error: "RAX todavía no está conectado a Supabase." };
+  // El origen del pedido sirve también en los despliegues de vista previa; Supabase solo acepta las URLs permitidas.
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const origin = host ? `${h.get("x-forwarded-proto") ?? "https"}://${host}` : appUrl();
+  const next = safeNext(form.get("next")) ?? "/bienvenida";
+  const supabase = await createUserClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`, queryParams: { prompt: "select_account" } },
+  });
+  if (error || !data.url) return { error: "No pudimos conectar con Google. Probá de nuevo o usá tu correo." };
+  redirect(data.url);
+}
+
 export async function signOutAction() {
   if (!missingConfig().length) {
     const origin = await resolveRequestOrigin();
@@ -161,7 +181,7 @@ export async function signOutAction() {
 export async function completeOnboardingAction(input: unknown) {
   const res = await run(null, async (d) => {
     const r = await completeOnboarding(d, V.parse(V.OnboardingInput, input));
-    return { home: r.project ? `/app/p/${r.project.id}` : homeFor(r.profile) };
+    return { home: r.project ? `/app/p/${r.project.id}/conversacion` : homeFor(r.profile) };
   });
   if (res.ok && res.data) redirect(res.data.home);
   return res;
@@ -171,7 +191,7 @@ export async function completeOnboardingAction(input: unknown) {
 
 export async function createProjectAction(input: { name: string; description: string; nature: InitiativeNature }) {
   const res = await run(null, (d) => createProject(d, V.parse(V.NewProject, input)));
-  if (res.ok && res.data) redirect(`/app/p/${res.data.id}`);
+  if (res.ok && res.data) redirect(`/app/p/${res.data.id}/conversacion`);
   return res.ok ? { ok: true as const } : res;
 }
 

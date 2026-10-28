@@ -11,11 +11,33 @@
 | 5 | Borrador de resumen y confirmación del emprendedor | IA + Emprendedor | `/diagnostico` | IMPLEMENTED |
 | 6 | Revisar elementos: confirmar, corregir, rechazar, aclarar, desconocido | Emprendedor | `/diagnostico` | IMPLEMENTED |
 | 7 | Asignar mentor | Administración | `/app/admin` | IMPLEMENTED |
-| 8 | Primera revisión: briefing, notas, priorizar, pedir aclaraciones | Mentor | `/mentoria`, `/diagnostico` | IMPLEMENTED |
+| 8 | Primera revisión: briefing, notas, priorizar, pedir aclaraciones | Mentor | `/orientar`, `/diagnostico` | IMPLEMENTED |
 | 9 | Proponer hipótesis y enviarla a aprobación | Emprendedor | `/validacion` | IMPLEMENTED |
 | 10 | Aprobar, devolver o descartar hipótesis | Mentor asignado | `/validacion` | IMPLEMENTED |
 | 11 | Diseñar e iniciar experimento (criterios bloqueados), tareas y evidencias | Emprendedor | `/validacion`, `/tareas`, `/historial` | IMPLEMENTED (archivos: solo metadatos, sin subida real) |
 | 12 | Registrar resultado y segunda revisión con decisión | Emprendedor + Mentor | `/validacion`, `/mentoria` | IMPLEMENTED |
+
+## Navegación por etapas
+
+El proyecto se navega por 4 etapas que agrupan las 10 fases (`features/projects/stages.ts`), más un Inicio y un Archivo:
+
+| Sección | Páginas | Fases |
+|---|---|---|
+| Inicio | `/app/p/[id]`: lo que sigue, a quién le toca y pendientes | todas |
+| 1 · Entender | `/conversacion`, `/diagnostico` | nuevo, conversación, resumen pendiente |
+| 2 · Orientar | `/orientar`: primera revisión y priorización del problema | 1ª revisión, priorizando |
+| 3 · Probar | `/validacion`: hipótesis y experimentos, con sus tareas y evidencia dentro de cada experimento | hipótesis, preparar experimento, en curso |
+| 4 · Decidir | `/decidir` (segunda revisión) | resultados, etapa concluida |
+| Archivo | `/historial`, `/tareas` (todas las tareas) | consulta |
+
+`/mentoria` redirige a la revisión que corresponde. `turnOf` dice a quién le toca mover el proyecto (emprendedor, mentor o administración, por ejemplo cuando falta asignar mentor). En celular, Inicio y las etapas van en una barra inferior.
+
+## Entrada por rol
+
+- **Emprendedor**: `/app` lista sus proyectos con la etapa y a quién le toca.
+- **Mentor**: `/app` abre con la bandeja (`features/mentoring/inbox.ts`): revisiones pedidas e hipótesis por aprobar, más viejo primero, cada una con enlace a la acción. Debajo, sus proyectos y su cupo.
+- **Postulante a mentor**: ve el estado de la solicitud y lo que envió.
+- **Administración**: `/app/admin` es un panel con contadores (proyectos esperando mentor, solicitudes, cupos libres) y pestañas (`?ver=asignaciones|solicitudes|personas|auditoria`). Los proyectos sin mentor van primero, con un mentor sugerido por rubro y cupo.
 
 ## Fase del proyecto (derivada)
 
@@ -31,7 +53,7 @@ Toda cuenta empieza en `/bienvenida` y elige cómo va a usar RAX.
 
 | Persona | Qué se le pregunta | Para qué se usa | Después |
 |---|---|---|---|
-| Emprendedor | Etapa y sector; objetivos con RAX, horas por semana, qué espera del mentor; primer proyecto | El mentor lo ve en mentoría; la administración lo usa para asignar | Se crea el proyecto y entra directo a la conversación |
+| Emprendedor | Etapa y sector; objetivos con RAX, horas por semana, qué espera del mentor; primer proyecto | El mentor lo ve en mentoría; la administración lo usa para asignar | Se crea el proyecto y entra directo a la conversación (`/app/p/[id]/conversacion`) |
 | Mentor | Años de experiencia, bio, LinkedIn; especialidades, sectores, horas por mes, máximo de proyectos | El emprendedor ve sus especialidades; la administración ve su cupo al asignar | Queda como postulación: ve una pantalla de estado hasta que la administración la aprueba o la rechaza (puede volver a postularse) |
 | Administración | Organización y programa | Contexto del panel | Solo cuentas que ya son admin (asignado por SQL); va a `/app/admin` |
 
