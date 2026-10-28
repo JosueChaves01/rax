@@ -95,7 +95,8 @@ describe("etapas del proyecto", () => {
   it("cada página del proyecto pertenece a una sola sección", () => {
     const slugs = SECTIONS.flatMap((s) => s.pages.map((p) => p.slug));
     expect(new Set(slugs).size).toBe(slugs.length);
-    expect(sectionOfSlug("tareas").id).toBe("probar");
+    expect(sectionOfSlug("validacion").id).toBe("probar");
+    expect(sectionOfSlug("tareas").id).toBe("archivo");
     expect(sectionOfSlug("").id).toBe("inicio");
   });
 });

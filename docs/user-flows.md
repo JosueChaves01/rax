@@ -11,7 +11,7 @@
 | 5 | Borrador de resumen y confirmación del emprendedor | IA + Emprendedor | `/diagnostico` | IMPLEMENTED |
 | 6 | Revisar elementos: confirmar, corregir, rechazar, aclarar, desconocido | Emprendedor | `/diagnostico` | IMPLEMENTED |
 | 7 | Asignar mentor | Administración | `/app/admin` | IMPLEMENTED |
-| 8 | Primera revisión: briefing, notas, priorizar, pedir aclaraciones | Mentor | `/mentoria`, `/diagnostico` | IMPLEMENTED |
+| 8 | Primera revisión: briefing, notas, priorizar, pedir aclaraciones | Mentor | `/orientar`, `/diagnostico` | IMPLEMENTED |
 | 9 | Proponer hipótesis y enviarla a aprobación | Emprendedor | `/validacion` | IMPLEMENTED |
 | 10 | Aprobar, devolver o descartar hipótesis | Mentor asignado | `/validacion` | IMPLEMENTED |
 | 11 | Diseñar e iniciar experimento (criterios bloqueados), tareas y evidencias | Emprendedor | `/validacion`, `/tareas`, `/historial` | IMPLEMENTED (archivos: solo metadatos, sin subida real) |
@@ -25,10 +25,10 @@ El proyecto se navega por 4 etapas que agrupan las 10 fases (`features/projects/
 |---|---|---|
 | Inicio | `/app/p/[id]`: lo que sigue, a quién le toca y pendientes | todas |
 | 1 · Entender | `/conversacion`, `/diagnostico` | nuevo, conversación, resumen pendiente |
-| 2 · Orientar | `/orientar` (primera revisión) | 1ª revisión, priorizando |
-| 3 · Probar | `/validacion`, `/tareas` | hipótesis, preparar experimento, en curso |
+| 2 · Orientar | `/orientar`: primera revisión y priorización del problema | 1ª revisión, priorizando |
+| 3 · Probar | `/validacion`: hipótesis y experimentos, con sus tareas y evidencia dentro de cada experimento | hipótesis, preparar experimento, en curso |
 | 4 · Decidir | `/decidir` (segunda revisión) | resultados, etapa concluida |
-| Archivo | `/historial` | consulta |
+| Archivo | `/historial`, `/tareas` (todas las tareas) | consulta |
 
 `/mentoria` redirige a la revisión que corresponde. `turnOf` dice a quién le toca mover el proyecto (emprendedor, mentor o administración, por ejemplo cuando falta asignar mentor). En celular, Inicio y las etapas van en una barra inferior.
 

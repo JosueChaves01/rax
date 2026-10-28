@@ -8,7 +8,7 @@ import { useAction } from "@/shared/ui/use-action";
 
 const ACCEPT = "application/pdf,image/png,image/jpeg,image/webp,text/plain,text/csv";
 
-export function EvidenceForm({ projectId }: { projectId: string }) {
+export function EvidenceForm({ projectId, idPrefix = "ev", onSaved }: { projectId: string; idPrefix?: string; onSaved?: () => void }) {
   const [kind, setKind] = useState<EvidenceKind>("note");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -35,6 +35,7 @@ export function EvidenceForm({ projectId }: { projectId: string }) {
             setDescription("");
             setUrl("");
             setFile(null);
+            onSaved?.();
           },
         );
       }}
@@ -44,28 +45,28 @@ export function EvidenceForm({ projectId }: { projectId: string }) {
         <div className="flex gap-2">
           {(["note", "link", "file"] as const).map((k) => (
             <label key={k} className="cursor-pointer rounded-full border border-line-strong px-3 py-1 text-xs has-[:checked]:border-accent has-[:checked]:bg-accent has-[:checked]:text-white">
-              <input type="radio" name="ev-kind" className="sr-only" checked={kind === k} onChange={() => setKind(k)} />
+              <input type="radio" name={`${idPrefix}-kind`} className="sr-only" checked={kind === k} onChange={() => setKind(k)} />
               {k === "note" ? "Nota" : k === "link" ? "Enlace" : "Archivo"}
             </label>
           ))}
         </div>
       </fieldset>
-      <Field id="ev-title" label="Título">
-        <input id="ev-title" className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} required />
+      <Field id={`${idPrefix}-title`} label="Título">
+        <input id={`${idPrefix}-title`} className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} required />
       </Field>
       {kind === "link" && (
-        <Field id="ev-url" label="URL">
-          <input id="ev-url" type="url" className={inputClass} value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://…" />
+        <Field id={`${idPrefix}-url`} label="URL">
+          <input id={`${idPrefix}-url`} type="url" className={inputClass} value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://…" />
         </Field>
       )}
       {kind === "file" && (
-        <Field id="ev-file" label="Archivo" hint="PDF, imagen, texto o CSV, hasta 10 MB. En el prototipo se valida pero no se almacena.">
-          <input id="ev-file" type="file" accept={ACCEPT} className="block w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-raised file:px-3 file:py-1.5 file:text-xs file:text-ink" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
+        <Field id={`${idPrefix}-file`} label="Archivo" hint="PDF, imagen, texto o CSV, hasta 10 MB. En el prototipo se valida pero no se almacena.">
+          <input id={`${idPrefix}-file`} type="file" accept={ACCEPT} className="block w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-raised file:px-3 file:py-1.5 file:text-xs file:text-ink" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
         </Field>
       )}
       <div className="md:col-span-2">
-        <Field id="ev-desc" label="Qué muestra">
-          <textarea id="ev-desc" rows={2} className={inputClass} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} />
+        <Field id={`${idPrefix}-desc`} label="Qué muestra">
+          <textarea id={`${idPrefix}-desc`} rows={2} className={inputClass} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} />
         </Field>
       </div>
       <Button variant="primary" type="submit" disabled={pending}>Guardar evidencia</Button>
