@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Experiment, ExperimentResult, Hypothesis, ResultOutcome, Uncertainty } from "@/types/domain";
+import type { Experiment, ExperimentResult, Hypothesis, ResultOutcome, Task, Uncertainty } from "@/types/domain";
 import {
   createExperimentAction,
   experimentTransitionAction,
@@ -16,6 +16,7 @@ import { hypothesisIssues } from "@/features/hypotheses/rules";
 import { missingForReady } from "@/features/experiments/rules";
 import { Button, Card, Field, Notice, Tag, cx, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
+import { ExperimentWork } from "./experiment-work";
 
 type Problem = { id: string; title: string; rank?: number };
 type People = Record<string, { id: string; name: string; role: string }>;
@@ -154,6 +155,7 @@ export function HypothesisCard(props: {
   experiments: Experiment[];
   results: ExperimentResult[];
   evidence: Array<{ id: string; title: string }>;
+  tasks: Task[];
   problems: Problem[];
   perms: Record<string, boolean>;
   people: People;
@@ -245,7 +247,16 @@ export function HypothesisCard(props: {
       {props.experiments.length > 0 && (
         <ul className="mt-5 space-y-3 border-t border-line pt-5">
           {props.experiments.map((e) => (
-            <ExperimentCard key={`${e.id}-${e.version}`} projectId={projectId} e={e} results={props.results.filter((r) => r.experimentId === e.id)} evidence={props.evidence} perms={perms} people={props.people} />
+            <ExperimentCard
+              key={`${e.id}-${e.version}`}
+              projectId={projectId}
+              e={e}
+              results={props.results.filter((r) => r.experimentId === e.id)}
+              evidence={props.evidence}
+              tasks={props.tasks.filter((t) => t.experimentId === e.id)}
+              perms={perms}
+              people={props.people}
+            />
           ))}
         </ul>
       )}
@@ -341,7 +352,23 @@ function ExperimentForm({ initial = EMPTY_E, submitLabel, onSubmit, pending, loc
 
 const STEPS: Experiment["status"][] = ["design", "ready", "running", "results_pending", "reviewed"];
 
-function ExperimentCard({ projectId, e, results, evidence, perms, people }: { projectId: string; e: Experiment; results: ExperimentResult[]; evidence: Array<{ id: string; title: string }>; perms: Record<string, boolean>; people: People }) {
+function ExperimentCard({
+  projectId,
+  e,
+  results,
+  evidence,
+  tasks,
+  perms,
+  people,
+}: {
+  projectId: string;
+  e: Experiment;
+  results: ExperimentResult[];
+  evidence: Array<{ id: string; title: string }>;
+  tasks: Task[];
+  perms: Record<string, boolean>;
+  people: People;
+}) {
   const [mode, setMode] = useState<null | "edit" | "result">(null);
   const { run, pending, error, code, reload } = useAction();
   const step = STEPS.indexOf(e.status);
@@ -376,6 +403,18 @@ function ExperimentCard({ projectId, e, results, evidence, perms, people }: { pr
         </ul>
       )}
       {e.criteriaLockedAt && <p className="mt-3 text-xs text-cyan">🔒 Criterios bloqueados el {formatDate(e.criteriaLockedAt)}, antes de observar resultados.</p>}
+
+      {e.status !== "design" && (
+        <ExperimentWork
+          projectId={projectId}
+          e={e}
+          tasks={tasks}
+          attached={evidence.filter((x) => results.some((r) => r.evidenceIds.includes(x.id)))}
+          projectEvidence={evidence.length}
+          canManageTasks={perms["task.manage"]}
+          canAddEvidence={perms["evidence.add"]}
+        />
+      )}
 
       {results.map((r) => (
         <div key={r.id} className="mt-3 rounded-lg border border-line p-3 text-sm">

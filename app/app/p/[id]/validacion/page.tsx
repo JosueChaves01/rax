@@ -10,8 +10,9 @@ export default async function ValidationPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="display text-4xl">
+      <div>
+        <p className="eyebrow">Etapa 3 · Probar</p>
+        <h2 className="display mt-2 text-4xl">
           Hipótesis y <span className="text-highlight">experimentos.</span>
         </h2>
       </div>
@@ -33,6 +34,7 @@ export default async function ValidationPage({ params }: { params: Promise<{ id:
               experiments={w.experiments.filter((e) => e.hypothesisId === h.id)}
               results={w.results}
               evidence={w.evidence.map((e) => ({ id: e.id, title: e.title }))}
+              tasks={w.tasks}
               problems={problems}
               perms={w.permissions}
               people={w.people as Record<string, { id: string; name: string; role: string }>}

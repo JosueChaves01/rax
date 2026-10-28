@@ -4,6 +4,7 @@ import { Empty, Notice, Tag } from "@/shared/ui/primitives";
 import { EXPERTISE_LABEL, GOAL_LABEL, WEEKLY_HOURS_LABEL } from "@/features/labels";
 import { loadWorkspace } from "../data";
 import { ReviewRequests, SessionCard, SharingToggle } from "./sessions";
+import { PriorityPanel } from "../orientar/priority-panel";
 
 const COPY = {
   first_review: {
@@ -111,20 +112,25 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
       )}
 
       {kind === "first_review" && firstDone && (
-        <div className="rounded-2xl border border-line bg-panel p-5">
-          <p className="eyebrow">Después del acuerdo</p>
-          <p className="mt-2 text-sm">
-            {w.phase === "prioritizing"
-              ? "Falta priorizar el problema a investigar primero, con una justificación. Se hace sobre las tarjetas de problema del diagnóstico."
-              : "El problema a investigar ya está priorizado. El paso siguiente es convertirlo en una hipótesis."}
-          </p>
-          <Link
-            href={`/app/p/${id}/${w.phase === "prioritizing" ? "diagnostico" : "validacion"}`}
-            className="mt-3 inline-block text-xs font-semibold uppercase tracking-[0.12em] text-accent hover:text-accent-strong"
-          >
-            {w.phase === "prioritizing" ? "Priorizar el problema →" : "Ir a Probar →"}
-          </Link>
-        </div>
+        <PriorityPanel
+          projectId={id}
+          canPrioritize={w.permissions["diagnosis.prioritize"]}
+          problems={w.items
+            .filter((i) => i.category === "problem" && i.reviewStatus !== "rejected" && i.infoType !== "unknown")
+            .map((i) => ({
+              id: i.id,
+              title: i.title,
+              content: i.content,
+              version: i.version,
+              priority: i.priority && { rank: i.priority.rank, rationale: i.priority.rationale, setByName: w.people[i.priority.setBy]?.name ?? "Persona" },
+            }))}
+        />
+      )}
+
+      {kind === "first_review" && firstDone && w.phase !== "prioritizing" && (
+        <Link href={`/app/p/${id}/validacion`} className="inline-block text-xs font-semibold uppercase tracking-[0.12em] text-accent hover:text-accent-strong">
+          Problema priorizado · ir a Probar →
+        </Link>
       )}
     </div>
   );

@@ -12,7 +12,7 @@ import { useAction } from "@/shared/ui/use-action";
 
 export type People = Record<string, { id: string; name: string; role: string }>;
 
-type Mode = null | "edit" | "reject" | "clarify" | "evidence" | "prioritize" | "comment" | "history";
+type Mode = null | "edit" | "reject" | "clarify" | "evidence" | "comment" | "history";
 
 const CHANGE_LABEL: Record<DiagnosisItemHistory["change"], string> = {
   created: "Creado",
@@ -48,7 +48,6 @@ export function ItemCard({
   const [content, setContent] = useState(item.content);
   const [uncertainty, setUncertainty] = useState<Uncertainty>(item.uncertainty);
   const [reason, setReason] = useState("");
-  const [rank, setRank] = useState(item.priority?.rank ?? 1);
   const [evidenceId, setEvidenceId] = useState("");
   const st = standing(item);
   const name = (id: string) => (id === "ai" ? "IA" : (people[id]?.name ?? "Persona"));
@@ -154,11 +153,6 @@ export function ItemCard({
             Evidencia
           </Button>
         )}
-        {perms["diagnosis.prioritize"] && item.category === "problem" && !isRejected && item.infoType !== "unknown" && (
-          <Button size="sm" variant="ghost" aria-expanded={mode === "prioritize"} onClick={() => toggle("prioritize")}>
-            Priorizar
-          </Button>
-        )}
         {perms["diagnosis.comment"] && (
           <Button size="sm" variant="ghost" aria-expanded={mode === "comment"} onClick={() => toggle("comment")}>
             Comentar
@@ -262,32 +256,6 @@ export function ItemCard({
               </Button>
             </>
           )}
-        </form>
-      )}
-
-      {mode === "prioritize" && (
-        <form
-          className="mt-3 space-y-3 rounded-xl border border-line p-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            apply({ kind: "prioritize", rank, rationale: reason });
-          }}
-        >
-          <p className="text-xs text-muted">
-            La prioridad es una decisión contextual y revisable, no un puntaje objetivo. Considerá impacto, frecuencia, evidencia disponible y
-            costo de investigarlo.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
-            <Field id={fid("rank")} label="Orden">
-              <input id={fid("rank")} type="number" min={1} max={50} className={inputClass} value={rank} onChange={(e) => setRank(Number(e.target.value))} />
-            </Field>
-            <Field id={fid("rat")} label="Justificación">
-              <input id={fid("rat")} className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} required />
-            </Field>
-          </div>
-          <Button size="sm" variant="primary" disabled={pending} type="submit">
-            Guardar prioridad
-          </Button>
         </form>
       )}
 

@@ -11,7 +11,6 @@ const CTA: Record<string, string> = {
   diagnostico: "Abrir el diagnóstico",
   orientar: "Ir a la primera revisión",
   validacion: "Ir a hipótesis y experimentos",
-  tareas: "Ver las tareas",
   decidir: "Ir a la segunda revisión",
 };
 
@@ -32,7 +31,7 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
       : { label: "Tarjetas por confirmar", n: pendingReview(w.items).length, tab: "diagnostico" },
     { label: "Preguntas abiertas", n: openQuestions(w.items).length, tab: "diagnostico" },
     { label: "Hipótesis esperando aprobación", n: hypPending, tab: "validacion" },
-    { label: "Tareas abiertas", n: w.tasks.filter((t) => t.status !== "done").length, tab: "tareas" },
+    { label: "Tareas abiertas", n: w.tasks.filter((t) => t.status !== "done").length, tab: "validacion" },
   ];
 
   return (

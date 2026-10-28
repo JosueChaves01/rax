@@ -90,17 +90,17 @@ export const SECTIONS: Section[] = [
       { slug: "diagnostico", label: "Diagnóstico" },
     ],
   },
-  { id: "orientar", label: "Orientar", pages: [{ slug: "orientar", label: "Primera revisión" }] },
+  { id: "orientar", label: "Orientar", pages: [{ slug: "orientar", label: "Revisión y prioridad" }] },
+  { id: "probar", label: "Probar", pages: [{ slug: "validacion", label: "Hipótesis y experimentos" }] },
+  { id: "decidir", label: "Decidir", pages: [{ slug: "decidir", label: "Segunda revisión" }] },
   {
-    id: "probar",
-    label: "Probar",
+    id: "archivo",
+    label: "Archivo",
     pages: [
-      { slug: "validacion", label: "Hipótesis y experimentos" },
-      { slug: "tareas", label: "Tareas" },
+      { slug: "historial", label: "Evidencia e historial" },
+      { slug: "tareas", label: "Todas las tareas" },
     ],
   },
-  { id: "decidir", label: "Decidir", pages: [{ slug: "decidir", label: "Segunda revisión" }] },
-  { id: "archivo", label: "Archivo", pages: [{ slug: "historial", label: "Evidencia e historial" }] },
 ];
 
 export function sectionOfSlug(slug: string): Section {

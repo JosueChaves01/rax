@@ -21,8 +21,8 @@ export const NEXT_STEP: Record<ProjectPhase, Record<Viewer, { text: string; tab:
     mentor: { text: "Primera revisión: leé el resumen preparado y orientá el enfoque.", tab: "orientar" },
   },
   prioritizing: {
-    entrepreneur: { text: "Priorizá el problema a investigar primero, con una justificación.", tab: "diagnostico" },
-    mentor: { text: "Ayudá a priorizar problemas en el diagnóstico.", tab: "diagnostico" },
+    entrepreneur: { text: "Priorizá el problema a investigar primero, con una justificación.", tab: "orientar" },
+    mentor: { text: "Ayudá a priorizar el problema a investigar primero.", tab: "orientar" },
   },
   hypotheses: {
     entrepreneur: { text: "Convertí la incertidumbre principal en una hipótesis comprobable.", tab: "validacion" },
@@ -34,7 +34,7 @@ export const NEXT_STEP: Record<ProjectPhase, Record<Viewer, { text: string; tab:
   },
   experiments_running: {
     entrepreneur: { text: "Ejecutá el experimento y registrá el resultado, sea cual sea.", tab: "validacion" },
-    mentor: { text: "Experimento en curso. Podés acompañar las tareas.", tab: "tareas" },
+    mentor: { text: "Experimento en curso. Podés acompañar sus tareas.", tab: "validacion" },
   },
   results_review: {
     entrepreneur: { text: "Pedí la segunda revisión para decidir el siguiente paso.", tab: "decidir" },
