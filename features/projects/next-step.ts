@@ -2,14 +2,14 @@ import type { ProjectPhase } from "@/types/domain";
 
 export type Viewer = "entrepreneur" | "mentor";
 
-/** Sugerencia del siguiente paso según la fase real y quién mira. */
+/** Sugerencia del siguiente paso según la fase real y quién mira. `tab` es la página del proyecto donde se hace. */
 export const NEXT_STEP: Record<ProjectPhase, Record<Viewer, { text: string; tab: string }>> = {
   new: {
-    entrepreneur: { text: "Contale a RAX tu idea con tus palabras. No hace falta tenerla clara.", tab: "" },
+    entrepreneur: { text: "Contale a RAX tu idea con tus palabras. No hace falta tenerla clara.", tab: "conversacion" },
     mentor: { text: "El proyecto recién empieza. Todavía no hay contexto para revisar.", tab: "diagnostico" },
   },
   conversation: {
-    entrepreneur: { text: "Seguí la conversación. Lo que no sepas queda como pregunta abierta.", tab: "" },
+    entrepreneur: { text: "Seguí la conversación. Lo que no sepas queda como pregunta abierta.", tab: "conversacion" },
     mentor: { text: "El emprendedor está conversando. Podés dejar comentarios en el diagnóstico.", tab: "diagnostico" },
   },
   summary_pending: {
@@ -17,8 +17,8 @@ export const NEXT_STEP: Record<ProjectPhase, Record<Viewer, { text: string; tab:
     mentor: { text: "Esperando que el emprendedor confirme su resumen inicial.", tab: "diagnostico" },
   },
   mentor_review_1: {
-    entrepreneur: { text: "Pedí la primera revisión del mentor para orientar el enfoque.", tab: "mentoria" },
-    mentor: { text: "Primera revisión: leé el resumen preparado y orientá el enfoque.", tab: "mentoria" },
+    entrepreneur: { text: "Pedí la primera revisión del mentor para orientar el enfoque.", tab: "orientar" },
+    mentor: { text: "Primera revisión: leé el resumen preparado y orientá el enfoque.", tab: "orientar" },
   },
   prioritizing: {
     entrepreneur: { text: "Priorizá el problema a investigar primero, con una justificación.", tab: "diagnostico" },
@@ -37,11 +37,11 @@ export const NEXT_STEP: Record<ProjectPhase, Record<Viewer, { text: string; tab:
     mentor: { text: "Experimento en curso. Podés acompañar las tareas.", tab: "tareas" },
   },
   results_review: {
-    entrepreneur: { text: "Pedí la segunda revisión para decidir el siguiente paso.", tab: "mentoria" },
-    mentor: { text: "Segunda revisión: contrastá resultados con criterios y registrá una decisión.", tab: "mentoria" },
+    entrepreneur: { text: "Pedí la segunda revisión para decidir el siguiente paso.", tab: "decidir" },
+    mentor: { text: "Segunda revisión: contrastá resultados con criterios y registrá una decisión.", tab: "decidir" },
   },
   decided: {
-    entrepreneur: { text: "Etapa concluida. Revisá la decisión y su justificación.", tab: "mentoria" },
-    mentor: { text: "Decisión registrada para esta etapa.", tab: "mentoria" },
+    entrepreneur: { text: "Etapa concluida. Revisá la decisión y su justificación.", tab: "decidir" },
+    mentor: { text: "Decisión registrada para esta etapa.", tab: "decidir" },
   },
 };

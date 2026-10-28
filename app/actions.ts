@@ -143,7 +143,7 @@ export async function signOutAction() {
 export async function completeOnboardingAction(input: unknown) {
   const res = await run(null, async (d) => {
     const r = await completeOnboarding(d, V.parse(V.OnboardingInput, input));
-    return { home: r.project ? `/app/p/${r.project.id}` : homeFor(r.profile) };
+    return { home: r.project ? `/app/p/${r.project.id}/conversacion` : homeFor(r.profile) };
   });
   if (res.ok && res.data) redirect(res.data.home);
   return res;
@@ -153,7 +153,7 @@ export async function completeOnboardingAction(input: unknown) {
 
 export async function createProjectAction(input: { name: string; description: string; nature: InitiativeNature }) {
   const res = await run(null, (d) => createProject(d, V.parse(V.NewProject, input)));
-  if (res.ok && res.data) redirect(`/app/p/${res.data.id}`);
+  if (res.ok && res.data) redirect(`/app/p/${res.data.id}/conversacion`);
   return res.ok ? { ok: true as const } : res;
 }
 
