@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getDeps } from "@/lib/runtime";
 import { adminOverview } from "@/lib/services/admin";
-import { ROLE_LABEL } from "@/features/labels";
+import { PROJECT_STATUS_LABEL, ROLE_LABEL } from "@/features/labels";
 import { Card, DemoTag, Heading, Notice, formatDate } from "@/shared/ui/primitives";
 import { AssignmentControls } from "./assignment-controls";
 
@@ -28,7 +28,7 @@ export default async function AdminPage() {
               <div className="flex flex-wrap items-center gap-2">
                 {p.isDemo && <DemoTag />}
                 <p className="display text-2xl">{p.name}</p>
-                <span className="ml-auto text-xs text-faint">Dueño: {name(p.ownerId)} · {p.status}</span>
+                <span className="ml-auto text-xs text-faint">Dueño: {name(p.ownerId)} · {PROJECT_STATUS_LABEL[p.status]}</span>
               </div>
               <AssignmentControls
                 projectId={p.id}

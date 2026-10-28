@@ -1,4 +1,5 @@
 import type {
+  Project,
   DiagnosisCategory,
   DiagnosisStatus,
   ExperimentStatus,
@@ -22,6 +23,12 @@ export const ROLE_LABEL: Record<Role, string> = {
   entrepreneur: "Emprendedor/a",
   mentor: "Mentor/a",
   admin: "Administración",
+};
+
+export const PROJECT_STATUS_LABEL: Record<Project["status"], string> = {
+  active: "Activo",
+  paused: "En pausa",
+  archived: "Archivado",
 };
 
 export const NATURE_LABEL: Record<InitiativeNature, string> = {
