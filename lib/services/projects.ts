@@ -1,0 +1,168 @@
+import type { InitiativeNature, Project, ProjectStatus } from "@/types/domain";
+import { can } from "@/lib/authz";
+import { validation } from "@/lib/errors";
+import { derivePhase } from "@/features/projects/phase";
+import { deriveDiagnosisStatus, isCurrent } from "@/features/diagnosis/rules";
+import { DIMENSION_QUESTION } from "@/features/conversation/interview";
+import { audit, guard, relationOf, type ServiceDeps } from "./base";
+
+export async function listMyProjects(d: ServiceDeps): Promise<Project[]> {
+  const owned = await d.repo.projects.list({ ownerId: d.actor.id });
+  const memberships = await d.repo.projectMembers.list({ profileId: d.actor.id });
+  const assigned = await d.repo.mentorAssignments.list({ mentorId: d.actor.id, status: "active" });
+  const ids = new Set([...owned.map((p) => p.id), ...memberships.map((m) => m.projectId), ...assigned.map((a) => a.projectId)]);
+  const projects = await Promise.all([...ids].map((id) => d.repo.projects.get(id)));
+  return projects.filter((p): p is Project => !!p).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function createProject(
+  d: ServiceDeps,
+  input: { name: string; description: string; nature: InitiativeNature },
+): Promise<Project> {
+  if (d.actor.role !== "entrepreneur") throw validation("Solo las personas emprendedoras crean proyectos.");
+  const name = input.name.trim();
+  if (name.length < 2) throw validation("Poné al menos un nombre provisional (2 caracteres o más).");
+  if (name.length > 80) throw validation("El nombre es demasiado largo (máximo 80 caracteres).");
+  const now = d.now();
+  const project: Project = {
+    id: d.newId("prj"),
+    ownerId: d.actor.id,
+    name,
+    description: input.description.trim().slice(0, 1000),
+    nature: input.nature,
+    status: "active",
+    isDemo: false,
+    shareConversationWithMentor: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await d.repo.projects.insert(project);
+  await d.repo.projectMembers.insert({ id: `${project.id}:${d.actor.id}`, projectId: project.id, profileId: d.actor.id, role: "owner", createdAt: now });
+  const conv = await d.repo.conversations.insert({ id: d.newId("conv"), projectId: project.id, createdAt: now });
+  await d.repo.diagnoses.insert({ id: d.newId("dx"), projectId: project.id, status: "exploring", updatedAt: now });
+  // Primera pregunta de la guía. Es texto fijo de la plataforma, no generado por un modelo.
+  await d.repo.messages.insert({
+    id: d.newId("msg"),
+    conversationId: conv.id,
+    projectId: project.id,
+    author: "assistant",
+    content: `Hola. Vamos a ordenar juntos lo que sabés de «${name}». No necesitás tener todo claro: lo que no sepas también es información útil. ${DIMENSION_QUESTION.nature}`,
+    dimension: "nature",
+    createdAt: now,
+  });
+  await audit(d, "project.created", { projectId: project.id, targetId: project.id });
+  return project;
+}
+
+export async function setProjectStatus(d: ServiceDeps, projectId: string, status: ProjectStatus) {
+  const { project } = await guard(d, projectId, "project.update");
+  await d.repo.projects.update(projectId, { status, updatedAt: d.now() });
+  await audit(d, "project.status_changed", { projectId, meta: { from: project.status, to: status } });
+}
+
+export async function setConversationSharing(d: ServiceDeps, projectId: string, share: boolean) {
+  await guard(d, projectId, "project.update");
+  await d.repo.projects.update(projectId, { shareConversationWithMentor: share, updatedAt: d.now() });
+  await audit(d, "project.status_changed", { projectId, meta: { shareConversationWithMentor: share } });
+}
+
+export async function touch(d: ServiceDeps, projectId: string) {
+  await d.repo.projects.update(projectId, { updatedAt: d.now() });
+}
+
+/** Vista agregada del espacio de trabajo. Los permisos se calculan aquí, en el servidor. */
+export async function getWorkspace(d: ServiceDeps, projectId: string) {
+  const { project, rel } = await guard(d, projectId, "project.read");
+  const r = d.repo;
+  const where = { projectId };
+  const [diagnoses, items, history, comments, messages, sessions, notes, hypotheses, experiments, results, tasks, evidence, assignments, auditEvents] =
+    await Promise.all([
+      r.diagnoses.list(where),
+      r.diagnosisItems.list(where),
+      r.diagnosisItemHistory.list(where),
+      r.comments.list(where),
+      r.messages.list(where),
+      r.mentorSessions.list(where),
+      r.sessionNotes.list(where),
+      r.hypotheses.list(where),
+      r.experiments.list(where),
+      r.experimentResults.list(where),
+      r.tasks.list(where),
+      r.evidence.list(where),
+      r.mentorAssignments.list({ projectId, status: "active" }),
+      r.auditEvents.list(where),
+    ]);
+  const diagnosis = diagnoses[0];
+  const status = deriveDiagnosisStatus(diagnosis, items, sessions, hypotheses);
+  const phase = derivePhase({
+    messages,
+    diagnosis,
+    sessions,
+    hypotheses,
+    experiments,
+    hasPrioritizedProblem: items.some((i) => isCurrent(i) && i.category === "problem" && !!i.priority),
+  });
+
+  const isMentorView = rel.isAssignedMentor && !rel.isOwner && !rel.isCollaborator;
+  const canSeeConversation = !isMentorView || project.shareConversationWithMentor;
+
+  const peopleIds = new Set<string>([project.ownerId, ...assignments.map((a) => a.mentorId)]);
+  const people = (await Promise.all([...peopleIds].map((id) => r.profiles.get(id)))).filter(Boolean);
+
+  const permissions = Object.fromEntries(
+    (
+      [
+        "project.update",
+        "conversation.write",
+        "diagnosis.edit",
+        "diagnosis.confirm_summary",
+        "diagnosis.comment",
+        "diagnosis.request_clarification",
+        "diagnosis.prioritize",
+        "mentor.request_review",
+        "mentor.note",
+        "mentor.decide",
+        "hypothesis.propose",
+        "hypothesis.approve",
+        "experiment.design",
+        "experiment.start",
+        "experiment.record_result",
+        "evidence.add",
+        "task.manage",
+      ] as const
+    ).map((a) => [a, can(d.actor, a, rel)]),
+  ) as Record<string, boolean>;
+
+  const byTime = <T extends { createdAt: string }>(xs: T[]) => xs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+  return {
+    project,
+    relation: rel,
+    isMentorView,
+    diagnosis: { ...diagnosis, status },
+    phase,
+    items: byTime(items),
+    history: byTime(history),
+    comments: byTime(comments),
+    messages: canSeeConversation ? byTime(messages) : [],
+    conversationHidden: !canSeeConversation,
+    sessions: byTime(sessions),
+    notes: byTime(notes),
+    hypotheses: byTime(hypotheses),
+    experiments: byTime(experiments),
+    results: byTime(results),
+    tasks: byTime(tasks),
+    evidence: byTime(evidence),
+    mentors: assignments.map((a) => a.mentorId),
+    people: Object.fromEntries(people.map((p) => [p!.id, { id: p!.id, name: p!.name, role: p!.role }])),
+    audit: isMentorView ? [] : byTime(auditEvents).slice(-50),
+    permissions,
+    ai: { id: d.ai.id, label: d.ai.label },
+  };
+}
+
+export type Workspace = Awaited<ReturnType<typeof getWorkspace>>;
+
+export async function myRelation(d: ServiceDeps, projectId: string) {
+  return relationOf(d, projectId);
+}
