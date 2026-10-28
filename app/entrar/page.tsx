@@ -33,7 +33,13 @@ export default async function EnterPage({ searchParams }: { searchParams: Promis
         <p className="mt-4 text-muted">
           Una sola cuenta para emprender o para acompañar como mentor. Después te preguntamos cómo vas a usar RAX.
         </p>
-        <AuthForm initialMode={modo === "registro" ? "signup" : "signin"} next={next} linkError={error === "enlace" ? "El enlace no es válido o ya venció. Entrá con tu correo y contraseña." : undefined} />
+        <AuthForm initialMode={modo === "registro" ? "signup" : "signin"} next={next} linkError={
+            error === "enlace"
+              ? "El enlace no es válido o ya venció. Entrá con tu correo y contraseña."
+              : error === "google"
+                ? "No se completó el ingreso con Google. Probá de nuevo o usá tu correo."
+                : undefined
+          } />
       </div>
     </main>
   );
