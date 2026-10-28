@@ -42,7 +42,20 @@ export function SharingToggle({ projectId, shared }: { projectId: string; shared
   );
 }
 
-export function ReviewRequests({ projectId, sessions, summaryConfirmed, hasResults }: { projectId: string; sessions: MentorSession[]; summaryConfirmed: boolean; hasResults: boolean }) {
+export function ReviewRequests({
+  projectId,
+  sessions,
+  summaryConfirmed,
+  hasResults,
+  only,
+}: {
+  projectId: string;
+  sessions: MentorSession[];
+  summaryConfirmed: boolean;
+  hasResults: boolean;
+  /** Muestra solo el pedido de esta revisión (cada etapa pide la suya). */
+  only?: MentorSession["kind"];
+}) {
   const { run, pending, error } = useAction();
   const open = (k: MentorSession["kind"]) => sessions.some((s) => s.kind === k && s.status !== "completed");
   const done = (k: MentorSession["kind"]) => sessions.some((s) => s.kind === k && s.status === "completed");
@@ -50,24 +63,28 @@ export function ReviewRequests({ projectId, sessions, summaryConfirmed, hasResul
     <div className="rounded-2xl border border-line bg-panel p-5">
       <p className="eyebrow">Pedir una revisión</p>
       <div className="mt-3 space-y-3 text-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            Primera revisión
-            {!summaryConfirmed && <span className="block text-xs text-muted">Disponible al confirmar el resumen inicial.</span>}
-          </span>
-          <Button size="sm" variant="primary" disabled={pending || open("first_review") || done("first_review")} onClick={() => run(() => requestReviewAction(projectId, "first_review"))}>
-            {done("first_review") ? "Hecha" : open("first_review") ? "Pedida" : "Pedir"}
-          </Button>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            Segunda revisión
-            {!hasResults && <span className="block text-xs text-muted">Disponible cuando registres al menos un resultado.</span>}
-          </span>
-          <Button size="sm" variant="primary" disabled={pending || open("second_review")} onClick={() => run(() => requestReviewAction(projectId, "second_review"))}>
-            {open("second_review") ? "Pedida" : "Pedir"}
-          </Button>
-        </div>
+        {only !== "second_review" && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              Primera revisión
+              {!summaryConfirmed && <span className="block text-xs text-muted">Disponible al confirmar el resumen inicial.</span>}
+            </span>
+            <Button size="sm" variant="primary" disabled={pending || open("first_review") || done("first_review")} onClick={() => run(() => requestReviewAction(projectId, "first_review"))}>
+              {done("first_review") ? "Hecha" : open("first_review") ? "Pedida" : "Pedir"}
+            </Button>
+          </div>
+        )}
+        {only !== "first_review" && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              Segunda revisión
+              {!hasResults && <span className="block text-xs text-muted">Disponible cuando registres al menos un resultado.</span>}
+            </span>
+            <Button size="sm" variant="primary" disabled={pending || open("second_review")} onClick={() => run(() => requestReviewAction(projectId, "second_review"))}>
+              {open("second_review") ? "Pedida" : "Pedir"}
+            </Button>
+          </div>
+        )}
       </div>
       {error && (
         <div className="mt-3">

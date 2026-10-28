@@ -17,6 +17,21 @@
 | 11 | Diseñar e iniciar experimento (criterios bloqueados), tareas y evidencias | Emprendedor | `/validacion`, `/tareas`, `/historial` | IMPLEMENTED (archivos: solo metadatos, sin subida real) |
 | 12 | Registrar resultado y segunda revisión con decisión | Emprendedor + Mentor | `/validacion`, `/mentoria` | IMPLEMENTED |
 
+## Navegación por etapas
+
+El proyecto se navega por 4 etapas que agrupan las 10 fases (`features/projects/stages.ts`), más un Inicio y un Archivo:
+
+| Sección | Páginas | Fases |
+|---|---|---|
+| Inicio | `/app/p/[id]`: lo que sigue, a quién le toca y pendientes | todas |
+| 1 · Entender | `/conversacion`, `/diagnostico` | nuevo, conversación, resumen pendiente |
+| 2 · Orientar | `/orientar` (primera revisión) | 1ª revisión, priorizando |
+| 3 · Probar | `/validacion`, `/tareas` | hipótesis, preparar experimento, en curso |
+| 4 · Decidir | `/decidir` (segunda revisión) | resultados, etapa concluida |
+| Archivo | `/historial` | consulta |
+
+`/mentoria` redirige a la revisión que corresponde. `turnOf` dice a quién le toca mover el proyecto (emprendedor, mentor o administración, por ejemplo cuando falta asignar mentor). En celular, Inicio y las etapas van en una barra inferior.
+
 ## Fase del proyecto (derivada)
 
 La fase no se guarda: se calcula en `features/projects/phase.ts` a partir del estado real (mensajes, resumen confirmado, sesiones, hipótesis, experimentos). Así no puede desincronizarse.
@@ -31,7 +46,7 @@ Toda cuenta empieza en `/bienvenida` y elige cómo va a usar RAX.
 
 | Persona | Qué se le pregunta | Para qué se usa | Después |
 |---|---|---|---|
-| Emprendedor | Etapa y sector; objetivos con RAX, horas por semana, qué espera del mentor; primer proyecto | El mentor lo ve en mentoría; la administración lo usa para asignar | Se crea el proyecto y entra directo a la conversación |
+| Emprendedor | Etapa y sector; objetivos con RAX, horas por semana, qué espera del mentor; primer proyecto | El mentor lo ve en mentoría; la administración lo usa para asignar | Se crea el proyecto y entra directo a la conversación (`/app/p/[id]/conversacion`) |
 | Mentor | Años de experiencia, bio, LinkedIn; especialidades, sectores, horas por mes, máximo de proyectos | El emprendedor ve sus especialidades; la administración ve su cupo al asignar | Queda como postulación: ve una pantalla de estado hasta que la administración la aprueba o la rechaza (puede volver a postularse) |
 | Administración | Organización y programa | Contexto del panel | Solo cuentas que ya son admin (asignado por SQL); va a `/app/admin` |
 

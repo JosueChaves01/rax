@@ -5,6 +5,8 @@ import { isUnknownSentence, readStatementSignal, splitSentences } from "@/featur
 import { hypothesisIssues, HYPOTHESIS_TRANSITIONS } from "@/features/hypotheses/rules";
 import { applyHumanChange } from "@/features/diagnosis/rules";
 import { parse, ItemChange } from "@/lib/validation/inputs";
+import { PHASE_ORDER } from "@/features/labels";
+import { SECTIONS, STAGES, phasesDone, sectionOfSlug, stageOf, stageState, turnOf } from "@/features/projects/stages";
 import type { DiagnosisItem } from "@/types/domain";
 
 const [ent, , mentor, , admin] = PEOPLE;
@@ -59,5 +61,41 @@ describe("validación de entradas", () => {
     expect(() => parse(ItemChange, { kind: "delete_everything" })).toThrow();
     expect(() => parse(ItemChange, { kind: "prioritize", rank: "1; drop table", rationale: "x" })).toThrow();
     expect(parse(ItemChange, { kind: "confirm", extra: 1 })).toEqual({ kind: "confirm" });
+  });
+});
+
+describe("etapas del proyecto", () => {
+  it("agrupa las 10 fases en 4 etapas, sin huecos ni repetidas", () => {
+    const all = STAGES.flatMap((s) => s.phases);
+    expect(all).toEqual(PHASE_ORDER);
+    expect(stageOf("prioritizing").id).toBe("orientar");
+    expect(stageOf("experiments_running").id).toBe("probar");
+  });
+
+  it("marca etapas hechas, en curso y por venir; la decisión cierra todo", () => {
+    const [entender, orientar, probar] = STAGES;
+    expect(stageState(entender, "hypotheses")).toBe("done");
+    expect(stageState(probar, "hypotheses")).toBe("current");
+    expect(stageState(orientar, "conversation")).toBe("upcoming");
+    expect(STAGES.every((s) => stageState(s, "decided") === "done")).toBe(true);
+    expect(phasesDone(entender, "summary_pending")).toBe(2);
+  });
+
+  it("dice a quién le toca, incluso cuando falta mentor", () => {
+    const base = { hasMentor: true, firstReviewRequested: false, secondReviewRequested: false, hypothesesAwaitingApproval: 0 };
+    expect(turnOf({ ...base, phase: "conversation" })).toBe("entrepreneur");
+    expect(turnOf({ ...base, phase: "mentor_review_1" })).toBe("entrepreneur");
+    expect(turnOf({ ...base, phase: "mentor_review_1", firstReviewRequested: true })).toBe("mentor");
+    expect(turnOf({ ...base, phase: "mentor_review_1", hasMentor: false })).toBe("admin");
+    expect(turnOf({ ...base, phase: "hypotheses", hypothesesAwaitingApproval: 1 })).toBe("mentor");
+    expect(turnOf({ ...base, phase: "results_review", secondReviewRequested: true })).toBe("mentor");
+    expect(turnOf({ ...base, phase: "decided" })).toBe("none");
+  });
+
+  it("cada página del proyecto pertenece a una sola sección", () => {
+    const slugs = SECTIONS.flatMap((s) => s.pages.map((p) => p.slug));
+    expect(new Set(slugs).size).toBe(slugs.length);
+    expect(sectionOfSlug("tareas").id).toBe("probar");
+    expect(sectionOfSlug("").id).toBe("inicio");
   });
 });
