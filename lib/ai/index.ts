@@ -9,6 +9,9 @@ import { DEFAULT_OPENROUTER_MODEL, OpenRouterProvider } from "./openrouter";
  */
 export function getAiProvider(): AiProvider {
   const key = process.env.OPENROUTER_API_KEY;
-  if (key) return new OpenRouterProvider(key, process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL);
+  if (key) {
+    const fallbacks = (process.env.OPENROUTER_FALLBACK_MODELS ?? "").split(",").filter((m) => m.trim());
+    return new OpenRouterProvider(key, process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL, fallbacks);
+  }
   return new SimulatedProvider();
 }

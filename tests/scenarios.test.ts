@@ -303,6 +303,70 @@ describe("Escenario G · proveedor de IA no disponible", () => {
   });
 });
 
+describe("OpenRouter · modelos gratuitos", () => {
+  const good = { reply: "¿Quién pagaría?", askedDimension: "people", proposals: [], contradictions: [], summaryDraft: null };
+  const ok = (model: string) => new Response(JSON.stringify({ model, choices: [{ message: { content: JSON.stringify(good) } }] }), { status: 200 });
+  const err = (status: number, message: string, raw?: string) =>
+    new Response(JSON.stringify({ error: { code: status, message, metadata: raw ? { provider_name: "Google AI Studio", raw } : undefined } }), { status });
+
+  async function ctx() {
+    const { as, repo } = await world();
+    const p = await createProject(as("ent1"), { name: "Prueba", description: "", nature: "unknown" });
+    const [dx] = await repo.diagnoses.list({ projectId: p.id });
+    const msg = await repo.messages.insert({ id: "m1", conversationId: "c", projectId: p.id, author: "entrepreneur", content: "hola", createdAt: "2026-10-01T00:00:00.000Z" });
+    return buildInterviewContext({ project: p, diagnosis: dx, messages: [msg], latestMessage: msg, items: [], mentorNotes: [] });
+  }
+  const bodyOf = (init?: RequestInit) => JSON.parse(String(init?.body));
+
+  it("si el modelo principal está saturado, usa el de respaldo y lo informa en el uso", async () => {
+    const c = await ctx();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchMock = vi.fn(async (_u: string, init?: RequestInit) =>
+      bodyOf(init).model === "a/saturado:free" ? err(429, "Provider returned error", "a/saturado:free is temporarily rate-limited upstream") : ok("b/respaldo:free"),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await new OpenRouterProvider("k", "a/saturado:free", ["b/respaldo:free"]).interpret(c);
+    expect(r.turn.reply).toBe(good.reply);
+    expect(r.usage?.model).toBe("b/respaldo:free");
+    expect(fetchMock.mock.calls.map(([, i]) => bodyOf(i).model)).toEqual(["a/saturado:free", "b/respaldo:free"]);
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("el cupo diario agotado no se disfraza de saturación ni prueba otros modelos", async () => {
+    const c = await ctx();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchMock = vi.fn(async () => err(429, "Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day"));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(new OpenRouterProvider("k", "a:free", ["b:free"]).interpret(c)).rejects.toMatchObject({ reason: "rate_limited", message: expect.stringContaining("cupo diario") });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("se adapta a modelos sin rol de sistema y sin modo JSON, y registra el detalle real", async () => {
+    const c = await ctx();
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchMock = vi.fn(async (_u: string, init?: RequestInit) => {
+      const b = bodyOf(init);
+      if (b.messages[0].role === "system") return err(400, "Developer instruction is not enabled for models/gemma");
+      if (b.response_format) return err(404, "No endpoints found that support the requested parameters");
+      return ok("g/gemma:free");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await new OpenRouterProvider("k", "g/gemma:free").interpret(c);
+    expect(r.turn.reply).toBe(good.reply);
+    const last = bodyOf(fetchMock.mock.calls.at(-1)![1]);
+    expect(last.messages[0].role).toBe("user");
+    expect(last.messages[0].content).toContain("RAX");
+    expect(last.response_format).toBeUndefined();
+    expect(log.mock.calls.flat().join(" ")).toContain("Developer instruction is not enabled");
+    expect(log.mock.calls.flat().join(" ")).not.toContain("Bearer");
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+});
+
 describe("Escenario H · actualización concurrente", () => {
   it("rechaza la escritura con versión vieja sin perder el cambio del otro", async () => {
     const { as, repo } = await world();

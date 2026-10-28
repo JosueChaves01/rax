@@ -9,7 +9,12 @@ La IA de RAX es un **motor de estructuración**: entrevista, archiva y señala. 
 | `SimulatedProvider` (`lib/ai/simulated.ts`) | Sin `OPENROUTER_API_KEY` | IMPLEMENTED. Determinista, basado en reglas; la interfaz lo etiqueta "Simulación". |
 | `OpenRouterProvider` (`lib/ai/openrouter.ts`) | Con `OPENROUTER_API_KEY` | IMPLEMENTED y probado con respuestas simuladas de `fetch`. **No verificado contra la API real** (el entorno de desarrollo no tenía salida a openrouter.ai). |
 
-Modelo por defecto: `meta-llama/llama-3.3-70b-instruct:free`. Los modelos gratuitos de OpenRouter cambian; si ese id deja de existir, elegir otro con sufijo `:free` en https://openrouter.ai/models y ponerlo en `OPENROUTER_MODEL`. Conviene uno que respete `response_format: json_object`. Los modelos gratuitos tienen límites de uso bajos: un 429 se muestra como "la IA no está disponible", no se simula.
+Modelo por defecto: `meta-llama/llama-3.3-70b-instruct:free`. Los modelos gratuitos de OpenRouter cambian; si ese id deja de existir, elegir otro con sufijo `:free` en https://openrouter.ai/models y ponerlo en `OPENROUTER_MODEL`. Conviene uno que respete `response_format: json_object`. Los modelos gratuitos tienen límites de uso bajos y no se simula una respuesta cuando fallan. El adaptador:
+
+- Prueba en orden `OPENROUTER_MODEL` y los de `OPENROUTER_FALLBACK_MODELS` cuando un modelo está saturado (429 del proveedor de origen), no existe (404), tarda (408/5xx) o devuelve JSON inválido.
+- Distingue el **cupo diario de la cuenta** (`free-models-per-day`: 50 pedidos por día sin créditos, más con créditos cargados): ahí no prueba otros modelos porque el cupo es de la cuenta, y lo dice tal cual.
+- Si un modelo no acepta instrucciones de sistema (p. ej. algunos Gemma) las pasa al primer mensaje; si no admite `response_format`, reintenta sin modo JSON (la salida igual se valida con zod).
+- Registra en el log del servidor el estado HTTP y el mensaje real del proveedor (`[openrouter] modelo: HTTP 429: …`), nunca la clave ni el contenido.
 
 ## Contrato de salida
 
