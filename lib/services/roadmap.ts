@@ -1,5 +1,4 @@
 import type {
-  ActionType,
   DelayCauseCategory,
   Id,
   MilestoneStatus,
@@ -122,7 +121,16 @@ export async function deleteMilestone(
   if (!ms) throw notFound("El hito no existe.");
   await guard(d, ms.projectId, "roadmap.manage");
 
-  await d.repo.roadmapMilestones.delete(milestoneId);
+  await d.repo.roadmapMilestones.update(
+    milestoneId,
+    { status: "deferred", updatedAt: d.now() },
+    ms.version,
+  );
+  await audit(d, "roadmap.milestone_status_changed", {
+    projectId: ms.projectId,
+    targetId: milestoneId,
+    meta: { from: ms.status, to: "deferred", reason: "deleted" },
+  });
   await touch(d, ms.projectId);
 }
 

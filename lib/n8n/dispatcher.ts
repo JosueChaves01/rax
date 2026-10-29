@@ -161,3 +161,4 @@ export async function invokeSyncChatN8n(
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+

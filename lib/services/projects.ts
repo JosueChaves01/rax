@@ -1,4 +1,4 @@
-import type { InitiativeNature, MentorOnboarding, MentorshipAgreement, MentorshipGoal, MentorshipRelation, Project, ProjectStatus, RoadmapMilestone } from "@/types/domain";
+import type { InitiativeNature, MentorOnboarding, MentorshipAgreement, MentorshipGoal, Project, ProjectStatus } from "@/types/domain";
 import { can } from "@/lib/authz";
 import { validation } from "@/lib/errors";
 import { derivePhase } from "@/features/projects/phase";

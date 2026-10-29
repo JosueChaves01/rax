@@ -68,3 +68,4 @@ describe("Validación Estructural de Workflows de n8n (v1+)", () => {
     }
   });
 });
+

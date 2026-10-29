@@ -24,13 +24,16 @@ Estados: PLANNED · IN_PROGRESS · IMPLEMENTED · PARTIAL · BLOCKED · DEPRECAT
 | **Objetivos de mentoría con línea base documentada** | IMPLEMENTED | `lib/services/mentorship-relation.ts`, `app/app/p/[id]/acuerdos`, `tests/mentorship-relation.test.ts` (Escenario B) |
 | **Asistente de IA para sugerencia de objetivos y acuerdos** | IMPLEMENTED | `lib/ai/openrouter.ts`, `lib/ai/simulated.ts`, `tests/mentorship-relation.test.ts` (Escenario C) |
 | **UI de Acuerdos y Objetivos en Workspace** | IMPLEMENTED | `/app/p/[id]/acuerdos`, navegación en etapa "Orientar" |
-| **Hoja de ruta multimodal sin experimentos forzados (Etapa 4)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts` (acciones operativas, aprendizaje, decisiones) |
+| **Hitos de Hoja de Ruta (`RoadmapMilestones`) (Etapa 4)** | IMPLEMENTED | `lib/services/roadmap.ts`, `app/app/p/[id]/tareas`, `tests/roadmap-multimodal.test.ts` (Escenario D1) |
+| **Acciones Multimodales sin experimentos forzados (Etapa 4)** | IMPLEMENTED | `lib/services/validation.ts`, `types/domain.ts`, `app/app/p/[id]/tareas`, `tests/roadmap-multimodal.test.ts` (Escenario D2) |
+| **Accountability no punitivo y diagnóstico de causas (Etapa 6)** | IMPLEMENTED | `lib/services/roadmap.ts`, `DelayHypothesis`, modal en `task-board.tsx`, `tests/roadmap-multimodal.test.ts` (Escenario D3) |
 | **Ciclo de sesiones, briefing contextual y privacidad (Etapa 5)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts`, `tests/mentoring-ai.test.ts`, `briefing.ts` |
-| **Accountability contextual y retrasos sin culpa (Etapa 6)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts` (Escenario F Global) |
 | **Evaluación de resultados, cierre y renovación (Etapa 7)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts` (Escenario I Global, preservación histórica) |
+| **Integración n8n + OpenRouter (Catálogo RAX-00..RAX-99)** | IMPLEMENTED | 19 workflows en `workflows/n8n/`, contratos Zod en `lib/n8n/contracts.ts`, endpoints `/api/n8n/*`, HMAC en `lib/n8n/security.ts`, tests en `tests/n8n/` |
+
 
 ## Punto de continuación (Plan Swarm)
 
-1. **Fase 3:** Implementación de Hitos (Milestones) y Acciones Multimodales conectadas a los objetivos de mentoría.
-2. **Fase 4:** Ciclo de sesiones (briefing pre-sesión con 4 capas de memoria, notas en vivo, resumen pos-sesión con compromisos).
-3. **Fase 5:** Accountability no punitivo (análisis causal de retrasos sin juicios de valor, soporte proactivo).
+1. **Fase 4:** Ciclo de sesiones de mentoría (briefing pre-sesión con 4 capas de memoria, notas en vivo, resumen pos-sesión con compromisos y privacidad entre notas privadas/compartidas).
+2. **Fase 5:** Productividad del mentor (cartera de clientes, priorización de intervenciones y alertas tempranas de riesgo de abandono).
+3. **Fase 6:** Evaluación, cierre de ciclo o renovación con reporte longitudinal.

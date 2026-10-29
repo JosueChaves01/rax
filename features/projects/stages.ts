@@ -105,7 +105,7 @@ export const SECTIONS: Section[] = [
     label: "Archivo",
     pages: [
       { slug: "historial", label: "Evidencia e historial" },
-      { slug: "tareas", label: "Todas las tareas" },
+      { slug: "tareas", label: "Hoja de ruta y tareas" },
     ],
   },
 ];

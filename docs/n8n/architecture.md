@@ -64,3 +64,4 @@
 2. **Protección Anti-Replay**: Peticiones con diferencia temporal superior a 300 segundos son descartadas de inmediato.
 3. **Aislamiento RLS**: n8n nunca interactúa directamente con la base de datos de Supabase sin pasar por las capas autorizadas de RAX.
 4. **Privacidad de Notas de Mentor**: Las notas privadas del mentor son purgadas del contexto si el actor de la petición es un emprendedor.
+

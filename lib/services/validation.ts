@@ -438,7 +438,9 @@ export async function createTask(
   }
   if (input.goalId) {
     const g = await d.repo.mentorshipGoals.get(input.goalId);
-    if (!g || g.projectId !== projectId) throw notFound("El objetivo no pertenece a este proyecto.");
+    if (!g) throw notFound("El objetivo no pertenece a este proyecto.");
+    const rel = await d.repo.mentorshipRelations.get(g.relationId);
+    if (!rel || rel.projectId !== projectId) throw notFound("El objetivo no pertenece a este proyecto.");
   }
   const actionType: ActionType = input.actionType ?? (input.experimentId ? "experiment" : "operational_task");
   const now = d.now();

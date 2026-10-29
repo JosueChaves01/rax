@@ -149,3 +149,4 @@ describe("Integración RAX ↔ n8n: Seguridad y Contratos", () => {
     expect(parsed.success).toBe(true);
   });
 });
+
