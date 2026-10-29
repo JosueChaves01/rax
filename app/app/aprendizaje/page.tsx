@@ -1,0 +1,275 @@
+"use client";
+
+import { useState } from "react";
+import { cx } from "@/shared/ui/primitives";
+
+type TabKind = "asignados" | "en-progreso" | "completados";
+
+export default function LearningPage() {
+  const [tab, setTab] = useState<TabKind>("asignados");
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: "ai" | "user"; text: string }>>([
+    {
+      sender: "ai",
+      text: "Hola, Laura. ¿Tienes alguna duda con el ejercicio PREP? ¿En qué puedo ayudarte?",
+    },
+  ]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [showAiModal, setShowAiModal] = useState(false);
+
+  const promptChips = [
+    "Dar un ejercicio similar",
+    "Dar ejemplos prácticos",
+    "Revisar mi entrega",
+    "Explicar el método",
+    "Sugerir siguiente paso",
+  ];
+
+  const handleSendPrompt = (prompt: string) => {
+    setChatMessages((prev) => [
+      ...prev,
+      { sender: "user", text: prompt },
+      {
+        sender: "ai",
+        text: `Excelente pregunta sobre "${prompt}". En el método PREP, la clave está en iniciar directamente con tu conclusión firme (Punto) sin rodeos defensivos, respaldándola inmediatamente con la Razón fundamental antes de dar la evidencia o Ejemplo.`,
+      },
+    ]);
+  };
+
+  const handleCustomSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputMessage.trim()) return;
+    handleSendPrompt(inputMessage);
+    setInputMessage("");
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* 1. Encabezado con Pestañas (Panel 5 del Mock) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Aprendizaje aplicado
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Micro-módulos y ejercicios prácticos asignados por tu mentor con retroalimentación instantánea de IA.
+          </p>
+        </div>
+
+        {/* Pestañas: [Asignados] | [En progreso] | [Completados] */}
+        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0">
+          {(
+            [
+              ["asignados", "Asignados"],
+              ["en-progreso", "En progreso"],
+              ["completados", "Completados"],
+            ] as const
+          ).map(([t, label]) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={cx(
+                "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+                tab === t
+                  ? "bg-white text-slate-900 shadow-2xs"
+                  : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 2. Distribución en 2 Columnas (Panel 5 del Mock) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Columna Izquierda: Tarjeta Principal del Ejercicio (7 cols) */}
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 shadow-xs flex flex-col justify-between space-y-6">
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-100 text-blue-700">
+                En progreso
+              </span>
+              <span className="text-xs text-slate-400 font-mono">
+                Vence: 20 Jun 2025
+              </span>
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">
+                PREP — Respuesta a objeciones
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Módulo de comunicación comercial de alto impacto
+              </p>
+            </div>
+
+            {/* Barra de progreso 75% */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-semibold text-slate-600">
+                <span>Progreso del módulo</span>
+                <span className="font-mono text-blue-600">75%</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 rounded-full w-3/4 transition-all duration-500" />
+              </div>
+            </div>
+
+            {/* Resumen */}
+            <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-100">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Resumen conceptual
+              </h3>
+              <p className="text-xs text-slate-700 leading-relaxed">
+                Aprende a estructurar respuestas claras y persuasivas ante dudas o cuestionamientos de clientes usando el marco: Punto, Razón, Ejemplo y Punto de cierre.
+              </p>
+            </div>
+
+            {/* Tu ejercicio */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Tu ejercicio
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Escribe una respuesta a la objeción típica de un cliente: «Tu servicio parece caro frente a alternativas de software gratuitas».
+              </p>
+              <textarea
+                rows={3}
+                defaultValue="Comprendo la comparación. Nuestro precio refleja que eliminamos 15 horas mensuales de trabajo manual que las herramientas gratuitas no resuelven. Por ejemplo, nuestro cliente Beta ahorró $800 en su primer mes evitando retrabajos. Por eso nuestra inversión se paga sola desde la segunda semana."
+                className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-white leading-relaxed focus:outline-none focus:border-blue-600"
+              />
+            </div>
+
+            {/* Estado Evaluación de IA */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🤖</span>
+                <span className="font-semibold text-emerald-900">
+                  Evaluación de IA: 9/10 Excelente estructura PREP
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAiModal(true)}
+                className="font-bold text-emerald-700 hover:underline cursor-pointer"
+              >
+                Ver detalle
+              </button>
+            </div>
+          </div>
+
+          {/* Botón Continuar */}
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-end">
+            <button
+              type="button"
+              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              Continuar al siguiente ejercicio →
+            </button>
+          </div>
+        </div>
+
+        {/* Columna Derecha: Asistente de IA (5 cols) */}
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between h-[520px]">
+          {/* Cabecera del chat */}
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+              IA
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-900">Asistente de IA</p>
+              <p className="text-[10px] text-emerald-600 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Disponible para consultas de aprendizaje
+              </p>
+            </div>
+          </div>
+
+          {/* Hilo de mensajes */}
+          <div className="flex-1 overflow-y-auto py-3 space-y-3">
+            {chatMessages.map((msg, i) => (
+              <div
+                key={i}
+                className={cx(
+                  "flex",
+                  msg.sender === "user" ? "justify-end" : "justify-start"
+                )}
+              >
+                <div
+                  className={cx(
+                    "max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed",
+                    msg.sender === "user"
+                      ? "bg-blue-600 text-white rounded-br-xs"
+                      : "bg-slate-100 text-slate-800 rounded-bl-xs"
+                  )}
+                >
+                  {msg.text}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Chips de sugerencias interactivas (Panel 5 del Mock) */}
+          <div className="py-2 border-t border-slate-100">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Acciones rápidas de IA
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {promptChips.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => handleSendPrompt(chip)}
+                  className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 text-slate-700 transition-colors cursor-pointer"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Input de chat */}
+          <form onSubmit={handleCustomSend} className="pt-2 flex items-center gap-2">
+            <input
+              type="text"
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              placeholder="Escribe tu mensaje..."
+              className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-blue-600"
+            />
+            <button
+              type="submit"
+              className="p-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-2xs"
+            >
+              ➤
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* Modal detalle de evaluación */}
+      {showAiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-slate-900">
+              Evaluación detallada de IA
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Cumpliste adecuadamente con las cuatro etapas del método PREP. La cuantificación del ahorro económico ($800) fortalece considerablemente el Punto final frente a respuestas genéricas.
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowAiModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold"
+              >
+                Cerrar detalle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

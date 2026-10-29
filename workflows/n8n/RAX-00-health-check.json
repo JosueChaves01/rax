@@ -39,14 +39,17 @@
       "parameters": {
         "method": "POST",
         "url": "https://openrouter.ai/api/v1/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.apiKey || $env.OPENROUTER_API_KEY }}"
+            },
+            {
               "name": "HTTP-Referer",
-              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+              "value": "https://rax.app"
             },
             {
               "name": "X-Title",

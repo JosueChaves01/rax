@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 /*
- * Sistema visual de RAX: hereda el lenguaje de la landing cinematográfica
- * (fondo casi negro, grafito, titulares condensados en mayúsculas, amarillo para destacar,
- * naranja para acciones, cian como luz ambiental). Los colores semánticos del dominio
- * (tipo de información) se definen aquí y en ningún otro lugar.
+ * Sistema visual de RAX:
+ * 1. Shell y Espacio de Trabajo Híbrido (Sidebar oscura slate-950/navy #0b132b, lienzo de trabajo claro #f8fafc,
+ *    tarjetas blancas #ffffff, tipografía Inter/sans legible, acento azul #2563eb).
+ * 2. Landing y experiencias cinematográficas con acentos de luz y colores semánticos de dominio.
  */
 @theme {
   --color-bg: #0b0b0c;
@@ -17,42 +17,65 @@
   --color-muted: #a6a7ad;
   --color-faint: #74757c;
   --color-highlight: #ffd21f;
-  --color-accent: #ff4a1c;
-  --color-accent-strong: #ff6a42;
-  --color-cyan: #3fd8ff;
-  --color-ok: #3ddc97;
-  --color-danger: #ff6b6b;
+  --color-accent: #2563eb;
+  --color-accent-strong: #1d4ed8;
+  --color-brand-orange: #ff4a1c;
+  --color-cyan: #0284c7;
+  --color-ok: #10b981;
+  --color-danger: #ef4444;
+
+  /* Paleta Shell SaaS Híbrida */
+  --color-sidebar-bg: #0b132b;
+  --color-sidebar-surface: #1c2541;
+  --color-sidebar-border: #1e293b;
+  --color-sidebar-text: #94a3b8;
+  --color-sidebar-active: #3b82f6;
+
+  --color-canvas-bg: #f8fafc;
+  --color-canvas-card: #ffffff;
+  --color-canvas-border: #e2e8f0;
+  --color-canvas-text: #0f172a;
+  --color-canvas-muted: #64748b;
 
   /* Tipos de información */
   --color-info-statement: #e8e8ea;
   --color-info-observation: #8fd4ff;
-  --color-info-evidence: #3ddc97;
-  --color-info-ai: #3fd8ff;
-  --color-info-hypothesis: #ff8a5c;
-  --color-info-correction: #ffd21f;
-  --color-info-unknown: #9a9ba3;
+  --color-info-evidence: #10b981;
+  --color-info-ai: #0284c7;
+  --color-info-hypothesis: #f97316;
+  --color-info-correction: #eab308;
+  --color-info-unknown: #94a3b8;
   --color-info-decision: #ffffff;
 
-  --font-display: var(--font-anton), "Impact", "Arial Narrow", sans-serif;
+  --font-display: var(--font-inter), system-ui, sans-serif;
+  --font-title: var(--font-anton), "Impact", "Arial Narrow", sans-serif;
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-mono-face), ui-monospace, monospace;
 }
 
 html {
-  color-scheme: dark;
-  background: var(--color-bg);
+  color-scheme: light dark;
+  background: var(--color-canvas-bg);
 }
 
 body {
-  background: var(--color-bg);
-  color: var(--color-ink);
+  background: var(--color-canvas-bg);
+  color: var(--color-canvas-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Titulares: condensados, en mayúsculas, interlineado 0.9 como en la landing */
+/* Titulares limpios y legibles para el dashboard moderno */
 .display {
   font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+/* Estilo condensado para landing y marcas */
+.display-cinematic {
+  font-family: var(--font-title);
   text-transform: uppercase;
   line-height: 0.9;
   letter-spacing: 0.005em;
@@ -63,27 +86,40 @@ body {
   font-size: 0.6875rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--color-muted);
+  color: var(--color-canvas-muted);
+}
+
+/* Lienzo de la aplicación moderna */
+.app-workspace {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* Tarjeta SaaS limpia */
+.mock-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  color: #0f172a;
 }
 
 /* Luz ambiental cian + líneas LED del techo (decoración contenida en hero/encabezados) */
 .ambient {
   background:
-    radial-gradient(60% 50% at 50% 0%, rgb(63 216 255 / 0.14), transparent 70%),
-    radial-gradient(40% 35% at 85% 100%, rgb(255 74 28 / 0.08), transparent 70%),
-    var(--color-bg);
+    radial-gradient(60% 50% at 50% 0%, rgb(37 99 235 / 0.18), transparent 70%),
+    radial-gradient(40% 35% at 85% 100%, rgb(15 23 42 / 0.9), transparent 70%),
+    #0b0f19;
 }
 
 .led-lines {
-  background-image: repeating-linear-gradient(
-    90deg,
-    transparent 0 calc(12.5% - 1px),
-    rgb(255 255 255 / 0.05) calc(12.5% - 1px) 12.5%
-  );
+  background-image: repeating-linear-gradient(90deg,
+      transparent 0 calc(12.5% - 1px),
+      rgb(255 255 255 / 0.05) calc(12.5% - 1px) 12.5%);
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-highlight);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
@@ -93,6 +129,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {

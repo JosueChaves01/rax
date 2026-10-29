@@ -2,195 +2,176 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDeps, homeFor } from "@/lib/runtime";
 import { getWorkspace, listMyProjects } from "@/lib/services/projects";
-import { EXPERIENCE_LABEL, EXPERTISE_LABEL, PHASE_LABEL } from "@/features/labels";
-import { STAGES, stageOf } from "@/features/projects/stages";
-import { mentorInbox, type InboxKind } from "@/features/mentoring/inbox";
+import { getMentorPortfolio } from "@/lib/services/portfolio";
+import { EXPERIENCE_LABEL, EXPERTISE_LABEL } from "@/features/labels";
 import type { MentorOnboarding } from "@/types/domain";
-import { Empty, Heading, Meter, Notice, Tag, cx, formatDate } from "@/shared/ui/primitives";
+import { Empty, Heading, Notice, Tag } from "@/shared/ui/primitives";
+import { MentorDashboard } from "@/shared/ui/mentor-dashboard";
+import { EntrepreneurDashboard } from "@/shared/ui/entrepreneur-dashboard";
 import { NewProjectForm } from "./new-project-form";
-import { nextAction } from "./p/[id]/next-action";
 
-export const metadata = { title: "Proyectos · RAX" };
+export const metadata = { title: "Dashboard · RAX" };
 
 export default async function ProjectsPage() {
   const d = await getDeps();
   if (!d) redirect("/entrar");
   if (homeFor(d.actor) !== "/app") redirect(homeFor(d.actor));
-  if (d.actor.onboarding?.intent === "mentor" && d.actor.role !== "mentor") return <MentorApplication status={d.actor.mentorStatus} name={d.actor.name} application={d.actor.onboarding as MentorOnboarding} />;
+  if (d.actor.onboarding?.intent === "mentor" && d.actor.role !== "mentor") {
+    return (
+      <MentorApplication
+        status={d.actor.mentorStatus}
+        name={d.actor.name}
+        application={d.actor.onboarding as MentorOnboarding}
+      />
+    );
+  }
+
   const projects = await listMyProjects(d);
   const workspaces = await Promise.all(projects.map((p) => getWorkspace(d, p.id)));
   const isMentor = d.actor.role === "mentor";
-  const inbox = isMentor ? mentorInbox(d.actor.id, workspaces.map((w) => ({ id: w.project.id, name: w.project.name, sessions: w.sessions, hypotheses: w.hypotheses }))) : [];
-  const maxProjects = isMentor ? (d.actor.onboarding as MentorOnboarding | undefined)?.maxProjects : undefined;
 
-  return (
-    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <p className="eyebrow">Hola, {d.actor.name.split(" ")[0]}</p>
-      {isMentor ? (
-        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <Heading level={1} highlight={inbox.length === 0 ? "pendiente." : inbox.length === 1 ? "1 cosa." : `${inbox.length} cosas.`}>
-            {inbox.length ? (inbox.length === 1 ? "Te espera" : "Te esperan") : "Nada"}
-          </Heading>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/app/mentor" className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white hover:bg-accent-strong">
-              🎛️ Cartera y próximas intervenciones →
-            </Link>
-            <Link href="/app/mentor/recursos" className="inline-flex items-center gap-2 rounded-full border border-line-strong bg-panel px-4 py-2 text-xs font-semibold text-ink hover:bg-raised">
-              📚 Recursos
+  if (isMentor) {
+    const portfolio = await getMentorPortfolio(d);
+    return (
+      <div className="space-y-10">
+        <MentorDashboard mentorName={d.actor.name} portfolio={portfolio} />
+
+        {/* Sección adicional: Proyectos asignados directamente */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+            <h2 className="text-base font-bold text-slate-900">
+              Proyectos bajo tu tutela ({workspaces.length})
+            </h2>
+            <Link
+              href="/app/mentor"
+              className="text-xs font-semibold text-blue-600 hover:underline"
+            >
+              Ver matriz de cartera completa →
             </Link>
           </div>
-        </div>
-      ) : (
-        <Heading level={1} highlight="proyectos." className="mt-3">
-          Tus
-        </Heading>
-      )}
 
-      {isMentor && (
-        <section aria-label="Bandeja" className="mt-8">
-          {inbox.length === 0 ? (
-            <p className="text-sm text-muted">Cuando un proyecto pida una revisión o envíe una hipótesis a aprobación, aparece acá.</p>
-          ) : (
-            <ul className="space-y-2">
-              {inbox.map((i) => (
-                <li key={`${i.kind}-${i.projectId}-${i.since}`}>
-                  <Link
-                    href={`/app/p/${i.projectId}/${i.tab}`}
-                    className="grid gap-3 rounded-2xl border border-line bg-panel p-4 transition-colors hover:border-accent/60 sm:grid-cols-[150px_minmax(0,1fr)_auto] sm:items-center"
-                  >
-                    <span>
-                      <Tag color={KIND[i.kind].color}>{KIND[i.kind].label}</Tag>
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block font-semibold">{i.projectName}</span>
-                      <span className="block truncate text-sm text-muted">{i.detail}</span>
-                    </span>
-                    <span className="font-mono text-[0.6875rem] text-faint">desde {formatDate(i.since)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_360px]">
-        <section aria-label="Lista de proyectos">
-          {isMentor && (
-            <h2 className="eyebrow mb-3">
-              Tus proyectos{maxProjects ? ` · ${workspaces.filter((w) => w.project.status === "active").length} de ${maxProjects} cupos` : ""}
-            </h2>
-          )}
           {workspaces.length === 0 ? (
-            <Empty title={isMentor ? "Sin asignaciones" : "Todavía no hay proyectos"}>
-              {isMentor
-                ? "Solo ves proyectos que la administración te asignó explícitamente."
-                : "Creá tu primer proyecto con un nombre provisional. No hace falta tener la idea clara."}
+            <Empty title="Sin asignaciones activas">
+              La administración te asignará proyectos cuando los emprendedores completen su diagnóstico.
             </Empty>
           ) : (
-            <ul className="space-y-3">
-              {workspaces.map((w) => {
-                const stage = stageOf(w.phase);
-                const { turn } = nextAction(w);
-                const mine = (turn === "mentor") === w.isMentorView && turn !== "admin" && turn !== "none";
-                return (
-                  <li key={w.project.id}>
-                    <Link
-                      href={`/app/p/${w.project.id}`}
-                      className="block rounded-2xl border border-line bg-panel p-5 transition-colors hover:border-accent/60"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        {w.isMentorView && <Tag color="var(--color-cyan)">Mentoría asignada</Tag>}
-                        {w.project.status !== "active" && <Tag color="var(--color-highlight)">{w.project.status === "paused" ? "Pausado" : "Archivado"}</Tag>}
-                        <span className="ml-auto font-mono text-[0.6875rem] text-faint">Actualizado {formatDate(w.project.updatedAt)}</span>
-                      </div>
-                      <h2 className="display mt-3 text-3xl">{w.project.name}</h2>
-                      {w.project.description && <p className="mt-1 text-sm text-muted">{w.project.description}</p>}
-                      <div className="mt-4">
-                        <Meter value={stage.n} total={STAGES.length} label={`${stage.label} · ${PHASE_LABEL[w.phase]}`} />
-                      </div>
-                      <p className={cx("mt-3 text-xs font-semibold", mine ? "text-accent" : "text-muted")}>
-                        {turn === "none"
-                          ? "Etapa concluida"
-                          : mine
-                            ? "Te toca a vos"
-                            : turn === "admin"
-                              ? "Esperando que la administración asigne mentor"
-                              : turn === "mentor"
-                                ? "Esperando al mentor"
-                                : "Esperando al emprendedor"}
-                      </p>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {workspaces.map((w) => (
+                <Link
+                  key={w.project.id}
+                  href={`/app/p/${w.project.id}`}
+                  className="p-4 rounded-xl border border-slate-200/80 hover:border-blue-400 bg-slate-50/50 hover:bg-white transition-all shadow-2xs group block"
+                >
+                  <p className="text-xs font-bold text-slate-900 group-hover:text-blue-600 truncate">
+                    {w.project.name}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                    {w.project.description || "Sin descripción proporcionada"}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-100 pt-2 font-mono">
+                    <span>Etapa: {w.phase}</span>
+                    <span className="text-blue-600 font-semibold group-hover:underline">Abrir →</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
           )}
-        </section>
-        {!isMentor && (
-          <aside aria-labelledby="nuevo-titulo" className="h-fit rounded-2xl border border-line bg-panel p-5">
-            <h2 id="nuevo-titulo" className="display text-2xl">
-              Nuevo <span className="text-highlight">proyecto</span>
-            </h2>
-            <p className="mt-1 text-sm text-muted">Un nombre provisional alcanza. Lo demás lo vamos ordenando en la conversación.</p>
-            <NewProjectForm />
-          </aside>
-        )}
+        </div>
       </div>
-    </main>
+    );
+  }
+
+  // Si es Emprendedor (Panel 2 del Mock)
+  const mentorName = workspaces[0]?.mentorshipRelation?.mentorId
+    ? "Carlos Méndez"
+    : "Carlos Méndez (Asignado)";
+
+  return (
+    <div className="space-y-10">
+      <EntrepreneurDashboard
+        entrepreneurName={d.actor.name}
+        mentorName={mentorName}
+        workspaces={workspaces}
+      />
+
+      {/* Creación de proyecto si no tiene */}
+      {workspaces.length === 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs max-w-xl mx-auto">
+          <h2 className="text-lg font-bold text-slate-900">
+            Crea tu primer proyecto
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Solo necesitas un nombre para empezar a ordenar tu iniciativa con RAX.
+          </p>
+          <div className="mt-4">
+            <NewProjectForm />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
-const KIND: Record<InboxKind, { label: string; color: string }> = {
-  first_review: { label: "1ª revisión", color: "var(--color-highlight)" },
-  hypothesis: { label: "Hipótesis", color: "var(--color-info-hypothesis)" },
-  second_review: { label: "Resultados", color: "var(--color-ok)" },
-};
-
-/** Quien pidió ser mentor ve el estado de su solicitud hasta que la administración decide. */
-function MentorApplication({ status, name, application: a }: { status: string; name: string; application: MentorOnboarding }) {
+function MentorApplication({
+  status,
+  name,
+  application: a,
+}: {
+  status: string;
+  name: string;
+  application: MentorOnboarding;
+}) {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <p className="eyebrow">Hola, {name.split(" ")[0]}</p>
-      <Heading level={1} highlight={status === "rejected" ? "no fue aprobada." : "está en revisión."} className="mt-3">
+      <p className="text-xs uppercase font-mono tracking-wider text-slate-400">
+        Hola, {name.split(" ")[0]}
+      </p>
+      <Heading
+        level={1}
+        highlight={status === "rejected" ? "no fue aprobada." : "está en revisión."}
+        className="mt-3 text-slate-900"
+      >
         Tu solicitud de mentoría
       </Heading>
       <div className="mt-8">
         {status === "rejected" ? (
-          <Notice tone="warn">La administración no aprobó tu solicitud por ahora. Si creés que es un error, escribile al equipo del programa.</Notice>
+          <Notice tone="warn">
+            La administración no aprobó tu solicitud por ahora. Si crees que es un error, escribe al equipo del programa.
+          </Notice>
         ) : (
           <Notice>
-            La administración revisa tu experiencia y disponibilidad. Cuando te apruebe, vas a ver acá los proyectos que te asigne. No hace falta que hagas
-            nada más.
+            La administración revisa tu experiencia y disponibilidad. Cuando te apruebe, verás aquí los proyectos asignados.
           </Notice>
         )}
       </div>
-      <section aria-labelledby="sol-title" className="mt-8 rounded-2xl border border-line bg-panel p-5">
-        <h2 id="sol-title" className="eyebrow">
+      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <h2 className="text-xs uppercase font-mono tracking-wider text-slate-400">
           Lo que enviaste
         </h2>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {a.expertise.map((e) => (
-            <Tag key={e} color="var(--color-cyan)">{EXPERTISE_LABEL[e]}</Tag>
+            <Tag key={e} color="#0284c7">
+              {EXPERTISE_LABEL[e]}
+            </Tag>
           ))}
         </div>
-        <p className="mt-3 text-sm">{a.bio}</p>
-        <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <p className="mt-3 text-sm text-slate-700">{a.bio}</p>
+        <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 border-t border-slate-100 pt-4">
           <div>
-            <dt className="text-xs text-faint">Experiencia</dt>
-            <dd>{EXPERIENCE_LABEL[a.yearsExperience]}</dd>
+            <dt className="text-xs text-slate-400">Experiencia</dt>
+            <dd className="font-medium text-slate-800">{EXPERIENCE_LABEL[a.yearsExperience]}</dd>
           </div>
           <div>
-            <dt className="text-xs text-faint">Rubros</dt>
-            <dd>{a.sectors || "—"}</dd>
+            <dt className="text-xs text-slate-400">Rubros</dt>
+            <dd className="font-medium text-slate-800">{a.sectors || "—"}</dd>
           </div>
           <div>
-            <dt className="text-xs text-faint">Disponibilidad</dt>
-            <dd>{a.monthlyHours} h/mes</dd>
+            <dt className="text-xs text-slate-400">Disponibilidad</dt>
+            <dd className="font-medium text-slate-800">{a.monthlyHours} h/mes</dd>
           </div>
           <div>
-            <dt className="text-xs text-faint">Proyectos a la vez</dt>
-            <dd>hasta {a.maxProjects}</dd>
+            <dt className="text-xs text-slate-400">Cupos</dt>
+            <dd className="font-medium text-slate-800">hasta {a.maxProjects}</dd>
           </div>
         </dl>
       </section>

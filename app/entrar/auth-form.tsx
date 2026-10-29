@@ -2,71 +2,108 @@
 
 import { useActionState, useState } from "react";
 import { googleSignInAction, signInAction, signUpAction, type AuthState } from "@/app/actions";
-import { Button, Field, Notice, cx, inputClass } from "@/shared/ui/primitives";
+import { Notice, cx } from "@/shared/ui/primitives";
 
 type Mode = "signin" | "signup";
+type SelectedRole = "mentor" | "entrepreneur";
 
 export function AuthForm({ initialMode, next, linkError }: { initialMode: Mode; next?: string; linkError?: string }) {
   const [mode, setMode] = useState<Mode>(initialMode);
+  const [selectedRole, setSelectedRole] = useState<SelectedRole>("mentor");
+  const [showForgotNotice, setShowForgotNotice] = useState(false);
+
   const [signInState, signIn, signingIn] = useActionState<AuthState, FormData>(signInAction, undefined);
   const [signUpState, signUp, signingUp] = useActionState<AuthState, FormData>(signUpAction, undefined);
   const [googleState, google, goingToGoogle] = useActionState<AuthState, FormData>(googleSignInAction, undefined);
+
   const state = mode === "signin" ? signInState : signUpState;
   const pending = signingIn || signingUp || goingToGoogle;
 
   return (
-    <div className="mt-8 rounded-2xl border border-line bg-panel p-5 sm:p-6">
-      <div role="tablist" aria-label="Cuenta" className="grid grid-cols-2 gap-1 rounded-full border border-line p-1">
-        {(
-          [
-            ["signin", "Entrar"],
-            ["signup", "Crear cuenta"],
-          ] as const
-        ).map(([m, label]) => (
-          <button
-            key={m}
-            role="tab"
-            type="button"
-            aria-selected={mode === m}
-            onClick={() => setMode(m)}
-            className={cx(
-              "rounded-full py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors",
-              mode === m ? "bg-highlight text-black" : "text-muted hover:text-ink",
-            )}
-          >
-            {label}
-          </button>
-        ))}
+    <div className="space-y-5">
+      {/* Selector de Rol Segmentado (Panel 0 del Mock) */}
+      <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+        <button
+          type="button"
+          onClick={() => setSelectedRole("mentor")}
+          className={cx(
+            "py-2 text-xs font-semibold rounded-lg transition-all text-center",
+            selectedRole === "mentor"
+              ? "bg-blue-600 text-white shadow-xs"
+              : "text-slate-600 hover:text-slate-900"
+          )}
+        >
+          Mentor
+        </button>
+        <button
+          type="button"
+          onClick={() => setSelectedRole("entrepreneur")}
+          className={cx(
+            "py-2 text-xs font-semibold rounded-lg transition-all text-center",
+            selectedRole === "entrepreneur"
+              ? "bg-blue-600 text-white shadow-xs"
+              : "text-slate-600 hover:text-slate-900"
+          )}
+        >
+          Emprendedor
+        </button>
       </div>
 
-      <form action={google} className="mt-5">
+      {/* Formulario de Acceso por Correo */}
+      <form action={mode === "signin" ? signIn : signUp} className="space-y-4">
         {next && <input type="hidden" name="next" value={next} />}
-        <Button type="submit" disabled={pending} className="w-full">
-          <GoogleMark />
-          {goingToGoogle ? "Abriendo Google…" : mode === "signin" ? "Entrar con Google" : "Registrarme con Google"}
-        </Button>
-        {googleState?.error && (
-          <div className="mt-3">
-            <Notice tone="error">{googleState.error}</Notice>
+        <input type="hidden" name="rolePreference" value={selectedRole} />
+
+        {mode === "signup" && (
+          <div className="space-y-1">
+            <label htmlFor="auth-name" className="block text-xs font-medium text-slate-700">
+              Nombre completo
+            </label>
+            <input
+              id="auth-name"
+              name="name"
+              defaultValue={state?.name}
+              required
+              minLength={2}
+              maxLength={120}
+              autoComplete="name"
+              placeholder="Ej. Laura Morales"
+              className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+            />
           </div>
         )}
-      </form>
 
-      <div className="mt-5 flex items-center gap-3 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted" aria-hidden="true">
-        <span className="h-px flex-1 bg-line" />o con tu correo<span className="h-px flex-1 bg-line" />
-      </div>
+        <div className="space-y-1">
+          <label htmlFor="auth-email" className="block text-xs font-medium text-slate-700">
+            Correo electrónico
+          </label>
+          <input
+            id="auth-email"
+            name="email"
+            defaultValue={state?.email}
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="tu@correo.com"
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+          />
+        </div>
 
-      <form action={mode === "signin" ? signIn : signUp} className="mt-5 space-y-4">
-        {next && <input type="hidden" name="next" value={next} />}
-        {mode === "signup" && (
-          <Field id="auth-name" label="Tu nombre">
-            <input id="auth-name" name="name" defaultValue={state?.name} required minLength={2} maxLength={120} autoComplete="name" className={inputClass} />
-          </Field>
-        )}
-        <Field id="auth-email" label="Correo">
-          <input id="auth-email" name="email" defaultValue={state?.email} type="email" required autoComplete="email" className={inputClass} />
-        </Field>
-        <Field id="auth-password" label="Contraseña" hint={mode === "signup" ? "Al menos 8 caracteres." : undefined}>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <label htmlFor="auth-password" className="block text-xs font-medium text-slate-700">
+              Contraseña
+            </label>
+            {mode === "signin" && (
+              <button
+                type="button"
+                onClick={() => setShowForgotNotice(true)}
+                className="text-[11px] text-blue-600 hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            )}
+          </div>
           <input
             id="auth-password"
             name="password"
@@ -74,16 +111,81 @@ export function AuthForm({ initialMode, next, linkError }: { initialMode: Mode; 
             required
             minLength={mode === "signup" ? 8 : 1}
             autoComplete={mode === "signup" ? "new-password" : "current-password"}
-            className={inputClass}
+            placeholder="••••••••"
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
           />
-        </Field>
+        </div>
+
+        {showForgotNotice && (
+          <div className="p-3 text-xs bg-blue-50 border border-blue-200 text-blue-800 rounded-xl">
+            Ingresa tu correo y contacta al administrador de RAX para restablecer el acceso temporal.
+          </div>
+        )}
+
         {linkError && !state && <Notice tone="warn">{linkError}</Notice>}
         {state?.error && <Notice tone="error">{state.error}</Notice>}
         {state?.notice && <Notice tone="success">{state.notice}</Notice>}
-        <Button variant="primary" type="submit" disabled={pending} className="w-full">
-          {pending ? "Un momento…" : mode === "signin" ? "Entrar" : "Crear mi cuenta"}
-        </Button>
+
+        {/* Botón Principal "Iniciar sesión" */}
+        <button
+          type="submit"
+          disabled={pending}
+          className="w-full py-2.5 px-4 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+        >
+          {pending ? "Un momento…" : mode === "signin" ? "Iniciar sesión" : "Crear mi cuenta"}
+        </button>
       </form>
+
+      {/* Separador */}
+      <div className="relative flex items-center justify-center my-3">
+        <div className="border-t border-slate-200 w-full" />
+        <span className="bg-white px-3 text-[11px] text-slate-400 uppercase tracking-wider">o</span>
+      </div>
+
+      {/* Botón "Continuar con Google" */}
+      <form action={google}>
+        {next && <input type="hidden" name="next" value={next} />}
+        <button
+          type="submit"
+          disabled={pending}
+          className="w-full py-2.5 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors shadow-2xs flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+        >
+          <GoogleMark />
+          {goingToGoogle ? "Abriendo Google…" : "Continuar con Google"}
+        </button>
+        {googleState?.error && (
+          <div className="mt-2">
+            <Notice tone="error">{googleState.error}</Notice>
+          </div>
+        )}
+      </form>
+
+      {/* Enlace de cambio de modo */}
+      <div className="text-center pt-2">
+        {mode === "signin" ? (
+          <p className="text-xs text-slate-500">
+            ¿No tienes una cuenta?{" "}
+            <button
+              type="button"
+              onClick={() => setMode("signup")}
+              className="text-blue-600 font-semibold hover:underline cursor-pointer"
+            >
+              Regístrate
+            </button>
+          </p>
+        ) : (
+          <p className="text-xs text-slate-500">
+            ¿Ya tienes una cuenta?{" "}
+            <button
+              type="button"
+              onClick={() => setMode("signin")}
+              className="text-blue-600 font-semibold hover:underline cursor-pointer"
+            >
+              Inicia sesión
+            </button>
+          </p>
+        )}
+      </div>
     </div>
   );
 }

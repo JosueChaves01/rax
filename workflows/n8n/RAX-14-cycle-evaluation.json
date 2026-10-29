@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el evaluador de ciclo de acompañamiento de RAX.\\nTu función es comparar el punto de partida con los resultados consolidados de la etapa de mentoría.\\nREGLAS:\\n1. Compara los objetivos iniciales con las metas alcanzadas con base en evidencias reales.\\n2. Formula una recomendación fundada entre: 'renew' (renovar con nuevos objetivos), 'advance_stage' (avanzar a siguiente fase), 'close' (cierre formal satisfactorio), o 'restructure' (replanteamiento profundo).\\n3. Recuerda que tu propuesta es consultiva; la decisión final es siempre de mentor y emprendedor.\\n4. Salida en JSON estricto con: evaluationSummary (string), baselineVsOutcomes (string), keyAchievements (array), persistentObstacles (array), recommendation (string), continuityPlan (string), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  relationshipId: event.relationshipId,\n  initialDiagnosis: payload.initialDiagnosis || '',\n  confirmedGoals: payload.confirmedGoals || [],\n  experimentResults: payload.experimentResults || [],\n  completedSessionsCount: payload.sessionsCount || 0\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el evaluador de ciclo de acompañamiento de RAX.\\nTu función es comparar el punto de partida con los resultados consolidados de la etapa de mentoría.\\nREGLAS:\\n1. Compara los objetivos iniciales con las metas alcanzadas con base en evidencias reales.\\n2. Formula una recomendación fundada entre: 'renew' (renovar con nuevos objetivos), 'advance_stage' (avanzar a siguiente fase), 'close' (cierre formal satisfactorio), o 'restructure' (replanteamiento profundo).\\n3. Recuerda que tu propuesta es consultiva; la decisión final es siempre de mentor y emprendedor.\\n4. Salida en JSON estricto con: evaluationSummary (string), baselineVsOutcomes (string), keyAchievements (array), persistentObstacles (array), recommendation (string), continuityPlan (string), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  relationshipId: event.relationshipId,\n  initialDiagnosis: payload.initialDiagnosis || '',\n  confirmedGoals: payload.confirmedGoals || [],\n  experimentResults: payload.experimentResults || [],\n  completedSessionsCount: payload.sessionsCount || 0\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-cycle-prompt",
       "name": "Build Cycle Evaluation Prompt",
@@ -38,14 +38,17 @@
       "parameters": {
         "method": "POST",
         "url": "https://openrouter.ai/api/v1/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.apiKey || $env.OPENROUTER_API_KEY }}"
+            },
+            {
               "name": "HTTP-Referer",
-              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+              "value": "https://rax.app"
             },
             {
               "name": "X-Title",

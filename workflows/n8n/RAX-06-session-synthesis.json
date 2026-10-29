@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el sintetizador de sesiones de RAX.\\nTu labor es procesar notas o transcripciones autorizadas para extraer acuerdos y propuestas de tareas.\\nREGLAS FUNDAMENTALES:\\n1. Todo compromiso extraído debe incluir una cita literal de origen (sourceQuote).\\n2. No inventes responsables ni fechas límite. Si no se dijeron explícitamente, déjalos como null o 'no especificado'.\\n3. Distingue entre 'decisiones acordadas' (agreements) y 'tareas pendientes' (tasks).\\n4. Salida en formato JSON estricto con: summary (string), topicsCovered (array), agreements (array de objetos con title, sourceQuote), suggestedTasks (array de objetos con title, ownerSuggestion, dueDateSuggestion, successCriteria, sourceQuote), openQuestions (array), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  sessionId: event.entityId,\n  sessionKind: payload.sessionKind,\n  rawNotes: payload.rawNotes || payload.notes || '',\n  mentorId: event.actor?.id,\n  projectId: event.projectId\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el sintetizador de sesiones de RAX.\\nTu labor es procesar notas o transcripciones autorizadas para extraer acuerdos y propuestas de tareas.\\nREGLAS FUNDAMENTALES:\\n1. Todo compromiso extraído debe incluir una cita literal de origen (sourceQuote).\\n2. No inventes responsables ni fechas límite. Si no se dijeron explícitamente, déjalos como null o 'no especificado'.\\n3. Distingue entre 'decisiones acordadas' (agreements) y 'tareas pendientes' (tasks).\\n4. Salida en formato JSON estricto con: summary (string), topicsCovered (array), agreements (array de objetos con title, sourceQuote), suggestedTasks (array de objetos con title, ownerSuggestion, dueDateSuggestion, successCriteria, sourceQuote), openQuestions (array), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  sessionId: event.entityId,\n  sessionKind: payload.sessionKind,\n  rawNotes: payload.rawNotes || payload.notes || '',\n  mentorId: event.actor?.id,\n  projectId: event.projectId\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-synthesis-prompt",
       "name": "Build Synthesis Prompt",
@@ -38,14 +38,17 @@
       "parameters": {
         "method": "POST",
         "url": "https://openrouter.ai/api/v1/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.apiKey || $env.OPENROUTER_API_KEY }}"
+            },
+            {
               "name": "HTTP-Referer",
-              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+              "value": "https://rax.app"
             },
             {
               "name": "X-Title",

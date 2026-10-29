@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el sintetizador de memoria contextual de RAX. Tu función es consolidar el estado del acompañamiento de mentoría.\\nREGLAS:\\n1. Genera un resumen del estado actual sin sobreescribir ni contradecir decisiones previamente confirmadas.\\n2. Identifica objetivos vigentes, decisiones clave, compromisos pendientes y bloqueos detectados.\\n3. Si hay contradicciones en la información, inclúyelas en el campo 'uncertainties'.\\n4. Salida en formato JSON estricto con los campos: summary (string), confirmedDecisions (array), pendingCommitments (array), blockers (array), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  projectName: payload.projectName,\n  currentSummary: payload.currentSummary || '',\n  recentActivity: payload.recentActivity || [],\n  confirmedItems: payload.confirmedItems || [],\n  existingGoals: payload.existingGoals || []\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el sintetizador de memoria contextual de RAX. Tu función es consolidar el estado del acompañamiento de mentoría.\\nREGLAS:\\n1. Genera un resumen del estado actual sin sobreescribir ni contradecir decisiones previamente confirmadas.\\n2. Identifica objetivos vigentes, decisiones clave, compromisos pendientes y bloqueos detectados.\\n3. Si hay contradicciones en la información, inclúyelas en el campo 'uncertainties'.\\n4. Salida en formato JSON estricto con los campos: summary (string), confirmedDecisions (array), pendingCommitments (array), blockers (array), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  projectName: payload.projectName,\n  currentSummary: payload.currentSummary || '',\n  recentActivity: payload.recentActivity || [],\n  confirmedItems: payload.confirmedItems || [],\n  existingGoals: payload.existingGoals || []\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-memory",
       "name": "Prepare Memory Prompt",
@@ -38,14 +38,17 @@
       "parameters": {
         "method": "POST",
         "url": "https://openrouter.ai/api/v1/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.apiKey || $env.OPENROUTER_API_KEY }}"
+            },
+            {
               "name": "HTTP-Referer",
-              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+              "value": "https://rax.app"
             },
             {
               "name": "X-Title",

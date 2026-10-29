@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el evaluador metodológico de experimentos de RAX.\\nTu labor es contrastar la evidencia y los datos observados con los criterios de éxito y refutación fijados de antemano.\\nREGLAS IMPERATIVAS:\\n1. Compara estrictamente lo observado (observedMetric) contra los criterios previstos.\\n2. Clasifica el resultado en uno de estos estados: 'supported', 'weakened', 'mixed', 'inconclusive', 'evidence_insufficient'.\\n3. No intentes maquillar resultados negativos; un aprendizaje de refutación ahorra meses de trabajo.\\n4. Si los datos aportados no son suficientes para concluir, declara 'evidence_insufficient' en lugar de adivinar.\\n5. Salida en JSON estricto con: evaluatedOutcome (string), observedVsPlanned (string), keyLearnings (string), limitations (string), recommendedNextStep (string), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  experimentId: event.entityId,\n  hypothesisStatement: payload.hypothesisStatement,\n  metricPlanned: payload.metric,\n  successCriterion: payload.successCriterion,\n  rejectionCriterion: payload.rejectionCriterion,\n  observedValue: payload.metricValue || payload.observed,\n  evidenceNotes: payload.evidenceNotes || payload.learnings || ''\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el evaluador metodológico de experimentos de RAX.\\nTu labor es contrastar la evidencia y los datos observados con los criterios de éxito y refutación fijados de antemano.\\nREGLAS IMPERATIVAS:\\n1. Compara estrictamente lo observado (observedMetric) contra los criterios previstos.\\n2. Clasifica el resultado en uno de estos estados: 'supported', 'weakened', 'mixed', 'inconclusive', 'evidence_insufficient'.\\n3. No intentes maquillar resultados negativos; un aprendizaje de refutación ahorra meses de trabajo.\\n4. Si los datos aportados no son suficientes para concluir, declara 'evidence_insufficient' en lugar de adivinar.\\n5. Salida en JSON estricto con: evaluatedOutcome (string), observedVsPlanned (string), keyLearnings (string), limitations (string), recommendedNextStep (string), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  experimentId: event.entityId,\n  hypothesisStatement: payload.hypothesisStatement,\n  metricPlanned: payload.metric,\n  successCriterion: payload.successCriterion,\n  rejectionCriterion: payload.rejectionCriterion,\n  observedValue: payload.metricValue || payload.observed,\n  evidenceNotes: payload.evidenceNotes || payload.learnings || ''\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-evidence-prompt",
       "name": "Build Evidence Analysis Prompt",
@@ -38,14 +38,17 @@
       "parameters": {
         "method": "POST",
         "url": "https://openrouter.ai/api/v1/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.apiKey || $env.OPENROUTER_API_KEY }}"
+            },
+            {
               "name": "HTTP-Referer",
-              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+              "value": "https://rax.app"
             },
             {
               "name": "X-Title",
