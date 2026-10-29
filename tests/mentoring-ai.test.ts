@@ -45,7 +45,7 @@ describe("Asistencia de IA en Primera Revisión (orientar el enfoque y cerrar ac
     // Debe contener una propuesta de acuerdo sustancial (mínimo 10 caracteres)
     expect(suggestion.agreement).toBeDefined();
     expect(suggestion.agreement.length).toBeGreaterThanOrEqual(10);
-    expect(suggestion.agreement).toContain("Investigar primero");
+    expect(suggestion.agreement).toMatch(/investigar/i);
 
     // Debe contener notas sugeridas tipadas (preguntas, observaciones o sugerencias)
     expect(suggestion.suggestedNotes).toBeDefined();

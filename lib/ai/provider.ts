@@ -1,5 +1,5 @@
 import type { DiagnosisItem, InterviewDimension, Message } from "@/types/domain";
-import type { AiTurn, FirstReviewSuggestion, HypothesesSuggestion, SuggestedExperiment } from "./schema";
+import type { AiTurn, ExperimentTasksSuggestion, FirstReviewSuggestion, GoalsSuggestion, HypothesesSuggestion, SuggestedExperiment } from "./schema";
 
 /**
  * Contexto seleccionado para una invocación. No se envía todo el historial:
@@ -132,6 +132,92 @@ export interface ExperimentSuggestionResult {
   usage?: AiUsage;
 }
 
+export interface ExperimentTasksContext {
+  projectName: string;
+  projectNature: string;
+  projectSummary: string;
+  hypothesis?: {
+    statement: string;
+    segment: string;
+    evaluationCriterion?: string;
+  };
+  experiment: {
+    id: string;
+    question: string;
+    method: string;
+    participants: string;
+    activities: string[];
+    resources: string;
+    durationDays: number | null;
+    budget: number | null;
+    metric: string;
+    successCriterion: string;
+    rejectionCriterion: string;
+    evidencePlan: string;
+    risks: string;
+    status: string;
+  };
+  founderContext?: {
+    stage?: string;
+    sector?: string;
+    weeklyHours?: string;
+  };
+  existingTasks: Array<{ title: string; status: string }>;
+}
+
+export interface ExperimentTasksResult {
+  suggestion: ExperimentTasksSuggestion;
+  provider: "simulated" | "openrouter";
+  usage?: AiUsage;
+}
+
+export interface GoalsSuggestionContext {
+  projectName: string;
+  projectNature: string;
+  projectSummary: string;
+  founderContext?: {
+    stage?: string;
+    sector?: string;
+    goals?: string[];
+    weeklyHours?: string;
+  };
+  confirmedDiagnosis: Array<{
+    id: string;
+    category: string;
+    title: string;
+    content: string;
+    infoType: string;
+    reviewStatus: string;
+  }>;
+  prioritizedProblems: Array<{
+    id: string;
+    title: string;
+    content: string;
+    rank?: number;
+    justification?: string;
+  }>;
+  mentorNotes?: string[];
+  existingGoals?: Array<{
+    title: string;
+    baseline: string;
+    targetResult: string;
+    priority: string;
+    status: string;
+  }>;
+  currentAgreement?: {
+    frequency?: string;
+    sessionDurationMinutes?: number;
+    authorizedChannels?: string[];
+    scope?: string;
+  };
+}
+
+export interface GoalsSuggestionResult {
+  suggestion: GoalsSuggestion;
+  provider: "simulated" | "openrouter";
+  usage?: AiUsage;
+}
+
 export interface AiProvider {
   readonly id: "simulated" | "openrouter";
   /** Texto visible que describe el proveedor (la simulación se declara como tal). */
@@ -140,6 +226,8 @@ export interface AiProvider {
   suggestFirstReview(ctx: FirstReviewContext): Promise<FirstReviewResult>;
   suggestHypotheses(ctx: HypothesisSuggestionContext): Promise<HypothesesSuggestionResult>;
   suggestExperiment(ctx: ExperimentSuggestionContext): Promise<ExperimentSuggestionResult>;
+  suggestExperimentTasks(ctx: ExperimentTasksContext): Promise<ExperimentTasksResult>;
+  suggestGoalsAndAgreement(ctx: GoalsSuggestionContext): Promise<GoalsSuggestionResult>;
 }
 
 export class AiUnavailableError extends Error {

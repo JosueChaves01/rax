@@ -273,6 +273,12 @@ describe("Escenario G · proveedor de IA no disponible", () => {
       suggestHypotheses: async () => {
         throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
       },
+      suggestExperimentTasks: async () => {
+        throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
+      },
+      suggestGoalsAndAgreement: async () => {
+        throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
+      },
       suggestExperiment: async () => {
         throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
       },

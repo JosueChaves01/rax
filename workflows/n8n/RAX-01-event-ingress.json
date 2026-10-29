@@ -1,0 +1,175 @@
+{
+  "name": "RAX-01 — Ingesta Segura de Eventos de RAX",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rax-events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-events",
+      "name": "Webhook Event Ingress",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 300],
+      "webhookId": "rax-events-ingress"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst headers = $input.first().json.headers || {};\nconst body = $input.first().json.body || {};\n\nconst signatureHeader = headers['x-rax-signature'];\nconst timestampHeader = headers['x-rax-timestamp'];\nconst rawBodyStr = JSON.stringify(body);\n\n// 1. Validar presencia de cabeceras\nif (!signatureHeader || !timestampHeader) {\n  return [{\n    json: {\n      valid: false,\n      statusCode: 401,\n      error: 'Missing security headers (x-rax-signature, x-rax-timestamp)'\n    }\n  }];\n}\n\n// 2. Validar ventana de tiempo (anti-replay <= 300s)\nconst now = Math.floor(Date.now() / 1000);\nconst reqTime = parseInt(timestampHeader, 10);\nif (isNaN(reqTime) || Math.abs(now - reqTime) > 300) {\n  return [{\n    json: {\n      valid: false,\n      statusCode: 401,\n      error: 'Request timestamp expired or out of allowed window (300s)'\n    }\n  }];\n}\n\n// 3. Validar firma HMAC-SHA256\nconst secret = $env.RAX_N8N_SHARED_SECRET || 'test-shared-secret-rax-n8n';\nconst hmac = crypto.createHmac('sha256', secret);\nconst expectedSig = 'sha256=' + hmac.update(`${timestampHeader}.${rawBodyStr}`).digest('hex');\n\nif (signatureHeader !== expectedSig) {\n  return [{\n    json: {\n      valid: false,\n      statusCode: 401,\n      error: 'Invalid HMAC signature'\n    }\n  }];\n}\n\n// 4. Validar esquema mínimo de evento\nif (!body.eventId || !body.eventType || !body.actor || !body.correlationId) {\n  return [{\n    json: {\n      valid: false,\n      statusCode: 400,\n      error: 'Invalid event schema: missing eventId, eventType, actor or correlationId'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    valid: true,\n    statusCode: 202,\n    event: body,\n    correlationId: body.correlationId,\n    eventType: body.eventType\n  }\n}];"
+      },
+      "id": "node-code-verify-security",
+      "name": "Verify HMAC & Schema",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "node-if-valid",
+      "name": "Is Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error }) }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      },
+      "id": "node-respond-unauthorized",
+      "name": "Reject Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [840, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ accepted: true, eventId: $json.event.eventId, correlationId: $json.correlationId, receivedAt: new Date().toISOString() }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "node-respond-accepted",
+      "name": "Respond 202 Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [840, 420]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.eventType }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "session.scheduled",
+              "output": 0
+            },
+            {
+              "value2": "session.notes_submitted",
+              "output": 1
+            },
+            {
+              "value2": "interview.response_received",
+              "output": 2
+            },
+            {
+              "value2": "mentorship.agreement_drafted",
+              "output": 3
+            },
+            {
+              "value2": "experiment.result_submitted",
+              "output": 4
+            }
+          ]
+        },
+        "fallbackOutput": 5
+      },
+      "id": "node-switch-event-router",
+      "name": "Route by EventType",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1080, 420]
+    }
+  ],
+  "connections": {
+    "Webhook Event Ingress": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC & Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC & Schema": {
+      "main": [
+        [
+          {
+            "node": "Is Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Respond 202 Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 202 Accepted": {
+      "main": [
+        [
+          {
+            "node": "Route by EventType",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Ingress"
+    }
+  ]
+}

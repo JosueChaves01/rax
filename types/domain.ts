@@ -1,5 +1,5 @@
 /**
- * Contratos de dominio compartidos de RAX (Fase Cero).
+ * Contratos de dominio compartidos de RAX (Fase Cero a Fase 3).
  * Cada estado vive en su propio campo: revisión ≠ incertidumbre ≠ fase del proyecto.
  * Ver docs/domain-model.md.
  */
@@ -321,6 +321,82 @@ export interface SessionNote {
   createdAt: ISODate;
 }
 
+/* ───────────── Proceso de Mentoría y Acuerdos ───────────── */
+
+export type MentorshipStage =
+  | "exploration"
+  | "diagnosis"
+  | "agreement"
+  | "active_mentoring"
+  | "evaluation"
+  | "renewed"
+  | "closed";
+
+export type CompatibilityStatus = "pending" | "proceed" | "needs_info" | "declined";
+
+export interface MentorshipRelation {
+  id: Id;
+  projectId: Id;
+  entrepreneurId: Id;
+  mentorId: Id;
+  stage: MentorshipStage;
+  compatibilityStatus: CompatibilityStatus;
+  compatibilityRationale?: string;
+  compatibilityDecidedAt?: ISODate;
+  version: number;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export type AgreementFrequency = "weekly" | "biweekly" | "monthly" | "on_demand";
+
+export type AgreementStatus =
+  | "draft"
+  | "confirmed_by_mentor"
+  | "confirmed_by_entrepreneur"
+  | "active"
+  | "superseded";
+
+export interface MentorshipAgreement {
+  id: Id;
+  relationId: Id;
+  version: number;
+  frequency: AgreementFrequency;
+  sessionDurationMinutes: number;
+  authorizedChannels: string[];
+  scope: string;
+  mentorCommitments: string;
+  entrepreneurCommitments: string;
+  confidentialityTerms: string;
+  expectedDurationWeeks: number;
+  status: AgreementStatus;
+  confirmedAt?: ISODate;
+  createdAt: ISODate;
+}
+
+export type GoalKind = "metric" | "qualitative" | "capability" | "strategic";
+export type GoalPriority = "high" | "medium" | "low";
+export type GoalStatus = "active" | "achieved" | "partially_achieved" | "deferred" | "discarded";
+
+export interface MentorshipGoal {
+  id: Id;
+  relationId: Id;
+  title: string;
+  description: string;
+  whyItMatters: string;
+  kind: GoalKind;
+  baseline: string;
+  targetResult: string;
+  metricIndicator?: string;
+  targetDate?: ISODate;
+  priority: GoalPriority;
+  relatedDiagnosisItemIds?: Id[];
+  status: GoalStatus;
+  version: number;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
 /* ───────────── Hipótesis y experimentos ───────────── */
 
 export type HypothesisStatus =
@@ -401,7 +477,49 @@ export interface ExperimentResult {
   createdAt: ISODate;
 }
 
-/* ───────────── Tareas y evidencia ───────────── */
+/* ───────────── Hoja de ruta y Acciones Multimodales ───────────── */
+
+export type MilestoneStatus = "pending" | "in_progress" | "achieved" | "deferred";
+
+export interface RoadmapMilestone {
+  id: Id;
+  projectId: Id;
+  relationId?: Id;
+  goalId?: Id;
+  title: string;
+  description?: string;
+  targetDate?: ISODate;
+  status: MilestoneStatus;
+  orderIndex: number;
+  version: number;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export type ActionType =
+  | "operational_task"
+  | "skill_learning"
+  | "business_decision"
+  | "conversation_third_party"
+  | "financial_review"
+  | "mentor_intervention"
+  | "experiment"
+  | "research"
+  | "expert_referral";
+
+export type DelayCauseCategory =
+  | "clarity"
+  | "time"
+  | "resources"
+  | "external"
+  | "priority_change"
+  | "execution_difficulty";
+
+export interface DelayHypothesis {
+  causeCategory: DelayCauseCategory;
+  detail: string;
+  identifiedAt: ISODate;
+}
 
 export type TaskStatus = "todo" | "doing" | "done" | "blocked";
 
@@ -409,9 +527,15 @@ export interface Task {
   id: Id;
   projectId: Id;
   title: string;
+  actionType?: ActionType;
+  milestoneId?: Id;
+  goalId?: Id;
   experimentId?: Id;
   assigneeId: Id;
   status: TaskStatus;
+  blockedReason?: string;
+  delayHypothesis?: DelayHypothesis;
+  evidenceIds?: Id[];
   dueDate?: ISODate;
   createdAt: ISODate;
   updatedAt: ISODate;
@@ -453,7 +577,18 @@ export type AuditAction =
   | "profile.onboarded"
   | "mentor.applied"
   | "mentor.approved"
-  | "mentor.rejected";
+  | "mentor.rejected"
+  | "mentorship.relation_created"
+  | "mentorship.stage_changed"
+  | "mentorship.compatibility_decided"
+  | "mentorship.agreement_updated"
+  | "mentorship.agreement_confirmed"
+  | "mentorship.goal_created"
+  | "mentorship.goal_status_changed"
+  | "roadmap.milestone_created"
+  | "roadmap.milestone_updated"
+  | "roadmap.milestone_status_changed"
+  | "task.delay_diagnosed";
 
 export interface AuditEvent {
   id: Id;

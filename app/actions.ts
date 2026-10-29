@@ -15,6 +15,9 @@ import type {
   ResultOutcome,
   SessionNoteKind,
   TaskStatus,
+  CompatibilityStatus,
+  GoalStatus,
+  MentorshipStage,
   Uncertainty,
 } from "@/types/domain";
 import { getDeps, homeFor } from "@/lib/runtime";
@@ -33,6 +36,7 @@ import {
   approveHypothesis,
   createExperiment,
   createTask,
+  createTasksBatch,
   discardHypothesis,
   markExperimentReady,
   proposeHypothesis,
@@ -43,12 +47,25 @@ import {
   startExperiment,
   submitHypothesis,
   suggestExperiment,
+  suggestExperimentTasks,
   suggestHypotheses,
   updateExperiment,
   type ExperimentInput,
   type HypothesisInput,
 } from "@/lib/services/validation";
 import { assignMentor, reviewMentorApplication, revokeMentor } from "@/lib/services/admin";
+import {
+  confirmMentorshipAgreement,
+  createMentorshipGoal,
+  decideCompatibility,
+  initiateMentorshipRelation,
+  saveMentorshipAgreement,
+  suggestGoalsAndAgreement,
+  transitionMentorshipStage,
+  updateMentorshipGoalStatus,
+  type MentorshipAgreementInput,
+  type MentorshipGoalInput,
+} from "@/lib/services/mentorship-relation";
 import * as V from "@/lib/validation/inputs";
 
 export type ActionResult<T = undefined> = { ok: true; data?: T; notice?: string } | { ok: false; error: string; code?: string };
@@ -340,6 +357,21 @@ export const createTaskAction = async (projectId: string, input: { title: string
   run(projectId, async (d) => {
     await createTask(d, V.parse(V.Ids, projectId), V.parse(V.TaskInput, input));
   });
+export const createTasksBatchAction = async (
+  projectId: string,
+  tasks: Array<{ title: string; experimentId?: string; dueDate?: string }>,
+) =>
+  run(projectId, async (d) => {
+    return createTasksBatch(
+      d,
+      V.parse(V.Ids, projectId),
+      V.parse(V.TasksBatchInput, tasks),
+    );
+  });
+export const suggestExperimentTasksAction = async (projectId: string, experimentId: string) =>
+  run(projectId, async (d) => {
+    return suggestExperimentTasks(d, V.parse(V.Ids, projectId), V.parse(V.Ids, experimentId));
+  });
 export const setTaskStatusAction = async (projectId: string, taskId: string, status: TaskStatus) =>
   run(projectId, async (d) => {
     await setTaskStatus(d, V.parse(V.Ids, taskId), V.parse(V.TaskStatus, status));
@@ -358,4 +390,107 @@ export const reviewMentorAction = async (profileId: string, approve: boolean) =>
 export const revokeMentorAction = async (assignmentId: string) =>
   run(null, async (d) => {
     await revokeMentor(d, V.parse(V.Ids, assignmentId));
+  });
+
+/* ── Relación, Acuerdos y Objetivos de Mentoría ── */
+
+export const initiateMentorshipRelationAction = async (
+  projectId: string,
+  entrepreneurId: string,
+  mentorId: string,
+) =>
+  run(projectId, async (d) => {
+    return initiateMentorshipRelation(
+      d,
+      V.parse(V.Ids, projectId),
+      V.parse(V.Ids, entrepreneurId),
+      V.parse(V.Ids, mentorId),
+    );
+  });
+
+export const decideCompatibilityAction = async (
+  projectId: string,
+  relationId: string,
+  status: CompatibilityStatus,
+  rationale?: string,
+) =>
+  run(projectId, async (d) => {
+    return decideCompatibility(
+      d,
+      V.parse(V.Ids, relationId),
+      V.parse(V.CompatibilityStatus, status),
+      rationale,
+    );
+  });
+
+export const transitionMentorshipStageAction = async (
+  projectId: string,
+  relationId: string,
+  toStage: MentorshipStage,
+) =>
+  run(projectId, async (d) => {
+    return transitionMentorshipStage(
+      d,
+      V.parse(V.Ids, relationId),
+      V.parse(V.MentorshipStage, toStage),
+    );
+  });
+
+export const saveMentorshipAgreementAction = async (
+  projectId: string,
+  relationId: string,
+  input: MentorshipAgreementInput,
+) =>
+  run(projectId, async (d) => {
+    return saveMentorshipAgreement(
+      d,
+      V.parse(V.Ids, relationId),
+      V.parse(V.MentorshipAgreementInput, input),
+    );
+  });
+
+export const confirmMentorshipAgreementAction = async (
+  projectId: string,
+  agreementId: string,
+) =>
+  run(projectId, async (d) => {
+    return confirmMentorshipAgreement(d, V.parse(V.Ids, agreementId));
+  });
+
+export const createMentorshipGoalAction = async (
+  projectId: string,
+  relationId: string,
+  input: MentorshipGoalInput,
+) =>
+  run(projectId, async (d) => {
+    return createMentorshipGoal(
+      d,
+      V.parse(V.Ids, relationId),
+      V.parse(V.MentorshipGoalInput, input),
+    );
+  });
+
+export const updateMentorshipGoalStatusAction = async (
+  projectId: string,
+  goalId: string,
+  status: GoalStatus,
+) =>
+  run(projectId, async (d) => {
+    return updateMentorshipGoalStatus(
+      d,
+      V.parse(V.Ids, goalId),
+      V.parse(V.GoalStatus, status),
+    );
+  });
+
+export const suggestGoalsAndAgreementAction = async (
+  projectId: string,
+  relationId: string,
+) =>
+  run(projectId, async (d) => {
+    return suggestGoalsAndAgreement(
+      d,
+      V.parse(V.Ids, projectId),
+      V.parse(V.Ids, relationId),
+    );
   });

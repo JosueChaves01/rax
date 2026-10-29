@@ -10,11 +10,15 @@ import type {
   ExperimentResult,
   Hypothesis,
   MentorAssignment,
+  MentorshipAgreement,
+  MentorshipGoal,
+  MentorshipRelation,
   MentorSession,
   Message,
   Profile,
   Project,
   SessionNote,
+  RoadmapMilestone,
   Task,
 } from "@/types/domain";
 import { conflict, notFound } from "@/lib/errors";
@@ -420,8 +424,14 @@ const task: Spec<Task> = {
     id: ["id", same],
     projectId: ["project_id", same],
     title: ["title", same],
+    actionType: ["action_type", nul],
+    milestoneId: ["milestone_id", nul],
+    goalId: ["goal_id", nul],
     experimentId: ["experiment_id", nul],
     assigneeId: ["assignee_id", same],
+    blockedReason: ["blocked_reason", nul],
+    delayHypothesis: ["delay_hypothesis", nul],
+    evidenceIds: ["evidence_ids", arr],
     status: ["status", same],
     dueDate: ["due_date", date],
     createdAt: ["created_at", tsReq],
@@ -487,6 +497,86 @@ const auditSpec: Spec<AuditEvent> = {
  * El historial lo escribe un trigger en cada cambio (también si alguien llama directo a la API).
  * El servidor solo precisa en esa fila el tipo de cambio, el actor real (p. ej. la IA) y el motivo.
  */
+const mentorshipRelationSpec: Spec<MentorshipRelation> = {
+  table: "mentorship_relations",
+  fields: {
+    id: ["id", same],
+    projectId: ["project_id", same],
+    entrepreneurId: ["entrepreneur_id", same],
+    mentorId: ["mentor_id", same],
+    stage: ["stage", same],
+    compatibilityStatus: ["compatibility_status", same],
+    compatibilityRationale: ["compatibility_rationale", nul],
+    compatibilityDecidedAt: ["compatibility_decided_at", ts],
+    version: ["version", same],
+    createdAt: ["created_at", tsReq],
+    updatedAt: ["updated_at", tsReq],
+  },
+  readOnly: ["version", "updatedAt"],
+};
+
+const mentorshipAgreementSpec: Spec<MentorshipAgreement> = {
+  table: "mentorship_agreements",
+  fields: {
+    id: ["id", same],
+    relationId: ["relation_id", same],
+    version: ["version", same],
+    frequency: ["frequency", same],
+    sessionDurationMinutes: ["session_duration_minutes", same],
+    authorizedChannels: ["authorized_channels", arr],
+    scope: ["scope", same],
+    mentorCommitments: ["mentor_commitments", same],
+    entrepreneurCommitments: ["entrepreneur_commitments", same],
+    confidentialityTerms: ["confidentiality_terms", same],
+    expectedDurationWeeks: ["expected_duration_weeks", same],
+    status: ["status", same],
+    confirmedAt: ["confirmed_at", ts],
+    createdAt: ["created_at", tsReq],
+  },
+};
+
+const mentorshipGoalSpec: Spec<MentorshipGoal> = {
+  table: "mentorship_goals",
+  fields: {
+    id: ["id", same],
+    relationId: ["relation_id", same],
+    title: ["title", same],
+    description: ["description", same],
+    whyItMatters: ["why_it_matters", same],
+    kind: ["kind", same],
+    baseline: ["baseline", same],
+    targetResult: ["target_result", same],
+    metricIndicator: ["metric_indicator", nul],
+    targetDate: ["target_date", date],
+    priority: ["priority", same],
+    relatedDiagnosisItemIds: ["related_diagnosis_item_ids", arr],
+    status: ["status", same],
+    version: ["version", same],
+    createdAt: ["created_at", tsReq],
+    updatedAt: ["updated_at", tsReq],
+  },
+  readOnly: ["version", "updatedAt"],
+};
+
+const roadmapMilestoneSpec: Spec<RoadmapMilestone> = {
+  table: "roadmap_milestones",
+  fields: {
+    id: ["id", same],
+    projectId: ["project_id", same],
+    relationId: ["relation_id", nul],
+    goalId: ["goal_id", nul],
+    title: ["title", same],
+    description: ["description", nul],
+    targetDate: ["target_date", date],
+    status: ["status", same],
+    orderIndex: ["order_index", num],
+    version: ["version", same],
+    createdAt: ["created_at", tsReq],
+    updatedAt: ["updated_at", tsReq],
+  },
+  readOnly: ["version", "updatedAt"],
+};
+
 class HistoryTable extends PgTable<DiagnosisItemHistory> {
   constructor(private readonly hdb: Db) {
     super(hdb, history);
@@ -514,9 +604,13 @@ export function createPgRepository(db: Db): Repository {
     comments: new PgTable(db, comment),
     mentorSessions: new PgTable(db, session),
     sessionNotes: new PgTable(db, note),
+    mentorshipRelations: new PgTable(db, mentorshipRelationSpec),
+    mentorshipAgreements: new PgTable(db, mentorshipAgreementSpec),
+    mentorshipGoals: new PgTable(db, mentorshipGoalSpec),
     hypotheses: new PgTable(db, hypothesis),
     experiments: new PgTable(db, experiment),
     experimentResults: new PgTable(db, result),
+    roadmapMilestones: new PgTable(db, roadmapMilestoneSpec),
     tasks: new PgTable(db, task),
     evidence: new PgTable(db, evidence),
     auditEvents: new PgTable(db, auditSpec),

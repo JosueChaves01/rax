@@ -1,0 +1,98 @@
+{
+  "name": "RAX-15 — Seguimiento de Eventos y Métricas Operativas",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "metricData",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "node-trigger-metrics",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json.metricData || $input.first().json;\n\n// Procesamiento de métricas sin datos sensibles\nconst metricRecord = {\n  operationId: input.operationId || 'met_' + Date.now(),\n  workflowId: input.workflowId || 'unknown',\n  correlationId: input.correlationId || 'unknown',\n  executionTimeMs: input.executionTimeMs || 0,\n  promptTokens: input.usage?.promptTokens || 0,\n  completionTokens: input.usage?.completionTokens || 0,\n  totalTokens: (input.usage?.promptTokens || 0) + (input.usage?.completionTokens || 0),\n  model: input.usage?.model || 'unknown',\n  status: input.status || 'completed',\n  proposalsCount: input.proposalsCount || 0,\n  humanReviewed: input.humanReviewed || false,\n  humanAccepted: input.humanAccepted || false,\n  recordedAt: new Date().toISOString()\n};\n\nreturn [{\n  json: metricRecord\n}];"
+      },
+      "id": "node-code-process-metric",
+      "name": "Process & Sanitize Metric",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAX_API_URL || 'http://localhost:3000' }}/api/n8n/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-rax-correlation-id",
+              "value": "={{ $json.correlationId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"operationId\": \"{{ $json.operationId }}\",\n  \"correlationId\": \"{{ $json.correlationId }}\",\n  \"workflowId\": \"RAX-15\",\n  \"workflowVersion\": \"1.0.0\",\n  \"status\": \"completed\",\n  \"executionTimeMs\": {{ $json.executionTimeMs }},\n  \"usage\": {\n    \"model\": \"{{ $json.model }}\",\n    \"promptTokens\": {{ $json.promptTokens }},\n    \"completionTokens\": {{ $json.completionTokens }}\n  },\n  \"data\": {\n    \"summary\": \"Métrica operativa registrada exitosamente\"\n  }\n}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "node-http-send-metric",
+      "name": "Send Metric Log to RAX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process & Sanitize Metric",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process & Sanitize Metric": {
+      "main": [
+        [
+          {
+            "node": "Send Metric Log to RAX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Metrics"
+    }
+  ]
+}

@@ -1,5 +1,12 @@
 import { DIMENSION_QUESTION } from "@/features/conversation/interview";
-import type { ExperimentSuggestionContext, FirstReviewContext, HypothesisSuggestionContext, InterviewContext } from "./provider";
+import type {
+  ExperimentSuggestionContext,
+  ExperimentTasksContext,
+  FirstReviewContext,
+  GoalsSuggestionContext,
+  HypothesisSuggestionContext,
+  InterviewContext,
+} from "./provider";
 
 /**
  * Instrucciones del sistema del motor de interpretación. Versionadas: si cambian, subí PROMPT_VERSION
@@ -105,6 +112,63 @@ Reglas indispensables de un experimento en RAX:
 Respondé ÚNICAMENTE con un objeto JSON con esta forma exacta:
 {"question": string, "method": string, "participants": string, "activities": [string], "resources": string, "budget": number|null, "durationDays": number|null, "metric": string, "successCriterion": string, "rejectionCriterion": string, "risks": string, "evidencePlan": string, "rationale": string}`;
 
+export const EXPERIMENT_TASKS_SYSTEM_PROMPT = `Sos el asistente de ejecución y gestión de tareas de RAX. Ayudás al equipo emprendedor a descomponer el diseño de un experimento en tareas operativas concretas, accionables y secuenciales.
+
+Tu objetivo:
+A partir del diseño del experimento (pregunta, método, participantes, actividades, recursos, métrica y plan de evidencia) y de la hipótesis que se prueba, generar una lista de 3 a 8 tareas operativas que permitan ejecutar el experimento de principio a fin.
+
+Reglas indispensables de las tareas en RAX:
+1. "title": acción concreta, específica y observable (máximo 200 caracteres).
+   - Comenzá con un verbo en infinitivo (ej: "Diseñar...", "Reclutar...", "Preparar...", "Conducir...", "Tabular...", "Adjuntar...").
+   - Especificá qué se hace y sobre qué recurso o segmento (ej: "Elaborar el guion de entrevista enfocado en validar el problema", "Contactar a 15 candidatos del segmento en LinkedIn para agendar llamadas").
+   - Prohibido formular tareas vagas o genéricas como: "Hacer el experimento", "Investigar", "Analizar datos", "Validar".
+2. Cobertura del ciclo operativo del experimento:
+   - Preparación previa: elaboración de instrumentos, guiones, prototipos o formularios según los recursos y método.
+   - Reclutamiento / Convocatoria: contactar y agendar con los participantes definidos.
+   - Ejecución: llevar a cabo las sesiones, pruebas o interacciones planificadas.
+   - Evidencia y análisis: registrar datos, recopilar evidencia objetiva (audios, planillas, confirmaciones) y cotejar contra los criterios de éxito y rechazo.
+3. No repitas tareas que ya existan en la lista de tareas existentes del experimento.
+4. Adaptate a la escala y duración del experimento (si dura 7 días y no tiene presupuesto, las tareas deben ser ágiles y pragmáticas).
+5. "rationale": síntesis breve (1-2 oraciones) de cómo estas tareas cubren el flujo del experimento.
+
+Respondé ÚNICAMENTE con un objeto JSON con esta forma exacta:
+{"tasks": [{"title": string}], "rationale": string}`;
+
+export const GOALS_SUGGESTION_SYSTEM_PROMPT = `Sos el asesor de alineación metodológica y acuerdos de mentoría de RAX. Ayudás al mentor y al emprendedor a acordar objetivos claros, observables y realistas para el proceso de acompañamiento (Etapa 2: Acuerdos y Objetivos).
+
+Tu objetivo:
+1. "suggestedGoals": Formular de 2 a 4 objetivos de mentoría bien fundamentados en el diagnóstico confirmado y en los problemas priorizados.
+   Reglas indispensables para cada objetivo:
+   - "title": Nombre conciso y accionable del objetivo (3 a 200 caracteres).
+   - "description": Explicación clara de lo que se busca lograr.
+   - "whyItMatters": Por qué este objetivo es crucial para la etapa actual del negocio.
+   - "kind": Clasificación honesta según la naturaleza del problema ("metric" | "qualitative" | "capability" | "strategic").
+     * "metric": Implica mover un indicador numérico (ej: retención, ventas, margen).
+     * "qualitative": Mejora cualitativa verificable (ej: claridad de propuesta de valor para clientes).
+     * "capability": Aprendizaje o adquisición de una habilidad por parte del equipo (ej: dominar entrevistas en frío, armar flujo de caja).
+     * "strategic": Decisión clave de negocio o redefinición de rumbo (ej: elegir entre modelo B2B o B2C).
+     Principio fundamental: NO todos los problemas necesitan experimentos ni métricas artificiales; valorá capacidades y decisiones estratégicas.
+   - "baseline": LÍNEA BASE ACTUAL DOCUMENTADA (obligatoria, basada en el diagnóstico confirmado o datos provistos). Ejemplo: "Actualmente no se mide retención y la cobranza es 100% manual por WhatsApp".
+   - "targetResult": RESULTADO ESPERADO OBSERVABLE al completar el ciclo. No uses tautologías de éxito ni frases vagas. Debe ser contrastable contra la realidad.
+   - "metricIndicator": Nombre del indicador numérico si el tipo es "metric" (opcional).
+   - "priority": "high" | "medium" | "low".
+   - "rationale": Breve justificación metodológica de por qué este objetivo es prioritario según el diagnóstico.
+
+2. "suggestedAgreementTerms": Proponer términos de trabajo y cadencia para el acuerdo de mentoría:
+   - "frequency": "weekly" | "biweekly" | "monthly" | "on_demand" (por defecto "biweekly").
+   - "sessionDurationMinutes": duración realista en minutos (típicamente 60).
+   - "authorizedChannels": canales oficiales de comunicación acordados (ej: ["Google Meet", "WhatsApp"]).
+   - "scope": alcance preciso del acompañamiento: qué abarca y qué NO abarca (para evitar expectativas falsas).
+   - "mentorCommitments": compromisos concretos asumidos por el mentor (preparación previa, puntualidad, devolución constructiva, confidencialidad).
+   - "entrepreneurCommitments": compromisos asumidos por el emprendedor (transparencia de métricas y bloqueos, avance entre sesiones, avisar cambios de agenda con 24h).
+   - "confidentialityTerms": términos de confidencialidad recíproca respecto a métricas, clientes y estrategia.
+   - "expectedDurationWeeks": duración estimada del ciclo de mentoría en semanas (ej: 8 a 12).
+
+3. "rationale": Breve síntesis (1-2 oraciones) de la alineación propuesta.
+
+Respondé ÚNICAMENTE con un objeto JSON con esta forma exacta:
+{"suggestedGoals": [{"title": string, "description": string, "whyItMatters": string, "kind": "metric"|"qualitative"|"capability"|"strategic", "baseline": string, "targetResult": string, "metricIndicator": string|null, "priority": "high"|"medium"|"low", "rationale": string}], "suggestedAgreementTerms": {"frequency": "weekly"|"biweekly"|"monthly"|"on_demand", "sessionDurationMinutes": number, "authorizedChannels": [string], "scope": string, "mentorCommitments": string, "entrepreneurCommitments": string, "confidentialityTerms": string, "expectedDurationWeeks": number}, "rationale": string}`;
+
 export function renderFirstReviewContext(ctx: FirstReviewContext): string {
   return JSON.stringify(
     {
@@ -166,6 +230,44 @@ export function renderExperimentSuggestionContext(ctx: ExperimentSuggestionConte
       hypothesisToTest: ctx.hypothesis,
       founderContext: ctx.founderContext,
       previousExperiments: ctx.previousExperiments,
+    },
+    null,
+    1,
+  );
+}
+
+export function renderExperimentTasksContext(ctx: ExperimentTasksContext): string {
+  return JSON.stringify(
+    {
+      project: {
+        name: ctx.projectName,
+        nature: ctx.projectNature,
+        summary: ctx.projectSummary,
+      },
+      hypothesis: ctx.hypothesis,
+      experiment: ctx.experiment,
+      existingTasks: ctx.existingTasks,
+      founderContext: ctx.founderContext,
+    },
+    null,
+    1,
+  );
+}
+
+export function renderGoalsSuggestionContext(ctx: GoalsSuggestionContext): string {
+  return JSON.stringify(
+    {
+      project: {
+        name: ctx.projectName,
+        nature: ctx.projectNature,
+        summary: ctx.projectSummary,
+      },
+      founderContext: ctx.founderContext,
+      confirmedDiagnosis: ctx.confirmedDiagnosis,
+      prioritizedProblems: ctx.prioritizedProblems,
+      existingGoals: ctx.existingGoals,
+      mentorNotes: ctx.mentorNotes,
+      currentAgreement: ctx.currentAgreement,
     },
     null,
     1,

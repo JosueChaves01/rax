@@ -2,7 +2,7 @@
 
 Estados: PLANNED · IN_PROGRESS · IMPLEMENTED · PARTIAL · BLOCKED · DEPRECATED. Un estado IMPLEMENTED significa que hay código y prueba o verificación manual; no significa listo para producción.
 
-Última actualización: 2026-10-28.
+Última actualización: 2026-10-29.
 
 ## Funcionalidades
 
@@ -19,27 +19,18 @@ Estados: PLANNED · IN_PROGRESS · IMPLEMENTED · PARTIAL · BLOCKED · DEPRECAT
 | Revisión humana del diagnóstico + historial | IMPLEMENTED | Escenario C, H |
 | Resumen y confirmación | IMPLEMENTED | `diagnosis.ts` |
 | Asignación de mentores | IMPLEMENTED | `/app/admin` |
-| Primera y segunda revisión | IMPLEMENTED | Escenario E |
-| Hipótesis con aprobación del mentor | IMPLEMENTED | Escenario E, RLS |
-| Experimentos con criterios bloqueados | IMPLEMENTED | Escenario E, RLS |
-| Tareas | IMPLEMENTED | `/tareas` |
-| Evidencias nota/enlace | IMPLEMENTED | `/historial` |
-| Evidencias archivo | PARTIAL | Se validan metadatos; no hay subida real |
-| Auditoría | IMPLEMENTED | `audit_events`, `/historial` |
-| IA simulada | IMPLEMENTED | Etiquetada en la interfaz |
-| IA OpenRouter (modelo gratuito) | PARTIAL | Código y pruebas con fetch simulado; sin verificación en vivo |
-| Migraciones Supabase + RLS | IMPLEMENTED | `npm run test:db` en Postgres local con stubs |
-| App conectada a Supabase | IMPLEMENTED | `lib/data/supabase-repository.ts`; `npm run test:pg` corre los escenarios contra Postgres con RLS |
-| Subida a Storage | PLANNED | Bucket y políticas listos |
-| Rate limiting | PLANNED | |
-| Notificaciones | PLANNED | |
-| CI | PLANNED | |
+| **Relaciones de mentoría y compatibilidad (Etapa 1)** | IMPLEMENTED | `lib/services/mentorship-relation.ts`, `tests/mentorship-relation.test.ts` (Escenario A) |
+| **Acuerdos de mentoría formales versionados (Etapa 2/3)** | IMPLEMENTED | `lib/services/mentorship-relation.ts`, `app/app/p/[id]/acuerdos`, `tests/mentorship-relation.test.ts` (Escenario B) |
+| **Objetivos de mentoría con línea base documentada** | IMPLEMENTED | `lib/services/mentorship-relation.ts`, `app/app/p/[id]/acuerdos`, `tests/mentorship-relation.test.ts` (Escenario B) |
+| **Asistente de IA para sugerencia de objetivos y acuerdos** | IMPLEMENTED | `lib/ai/openrouter.ts`, `lib/ai/simulated.ts`, `tests/mentorship-relation.test.ts` (Escenario C) |
+| **UI de Acuerdos y Objetivos en Workspace** | IMPLEMENTED | `/app/p/[id]/acuerdos`, navegación en etapa "Orientar" |
+| **Hoja de ruta multimodal sin experimentos forzados (Etapa 4)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts` (acciones operativas, aprendizaje, decisiones) |
+| **Ciclo de sesiones, briefing contextual y privacidad (Etapa 5)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts`, `tests/mentoring-ai.test.ts`, `briefing.ts` |
+| **Accountability contextual y retrasos sin culpa (Etapa 6)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts` (Escenario F Global) |
+| **Evaluación de resultados, cierre y renovación (Etapa 7)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts` (Escenario I Global, preservación histórica) |
 
-## Punto de continuación
+## Punto de continuación (Plan Swarm)
 
-1. Aplicar `20261028000004_rax_onboarding.sql`, poner las variables de entorno y configurar las URLs de Auth (ver README).
-2. Recorrer el flujo completo en el proyecto real: registro, confirmación de correo, onboarding de cada tipo, aprobación de un mentor, asignación y conversación.
-3. Recuperación de contraseña y cambio de correo.
-4. Subida de archivos a Storage con URL firmada.
-5. Rate limiting en `sendMessage` y CI con `npm run check` + `test:pg`.
-6. SMTP propio para los correos de Auth.
+1. **Fase 3:** Implementación de Hitos (Milestones) y Acciones Multimodales conectadas a los objetivos de mentoría.
+2. **Fase 4:** Ciclo de sesiones (briefing pre-sesión con 4 capas de memoria, notas en vivo, resumen pos-sesión con compromisos).
+3. **Fase 5:** Accountability no punitivo (análisis causal de retrasos sin juicios de valor, soporte proactivo).

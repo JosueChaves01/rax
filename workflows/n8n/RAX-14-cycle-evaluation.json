@@ -1,0 +1,162 @@
+{
+  "name": "RAX-14 — Evaluación y Cierre de una Etapa de Mentoría",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "node-trigger-cycle-evaluation",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el evaluador de ciclo de acompañamiento de RAX.\\nTu función es comparar el punto de partida con los resultados consolidados de la etapa de mentoría.\\nREGLAS:\\n1. Compara los objetivos iniciales con las metas alcanzadas con base en evidencias reales.\\n2. Formula una recomendación fundada entre: 'renew' (renovar con nuevos objetivos), 'advance_stage' (avanzar a siguiente fase), 'close' (cierre formal satisfactorio), o 'restructure' (replanteamiento profundo).\\n3. Recuerda que tu propuesta es consultiva; la decisión final es siempre de mentor y emprendedor.\\n4. Salida en JSON estricto con: evaluationSummary (string), baselineVsOutcomes (string), keyAchievements (array), persistentObstacles (array), recommendation (string), continuityPlan (string), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  relationshipId: event.relationshipId,\n  initialDiagnosis: payload.initialDiagnosis || '',\n  confirmedGoals: payload.confirmedGoals || [],\n  experimentResults: payload.experimentResults || [],\n  completedSessionsCount: payload.sessionsCount || 0\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "id": "node-code-prep-cycle-prompt",
+      "name": "Build Cycle Evaluation Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "RAX Mentorship Cycle Evaluation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.model }}\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.2,\n  \"max_tokens\": 1800\n}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "node-http-openrouter-cycle",
+      "name": "Call OpenRouter Cycle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Build Cycle Evaluation Prompt').first().json;\n\nlet parsed = {};\ntry {\n  const content = response.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { evaluationSummary: 'Error al procesar la evaluación', uncertainties: ['Salida JSON no válida'] };\n}\n\nconst proposals = [{\n  type: 'recommendation',\n  title: `Recomendación de etapa: ${parsed.recommendation || 'Revisión conjunta'}`,\n  description: `${parsed.evaluationSummary || ''} | Continuidad: ${parsed.continuityPlan || 'A definir'}`,\n  needsHumanApproval: true,\n  uncertainties: parsed.uncertainties || []\n}];\n\nconst callbackPayload = {\n  operationId: 'op_cyc_' + Date.now(),\n  correlationId: prep.correlationId,\n  workflowId: 'RAX-14',\n  workflowVersion: '1.0.0',\n  status: 'completed',\n  usage: {\n    model: response.model || prep.model,\n    promptTokens: response.usage?.prompt_tokens || 0,\n    completionTokens: response.usage?.completion_tokens || 0\n  },\n  data: {\n    summary: parsed.evaluationSummary,\n    proposals,\n    uncertainties: parsed.uncertainties || [],\n    nextStepRecommendation: parsed.continuityPlan\n  }\n};\n\nreturn [{\n  json: {\n    callbackUrl: prep.callbackUrl,\n    payload: callbackPayload\n  }\n}];"
+      },
+      "id": "node-code-format-cycle-callback",
+      "name": "Format Cycle Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-rax-correlation-id",
+              "value": "={{ $json.payload.correlationId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-http-send-cycle-callback",
+      "name": "Send Callback to RAX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Cycle Evaluation Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Cycle Evaluation Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter Cycle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter Cycle": {
+      "main": [
+        [
+          {
+            "node": "Format Cycle Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Cycle Callback": {
+      "main": [
+        [
+          {
+            "node": "Send Callback to RAX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Evaluation"
+    }
+  ]
+}

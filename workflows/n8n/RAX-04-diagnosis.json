@@ -1,0 +1,162 @@
+{
+  "name": "RAX-04 — Diagnóstico y Extracción Estructurada",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "node-trigger-diagnosis",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el especialista en diagnóstico estructurado de RAX.\\nTu función es procesar las declaraciones del emprendedor para extraer elementos de diagnóstico precisos.\\nCATEGORÍAS PERMITIDAS DE RAX:\\n- context, people_market, problem, solutions, financial, operational, commercial, legal, risk, open_question.\\n\\nREGLAS:\\n1. Si la persona afirma algo sin datos verificables, clasifícalo como 'entrepreneur_statement'.\\n2. Incluye siempre una cita textual (sourceQuote) del mensaje.\\n3. Si detectas incertidumbre o contradicción con lo previo, márcalo explícitamente.\\n4. Salida en formato JSON estricto con: extractedItems (array de objetos con category, title, content, infoType, uncertainty, sourceQuote), openQuestions (array de strings), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  messageContent: payload.messageContent || payload.content || '',\n  existingDiagnosisItems: payload.existingItems || []\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "id": "node-code-prep-diag-prompt",
+      "name": "Build Diagnosis Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "RAX Structured Diagnosis"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.model }}\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.2,\n  \"max_tokens\": 1600\n}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "node-http-openrouter-diag",
+      "name": "Call OpenRouter Diagnosis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Build Diagnosis Prompt').first().json;\n\nlet parsed = {};\ntry {\n  const content = response.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { extractedItems: [], uncertainties: ['Salida JSON no válida'] };\n}\n\nconst proposals = (parsed.extractedItems || []).map(item => ({\n  type: 'diagnosis_item',\n  category: item.category || 'context',\n  title: item.title,\n  description: item.content || item.title,\n  sourceQuote: item.sourceQuote || undefined,\n  needsHumanApproval: true,\n  uncertainties: item.uncertainty ? [item.uncertainty] : []\n}));\n\nconst callbackPayload = {\n  operationId: 'op_diag_' + Date.now(),\n  correlationId: prep.correlationId,\n  workflowId: 'RAX-04',\n  workflowVersion: '1.0.0',\n  status: 'completed',\n  usage: {\n    model: response.model || prep.model,\n    promptTokens: response.usage?.prompt_tokens || 0,\n    completionTokens: response.usage?.completion_tokens || 0\n  },\n  data: {\n    summary: `Se extrajeron ${proposals.length} elementos de diagnóstico propuestos.`,\n    proposals,\n    uncertainties: parsed.uncertainties || [],\n    nextStepRecommendation: (parsed.openQuestions || []).join('; ')\n  }\n};\n\nreturn [{\n  json: {\n    callbackUrl: prep.callbackUrl,\n    payload: callbackPayload\n  }\n}];"
+      },
+      "id": "node-code-format-diag-callback",
+      "name": "Format Diagnosis Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-rax-correlation-id",
+              "value": "={{ $json.payload.correlationId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-http-send-diag-callback",
+      "name": "Send Callback to RAX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Diagnosis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Diagnosis Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter Diagnosis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter Diagnosis": {
+      "main": [
+        [
+          {
+            "node": "Format Diagnosis Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Diagnosis Callback": {
+      "main": [
+        [
+          {
+            "node": "Send Callback to RAX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Diagnosis"
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "name": "RAX-90 — Gestión Central de Errores",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-error-trigger",
+      "name": "Workflow Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const errorInfo = $input.first().json.execution?.error || {};\nconst workflow = $input.first().json.workflow || {};\nconst execution = $input.first().json.execution || {};\n\nconst errorMessage = errorInfo.message || 'Unknown execution error';\nconst httpCode = errorInfo.httpCode || errorInfo.status || null;\n\n// Clasificación: transitorio vs permanente\nlet isTransient = false;\nif (httpCode === 429 || httpCode === 503 || httpCode === 504 || errorMessage.includes('timeout') || errorMessage.includes('ECONNRESET')) {\n  isTransient = true;\n}\n\n// Extraer correlationId si venía en los datos de entrada\nlet correlationId = 'unknown';\ntry {\n  const lastNodeData = execution.data?.resultData?.runData;\n  if (lastNodeData) {\n    const firstKey = Object.keys(lastNodeData)[0];\n    const firstItem = lastNodeData[firstKey]?.[0]?.data?.main?.[0]?.[0]?.json;\n    if (firstItem && firstItem.correlationId) {\n      correlationId = firstItem.correlationId;\n    } else if (firstItem?.event?.correlationId) {\n      correlationId = firstItem.event.correlationId;\n    }\n  }\n} catch (e) {\n  // Continuar con fallback\n}\n\nconst sanitizedReport = {\n  operationId: 'err_' + Date.now(),\n  correlationId,\n  workflowId: workflow.id || 'unknown',\n  workflowName: workflow.name || 'unknown',\n  executionId: execution.id || 'unknown',\n  errorType: isTransient ? 'transient' : 'permanent',\n  errorMessage: errorMessage.replace(/key=[^&\\s]+/gi, 'key=REDACTED'),\n  httpCode,\n  timestamp: new Date().toISOString()\n};\n\nreturn [{\n  json: sanitizedReport\n}];"
+      },
+      "id": "node-code-classify-error",
+      "name": "Classify & Sanitize Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAX_API_URL || 'http://localhost:3000' }}/api/n8n/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-rax-correlation-id",
+              "value": "={{ $json.correlationId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"operationId\": \"{{ $json.operationId }}\",\n  \"correlationId\": \"{{ $json.correlationId }}\",\n  \"workflowId\": \"{{ $json.workflowName }}\",\n  \"workflowVersion\": \"1.0.0\",\n  \"status\": \"failed\",\n  \"error\": {\n    \"code\": \"{{ $json.errorType }}\",\n    \"message\": \"{{ $json.errorMessage }}\",\n    \"recoverable\": {{ $json.errorType === 'transient' }},\n    \"providerStatus\": {{ $json.httpCode || 'null' }}\n  }\n}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "node-http-report-error-rax",
+      "name": "Report Error to RAX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Workflow Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Classify & Sanitize Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify & Sanitize Error": {
+      "main": [
+        [
+          {
+            "node": "Report Error to RAX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Error"
+    }
+  ]
+}

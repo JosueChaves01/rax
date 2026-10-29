@@ -1,4 +1,4 @@
-import type { Evidence, EvidenceKind, Experiment, ExperimentResult, Hypothesis, ResultOutcome, Task, TaskStatus, Uncertainty } from "@/types/domain";
+import type { ActionType, Evidence, EvidenceKind, Experiment, ExperimentResult, Hypothesis, ResultOutcome, Task, TaskStatus, Uncertainty } from "@/types/domain";
 import { assertHypothesisTransition, assertTestable, OUTCOME_TO_HYPOTHESIS } from "@/features/hypotheses/rules";
 import { assertCriteriaEditable, assertExperimentTransition, assertReady } from "@/features/experiments/rules";
 import { notFound, validation } from "@/lib/errors";
@@ -6,8 +6,8 @@ import { audit, guard, type ServiceDeps } from "./base";
 import { touch } from "./projects";
 import { isCurrent } from "@/features/diagnosis/rules";
 import { GOAL_LABEL, NATURE_LABEL } from "@/features/labels";
-import { AiUnavailableError, type ExperimentSuggestionContext, type HypothesisSuggestionContext } from "@/lib/ai/provider";
-import type { HypothesesSuggestion, SuggestedExperiment } from "@/lib/ai/schema";
+import { AiUnavailableError, type ExperimentSuggestionContext, type ExperimentTasksContext, type HypothesisSuggestionContext } from "@/lib/ai/provider";
+import type { ExperimentTasksSuggestion, HypothesesSuggestion, SuggestedExperiment } from "@/lib/ai/schema";
 
 /* ───────────── Hipótesis ───────────── */
 
@@ -139,10 +139,10 @@ export async function suggestHypotheses(d: ServiceDeps, projectId: string): Prom
     projectSummary: diagnosis?.summary ?? project.description,
     founderContext: founderOnboarding
       ? {
-          stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
-          sector: founderOnboarding.sector,
-          goals: founderOnboarding.goals.map((g) => GOAL_LABEL[g] ?? g),
-        }
+        stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
+        sector: founderOnboarding.sector,
+        goals: founderOnboarding.goals.map((g) => GOAL_LABEL[g] ?? g),
+      }
       : undefined,
     prioritizedProblems,
     otherProblems,
@@ -332,10 +332,10 @@ export async function suggestExperiment(d: ServiceDeps, projectId: string, hypot
     },
     founderContext: founderOnboarding
       ? {
-          stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
-          sector: founderOnboarding.sector,
-          weeklyHours: founderOnboarding.weeklyHours,
-        }
+        stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
+        sector: founderOnboarding.sector,
+        weeklyHours: founderOnboarding.weeklyHours,
+      }
       : undefined,
     previousExperiments: experiments.map((e) => ({ question: e.question, method: e.method })),
   };
@@ -423,6 +423,93 @@ export async function createTask(d: ServiceDeps, projectId: string, input: { tit
   const t: Task = { id: d.newId("task"), projectId, title: title.slice(0, 200), experimentId: input.experimentId, assigneeId: input.assigneeId ?? d.actor.id, status: "todo", dueDate: input.dueDate, createdAt: now, updatedAt: now };
   await d.repo.tasks.insert(t);
   return t;
+}
+
+export async function createTasksBatch(
+  d: ServiceDeps,
+  projectId: string,
+  tasks: Array<{ title: string; experimentId?: string; dueDate?: string }>,
+): Promise<Task[]> {
+  await guard(d, projectId, "task.manage");
+  const created: Task[] = [];
+  for (const t of tasks) {
+    const row = await createTask(d, projectId, t);
+    created.push(row);
+  }
+  return created;
+}
+
+/** Sugiere tareas operativas con IA para ejecutar un experimento a partir de su contexto */
+export async function suggestExperimentTasks(d: ServiceDeps, projectId: string, experimentId: string): Promise<ExperimentTasksSuggestion> {
+  await guard(d, projectId, "task.manage");
+  const exp = await d.repo.experiments.get(experimentId);
+  if (!exp || exp.projectId !== projectId) throw notFound("El experimento no pertenece a este proyecto.");
+
+  const [project, hyp, allTasks] = await Promise.all([
+    d.repo.projects.get(projectId),
+    d.repo.hypotheses.get(exp.hypothesisId),
+    d.repo.tasks.list({ projectId, experimentId }),
+  ]);
+
+  const ownerProfile = project ? await d.repo.profiles.get(project.ownerId) : null;
+  const founderOnboarding = ownerProfile?.onboarding?.intent === "entrepreneur" ? ownerProfile.onboarding : undefined;
+
+  const ctx: ExperimentTasksContext = {
+    projectName: project?.name ?? "",
+    projectNature: project ? (NATURE_LABEL[project.nature] ?? project.nature) : "",
+    projectSummary: project?.description ?? "",
+    hypothesis: hyp
+      ? {
+        statement: hyp.statement,
+        segment: hyp.segment,
+        evaluationCriterion: hyp.evaluationCriterion,
+      }
+      : undefined,
+    experiment: {
+      id: exp.id,
+      question: exp.question,
+      method: exp.method,
+      participants: exp.participants,
+      activities: exp.activities,
+      resources: exp.resources,
+      durationDays: exp.durationDays,
+      budget: exp.budget,
+      metric: exp.metric,
+      successCriterion: exp.successCriterion,
+      rejectionCriterion: exp.rejectionCriterion,
+      evidencePlan: exp.evidencePlan,
+      risks: exp.risks,
+      status: exp.status,
+    },
+    founderContext: founderOnboarding
+      ? {
+        stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
+        sector: founderOnboarding.sector,
+        weeklyHours: founderOnboarding.weeklyHours,
+      }
+      : undefined,
+    existingTasks: allTasks.map((t) => ({ title: t.title, status: t.status })),
+  };
+
+  try {
+    const result = await d.ai.suggestExperimentTasks(ctx);
+    await audit(d, "ai.invoked", {
+      projectId,
+      targetId: experimentId,
+      meta: { task: "experiment_tasks_suggestion", provider: result.provider },
+    });
+    return result.suggestion;
+  } catch (e) {
+    await audit(d, "ai.failed", {
+      projectId,
+      targetId: experimentId,
+      meta: {
+        task: "experiment_tasks_suggestion",
+        reason: e instanceof AiUnavailableError ? e.reason : "unknown",
+      },
+    });
+    throw e;
+  }
 }
 
 export async function setTaskStatus(d: ServiceDeps, taskId: string, status: TaskStatus) {

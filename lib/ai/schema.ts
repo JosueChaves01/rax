@@ -126,3 +126,53 @@ export const SuggestedExperimentSchema = z.object({
 });
 
 export type SuggestedExperiment = z.infer<typeof SuggestedExperimentSchema>;
+
+/* ───────────── Tareas de Experimentos ───────────── */
+
+export const SuggestedTaskSchema = z.object({
+  title: z.string().min(3).max(200),
+});
+
+export const ExperimentTasksSuggestionSchema = z.object({
+  tasks: z.array(SuggestedTaskSchema).min(1).max(15),
+  rationale: z.string().max(400).optional(),
+});
+
+export type SuggestedTask = z.infer<typeof SuggestedTaskSchema>;
+export type ExperimentTasksSuggestion = z.infer<typeof ExperimentTasksSuggestionSchema>;
+
+/* ───────────── Objetivos y Acuerdos de Mentoría (Etapa 3) ───────────── */
+
+export const SuggestedGoalSchema = z.object({
+  title: z.string().min(3).max(200),
+  description: z.string().max(1000).default(""),
+  whyItMatters: z.string().max(1000).default(""),
+  kind: z.enum(["metric", "qualitative", "capability", "strategic"]).default("qualitative"),
+  baseline: z.string().max(1000),
+  targetResult: z.string().min(3).max(1000),
+  metricIndicator: z.string().max(300).optional(),
+  priority: z.enum(["high", "medium", "low"]).default("medium"),
+  rationale: z.string().max(400).optional(),
+});
+
+export const SuggestedAgreementTermsSchema = z.object({
+  frequency: z.enum(["weekly", "biweekly", "monthly", "on_demand"]).default("biweekly"),
+  sessionDurationMinutes: z.number().int().min(15).max(240).default(60),
+  authorizedChannels: z.array(z.string().max(100)).default(["Google Meet", "WhatsApp"]),
+  scope: z.string().max(2000),
+  mentorCommitments: z.string().max(2000),
+  entrepreneurCommitments: z.string().max(2000),
+  confidentialityTerms: z.string().max(2000).default("Confidencialidad recíproca respecto a métricas, clientes y estrategia."),
+  expectedDurationWeeks: z.number().int().min(1).max(52).default(12),
+});
+
+export const GoalsSuggestionSchema = z.object({
+  suggestedGoals: z.array(SuggestedGoalSchema).min(1).max(5),
+  suggestedAgreementTerms: SuggestedAgreementTermsSchema.optional(),
+  rationale: z.string().max(500).optional(),
+});
+
+export type SuggestedGoal = z.infer<typeof SuggestedGoalSchema>;
+export type SuggestedAgreementTerms = z.infer<typeof SuggestedAgreementTermsSchema>;
+export type GoalsSuggestion = z.infer<typeof GoalsSuggestionSchema>;
+

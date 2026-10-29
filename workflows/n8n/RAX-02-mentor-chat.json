@@ -1,0 +1,192 @@
+{
+  "name": "RAX-02 — Asistente Conversacional de Mentoría",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rax-chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-chat",
+      "name": "Webhook Chat Ingress",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 300],
+      "webhookId": "rax-chat-ingress"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst headers = $input.first().json.headers || {};\nconst body = $input.first().json.body || {};\n\nconst signatureHeader = headers['x-rax-signature'];\nconst timestampHeader = headers['x-rax-timestamp'];\nconst rawBodyStr = JSON.stringify(body);\n\n// 1. Verificación de seguridad HMAC\nconst secret = $env.RAX_N8N_SHARED_SECRET || 'test-shared-secret-rax-n8n';\nconst hmac = crypto.createHmac('sha256', secret);\nconst expectedSig = 'sha256=' + hmac.update(`${timestampHeader}.${rawBodyStr}`).digest('hex');\n\nif (signatureHeader !== expectedSig) {\n  return [{\n    json: {\n      valid: false,\n      statusCode: 401,\n      error: 'Invalid HMAC signature'\n    }\n  }];\n}\n\n// 2. Control de Privacidad Estricto:\n// Si el actor es el emprendedor, purgeamos cualquier nota privada de mentor que pudiera haberse filtrado\nconst actorRole = body.actor?.role;\nconst context = body.context || {};\nlet sanitizedNotes = [];\nif (actorRole === 'mentor' || actorRole === 'admin') {\n  sanitizedNotes = context.mentorNotes || [];\n}\n\n// 3. Construir el prompt contextual para OpenRouter (Nivel 2)\nconst systemPrompt = `Eres el asistente de mentoría de RAX. Tu misión es acompañar al emprendedor con pedagogía socrática.\nREGLAS OBLIGATORIAS:\n1. Responde en español neutral y profesional.\n2. Haz una sola pregunta o reflexión a la vez para no abrumar.\n3. Distingue entre hechos registrados, afirmaciones del emprendedor e hipótesis no comprobadas.\n4. Si el usuario menciona una duda o falta de información, decláralo como incertidumbre en lugar de adivinar.\n5. Si identificas un elemento clave (problema, cliente, métrica), sugiérelo como propuesta con needsHumanApproval: true.\n6. Devuelve EXCLUSIVAMENTE un objeto JSON válido con los campos: reply (string), askedDimension (string opcional), proposals (array de propuestas), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  actorRole,\n  userMessage: body.message,\n  projectName: context.projectName,\n  projectSummary: context.projectSummary,\n  recentMessages: context.recentMessages || [],\n  coveredDimensions: context.coveredDimensions || [],\n  pendingDimensions: context.pendingDimensions || [],\n  mentorNotesAllowed: sanitizedNotes\n});\n\nreturn [{\n  json: {\n    valid: true,\n    correlationId: body.correlationId,\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "id": "node-code-sanitize-chat",
+      "name": "Sanitize & Build Chat Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "node-if-chat-valid",
+      "name": "Is Chat Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "RAX Mentor Chat"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.model }}\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.4,\n  \"max_tokens\": 1000\n}",
+        "options": {
+          "timeout": 35000
+        }
+      },
+      "id": "node-http-openrouter-chat",
+      "name": "Call OpenRouter Chat Model",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [840, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Sanitize & Build Chat Prompt').first().json;\n\nlet output = null;\ntry {\n  const content = response.choices?.[0]?.message?.content || '{}';\n  output = JSON.parse(content);\n} catch (e) {\n  output = {\n    reply: 'He recibido tu mensaje y estoy procesándolo con tu mentor. ¿Podrías brindarme más detalles?',\n    uncertainties: ['Salida no estructurada del modelo']\n  };\n}\n\nreturn [{\n  json: {\n    correlationId: prep.correlationId,\n    reply: output.reply || 'Entendido. Sigamos profundizando.',\n    dimension: output.askedDimension || null,\n    proposals: (output.proposals || []).map(p => ({\n      ...p,\n      needsHumanApproval: true\n    })),\n    uncertainties: output.uncertainties || [],\n    usage: {\n      model: response.model || prep.model,\n      promptTokens: response.usage?.prompt_tokens || 0,\n      completionTokens: response.usage?.completion_tokens || 0\n    }\n  }\n}];"
+      },
+      "id": "node-code-validate-chat-output",
+      "name": "Validate & Structure Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1060, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-respond-chat",
+      "name": "Respond Synchronous Chat",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1280, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "node-respond-chat-denied",
+      "name": "Respond Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [840, 420]
+    }
+  ],
+  "connections": {
+    "Webhook Chat Ingress": {
+      "main": [
+        [
+          {
+            "node": "Sanitize & Build Chat Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitize & Build Chat Prompt": {
+      "main": [
+        [
+          {
+            "node": "Is Chat Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Chat Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter Chat Model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter Chat Model": {
+      "main": [
+        [
+          {
+            "node": "Validate & Structure Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Structure Output": {
+      "main": [
+        [
+          {
+            "node": "Respond Synchronous Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Chat"
+    }
+  ]
+}

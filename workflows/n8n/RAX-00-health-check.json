@@ -1,0 +1,147 @@
+{
+  "name": "RAX-00 — Health Check y Diagnóstico de Integración",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "rax-health",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-health",
+      "name": "Webhook Health Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "rax-health-check"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RAX_API_URL || 'http://localhost:3000' }}/api/n8n/health",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "node-http-rax-health",
+      "name": "Ping RAX API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "RAX Health Check"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free' }}\",\n  \"messages\": [\n    {\"role\": \"user\", \"content\": \"ping\"}\n  ],\n  \"max_tokens\": 5\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-http-openrouter-ping",
+      "name": "Ping OpenRouter Model",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raxData = $('Ping RAX API').first().json;\nconst orData = $('Ping OpenRouter Model').first().json;\n\nconst raxOk = raxData && raxData.status === 'ok';\nconst orOk = orData && orData.choices && orData.choices.length > 0;\n\nreturn [{\n  json: {\n    status: (raxOk && orOk) ? 'healthy' : 'degraded',\n    timestamp: new Date().toISOString(),\n    components: {\n      n8n: { status: 'ok' },\n      raxApi: {\n        status: raxOk ? 'ok' : 'unreachable',\n        version: raxData.version || 'unknown'\n      },\n      openRouter: {\n        status: orOk ? 'ok' : 'failed',\n        modelTested: orData.model || ($env.OPENROUTER_MODEL || 'default'),\n        promptTokens: orData.usage?.prompt_tokens || 0\n      }\n    }\n  }\n}];"
+      },
+      "id": "node-code-eval-health",
+      "name": "Evaluate Diagnostics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.status === 'healthy' ? 200 : 503 }}"
+        }
+      },
+      "id": "node-respond-health",
+      "name": "Respond Diagnostic Report",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Health Trigger": {
+      "main": [
+        [
+          {
+            "node": "Ping RAX API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ping RAX API": {
+      "main": [
+        [
+          {
+            "node": "Ping OpenRouter Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ping OpenRouter Model": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Diagnostics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Diagnostics": {
+      "main": [
+        [
+          {
+            "node": "Respond Diagnostic Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Integration"
+    }
+  ]
+}

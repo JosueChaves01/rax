@@ -23,6 +23,13 @@ export const Decision = z.enum(["continue", "reformulate", "deepen", "pause", "d
 export const Outcome = z.enum(["positive", "negative", "mixed", "inconclusive"]);
 export const TaskStatus = z.enum(["todo", "doing", "done", "blocked"]);
 export const CommentTarget = z.enum(["diagnosis_item", "hypothesis", "experiment"]);
+export const MentorshipStage = z.enum(["exploration", "diagnosis", "agreement", "active_mentoring", "evaluation", "renewed", "closed"]);
+export const CompatibilityStatus = z.enum(["pending", "proceed", "needs_info", "declined"]);
+export const AgreementFrequency = z.enum(["weekly", "biweekly", "monthly", "on_demand"]);
+export const AgreementStatus = z.enum(["draft", "confirmed_by_mentor", "confirmed_by_entrepreneur", "active", "superseded"]);
+export const GoalKind = z.enum(["metric", "qualitative", "capability", "strategic"]);
+export const GoalPriority = z.enum(["high", "medium", "low"]);
+export const GoalStatus = z.enum(["active", "achieved", "partially_achieved", "deferred", "discarded"]);
 
 export const ItemChange = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("edit"), title: str(120).optional(), content: str(2000).optional(), category: Category.optional(), uncertainty: Uncertainty.optional(), reason: str(500).optional() }),
@@ -82,7 +89,76 @@ export const EvidenceInput = z.object({
   file: z.object({ name: str(200), mimeType: str(100), sizeBytes: z.number().int().min(0) }).optional(),
 });
 
-export const TaskInput = z.object({ title: str(200), experimentId: id.optional(), dueDate: z.string().max(40).optional() });
+export const MilestoneStatus = z.enum(["pending", "in_progress", "achieved", "deferred"]);
+
+export const ActionType = z.enum([
+  "operational_task",
+  "skill_learning",
+  "business_decision",
+  "conversation_third_party",
+  "financial_review",
+  "mentor_intervention",
+  "experiment",
+  "research",
+  "expert_referral",
+]);
+
+export const DelayCauseCategory = z.enum([
+  "clarity",
+  "time",
+  "resources",
+  "external",
+  "priority_change",
+  "execution_difficulty",
+]);
+
+export const DelayHypothesisInput = z.object({
+  causeCategory: DelayCauseCategory,
+  detail: str(2000),
+});
+
+export const MilestoneInput = z.object({
+  title: str(200),
+  description: str(2000).optional(),
+  targetDate: z.string().max(40).optional(),
+  goalId: id.optional(),
+  relationId: id.optional(),
+});
+
+export const TaskInput = z.object({
+  title: str(200),
+  actionType: ActionType.optional(),
+  milestoneId: id.optional(),
+  goalId: id.optional(),
+  experimentId: id.optional(),
+  dueDate: z.string().max(40).optional(),
+  blockedReason: str(2000).optional(),
+});
+export const TasksBatchInput = z.array(TaskInput).min(1).max(25);
+
+export const MentorshipAgreementInput = z.object({
+  frequency: AgreementFrequency,
+  sessionDurationMinutes: z.number().int().min(15).max(240),
+  authorizedChannels: z.array(str(100)).max(10),
+  scope: str(4000),
+  mentorCommitments: str(4000),
+  entrepreneurCommitments: str(4000),
+  confidentialityTerms: str(4000),
+  expectedDurationWeeks: z.number().int().min(1).max(104),
+});
+
+export const MentorshipGoalInput = z.object({
+  title: str(200),
+  description: str(2000).default(""),
+  whyItMatters: str(2000).default(""),
+  kind: GoalKind,
+  baseline: str(2000),
+  targetResult: str(2000),
+  metricIndicator: str(500).optional(),
+  targetDate: z.string().max(40).optional(),
+  priority: GoalPriority,
+  relatedDiagnosisItemIds: z.array(id).max(20).optional(),
+});
 
 /** Parsea o lanza un error de validación con un mensaje legible. */
 export function parse<T>(schema: z.ZodType<T>, value: unknown): T {

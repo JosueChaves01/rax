@@ -1,0 +1,128 @@
+{
+  "name": "RAX-91 — Reprocesamiento Controlado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rax-reprocess",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-reprocess",
+      "name": "Webhook Reprocess Ingress",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "rax-reprocess-ingress"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst headers = $input.first().json.headers || {};\nconst body = $input.first().json.body || {};\n\nconst signatureHeader = headers['x-rax-signature'];\nconst timestampHeader = headers['x-rax-timestamp'];\nconst rawBodyStr = JSON.stringify(body);\n\n// 1. Verificación de seguridad HMAC estricta\nconst secret = $env.RAX_N8N_SHARED_SECRET || 'test-shared-secret-rax-n8n';\nconst hmac = crypto.createHmac('sha256', secret);\nconst expectedSig = 'sha256=' + hmac.update(`${timestampHeader}.${rawBodyStr}`).digest('hex');\n\nif (signatureHeader !== expectedSig) {\n  return [{\n    json: {\n      authorized: false,\n      error: 'Invalid HMAC signature'\n    }\n  }];\n}\n\n// 2. Comprobar rol administrativo o de servicio\nif (body.actor?.role !== 'admin' && body.actor?.role !== 'system') {\n  return [{\n    json: {\n      authorized: false,\n      error: 'Reprocessing requires admin or system role'\n    }\n  }];\n}\n\nconst originalEvent = body.originalEvent || {};\nconst originalCorrelationId = originalEvent.correlationId || body.correlationId;\nconst reprocessCorrelationId = `${originalCorrelationId}_re_${Date.now()}`;\n\nreturn [{\n  json: {\n    authorized: true,\n    reprocessCorrelationId,\n    originalCorrelationId,\n    targetWorkflow: body.targetWorkflow,\n    reprocessReason: body.reason || 'manual_admin_retry',\n    event: {\n      ...originalEvent,\n      correlationId: reprocessCorrelationId,\n      reprocessingOf: originalCorrelationId\n    }\n  }\n}];"
+      },
+      "id": "node-code-verify-admin-reprocess",
+      "name": "Verify Admin Authorization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.authorized }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "node-if-reprocess-auth",
+      "name": "Is Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ reprocessAccepted: true, originalCorrelationId: $json.originalCorrelationId, newCorrelationId: $json.reprocessCorrelationId, queuedAt: new Date().toISOString() }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "node-respond-reprocess-accepted",
+      "name": "Respond 202 Reprocess Queued",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [920, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error }) }}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "node-respond-reprocess-forbidden",
+      "name": "Respond 403 Forbidden",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [920, 420]
+    }
+  ],
+  "connections": {
+    "Webhook Reprocess Ingress": {
+      "main": [
+        [
+          {
+            "node": "Verify Admin Authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Admin Authorization": {
+      "main": [
+        [
+          {
+            "node": "Is Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Respond 202 Reprocess Queued",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 403 Forbidden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Reprocessing"
+    }
+  ]
+}

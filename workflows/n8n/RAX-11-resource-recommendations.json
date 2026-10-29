@@ -1,0 +1,162 @@
+{
+  "name": "RAX-11 — Recomendación de Recursos y Conocimientos",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "node-trigger-resources",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el recomendador de recursos y herramientas de RAX.\\nTu función es sugerir metodologías, plantillas o ejercicios prácticos alineados con los desafíos del emprendedor.\\nREGLAS:\\n1. Explica con claridad por qué el recurso es pertinente para la necesidad detectada y qué limitaciones tiene.\\n2. No inventes URLs externas ni enlaces a dominios no verificados.\\n3. Formula sugerencias metodológicas reconocidas (Lean Canvas, Customer Discovery, Unit Economics, OKRs).\\n4. Salida en JSON estricto con: recommendations (array de objetos con title, kind, rationale, limitations, suggestedExercise), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  identifiedProblem: payload.problemTitle || payload.problem || '',\n  founderStage: payload.founderStage || 'exploring_idea',\n  sector: payload.sector || 'general'\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "id": "node-code-prep-resources-prompt",
+      "name": "Build Resources Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "RAX Resource Recommendations"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.model }}\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.3,\n  \"max_tokens\": 1200\n}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "node-http-openrouter-resources",
+      "name": "Call OpenRouter Resources",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Build Resources Prompt').first().json;\n\nlet parsed = {};\ntry {\n  const content = response.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { recommendations: [], uncertainties: ['Salida JSON no válida'] };\n}\n\nconst proposals = (parsed.recommendations || []).map(r => ({\n  type: 'recommendation',\n  title: r.title,\n  description: `${r.rationale} | Ejercicio sugerido: ${r.suggestedExercise || 'N/A'}`,\n  needsHumanApproval: true,\n  uncertainties: r.limitations ? [r.limitations] : []\n}));\n\nconst callbackPayload = {\n  operationId: 'op_res_' + Date.now(),\n  correlationId: prep.correlationId,\n  workflowId: 'RAX-11',\n  workflowVersion: '1.0.0',\n  status: 'completed',\n  usage: {\n    model: response.model || prep.model,\n    promptTokens: response.usage?.prompt_tokens || 0,\n    completionTokens: response.usage?.completion_tokens || 0\n  },\n  data: {\n    summary: `Se generaron ${proposals.length} recomendaciones metodológicas.`,\n    proposals,\n    uncertainties: parsed.uncertainties || []\n  }\n};\n\nreturn [{\n  json: {\n    callbackUrl: prep.callbackUrl,\n    payload: callbackPayload\n  }\n}];"
+      },
+      "id": "node-code-format-resources-callback",
+      "name": "Format Resources Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-rax-correlation-id",
+              "value": "={{ $json.payload.correlationId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-http-send-resources-callback",
+      "name": "Send Callback to RAX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Resources Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Resources Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter Resources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter Resources": {
+      "main": [
+        [
+          {
+            "node": "Format Resources Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Resources Callback": {
+      "main": [
+        [
+          {
+            "node": "Send Callback to RAX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Resources"
+    }
+  ]
+}

@@ -2,9 +2,9 @@
 
 ## Qué hay y cómo correrlo
 
-| Comando | Qué prueba | Resultado al 2026-10-28 |
+| Comando | Qué prueba | Resultado al 2026-10-29 |
 |---|---|---|
-| `npm test` | vitest en memoria: escenarios A–H, onboarding, reglas de dominio, OpenRouter con `fetch` simulado | 23 pruebas pasando |
+| `npm test` | vitest en memoria: escenarios globales, ciclo de vida de mentoría (etapas 1-7), onboarding, reglas de dominio, OpenRouter con `fetch` simulado | 40 pruebas pasando (8 suites) |
 | `npm run test:pg` | escenarios A–H y onboarding contra Postgres 16 con las migraciones y RLS, actuando como `authenticated` o `service_role` | 12 pasando, 4 omitidas (solo memoria: OpenRouter) |
 | `npm run typecheck` | TypeScript estricto | sin errores |
 | `npm run build` | build de Next.js con lint | correcto |

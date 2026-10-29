@@ -1,4 +1,4 @@
-import type { InitiativeNature, MentorOnboarding, Project, ProjectStatus } from "@/types/domain";
+import type { InitiativeNature, MentorOnboarding, MentorshipAgreement, MentorshipGoal, MentorshipRelation, Project, ProjectStatus, RoadmapMilestone } from "@/types/domain";
 import { can } from "@/lib/authz";
 import { validation } from "@/lib/errors";
 import { derivePhase } from "@/features/projects/phase";
@@ -79,7 +79,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
   const { project, rel } = await guard(d, projectId, "project.read");
   const r = d.repo;
   const where = { projectId };
-  const [diagnoses, items, history, comments, messages, sessions, notes, hypotheses, experiments, results, tasks, evidence, assignments, auditEvents] =
+  const [diagnoses, items, history, comments, messages, sessions, notes, hypotheses, experiments, results, tasks, evidence, assignments, auditEvents, mentorshipRelations, roadmapMilestones] =
     await Promise.all([
       r.diagnoses.list(where),
       r.diagnosisItems.list(where),
@@ -95,6 +95,8 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
       r.evidence.list(where),
       r.mentorAssignments.list({ projectId, status: "active" }),
       r.auditEvents.list(where),
+      r.mentorshipRelations.list(where),
+      r.roadmapMilestones.list(where),
     ]);
   const diagnosis = diagnoses[0];
   const status = deriveDiagnosisStatus(diagnosis, items, sessions, hypotheses);
@@ -106,6 +108,23 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
     experiments,
     hasPrioritizedProblem: items.some((i) => isCurrent(i) && i.category === "problem" && !!i.priority),
   });
+
+  const activeMentorshipRelation =
+    mentorshipRelations.find((mr) => mr.stage !== "closed") ??
+    mentorshipRelations[0] ??
+    null;
+
+  let mentorshipAgreements: MentorshipAgreement[] = [];
+  let mentorshipGoals: MentorshipGoal[] = [];
+
+  if (activeMentorshipRelation) {
+    const [agrs, goals] = await Promise.all([
+      r.mentorshipAgreements.list({ relationId: activeMentorshipRelation.id }),
+      r.mentorshipGoals.list({ relationId: activeMentorshipRelation.id }),
+    ]);
+    mentorshipAgreements = agrs;
+    mentorshipGoals = goals;
+  }
 
   const isMentorView = rel.isAssignedMentor && !rel.isOwner && !rel.isCollaborator;
   const canSeeConversation = !isMentorView || project.shareConversationWithMentor;
@@ -134,6 +153,12 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
         "experiment.record_result",
         "evidence.add",
         "task.manage",
+        "mentorship.manage",
+        "agreement.edit",
+        "agreement.confirm",
+        "goal.manage",
+        "roadmap.manage",
+        "task.diagnose_delay",
       ] as const
     ).map((a) => [a, can(d.actor, a, rel)]),
   ) as Record<string, boolean>;
@@ -157,6 +182,11 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
     experiments: byTime(experiments),
     results: byTime(results),
     tasks: byTime(tasks),
+    mentorshipRelation: activeMentorshipRelation,
+    mentorshipRelations: byTime(mentorshipRelations),
+    mentorshipAgreements: byTime(mentorshipAgreements),
+    mentorshipGoals: byTime(mentorshipGoals),
+    roadmapMilestones: byTime(roadmapMilestones).sort((a, b) => a.orderIndex - b.orderIndex),
     evidence: byTime(evidence),
     mentors: assignments.map((a) => a.mentorId),
     people: Object.fromEntries(people.map((p) => [p!.id, { id: p!.id, name: p!.name, role: p!.role }])),

@@ -1,0 +1,162 @@
+{
+  "name": "RAX-05 — Preparación Inteligente de Sesiones",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "node-trigger-session-prep",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el asistente de preparación de sesiones de mentoría de RAX.\\nTu misión es preparar un Briefing estructurado para el mentor antes de la sesión.\\nREGLAS:\\n1. Analiza los cambios desde la última sesión y el avance en los objetivos acordados.\\n2. Formula de 3 a 5 preguntas potentes y abiertas para el mentor.\\n3. Señala decisiones pendientes o bloqueos que requieren atención.\\n4. Si no hay registros de un hecho, no lo asumas.\\n5. Salida en JSON estricto con los campos: sessionGoal (string), currentStatusSummary (string), agendaTopics (array de strings), suggestedQuestions (array de strings), pendingDecisions (array de strings), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  sessionKind: payload.sessionKind || 'follow_up',\n  goals: payload.goals || [],\n  previousNotes: payload.previousNotes || [],\n  recentEvidence: payload.recentEvidence || [],\n  pendingTasks: payload.pendingTasks || []\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "id": "node-code-prep-session-prompt",
+      "name": "Build Session Prep Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "RAX Session Preparation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.model }}\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.3,\n  \"max_tokens\": 1500\n}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "node-http-openrouter-session-prep",
+      "name": "Call OpenRouter Prep",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Build Session Prep Prompt').first().json;\n\nlet parsed = {};\ntry {\n  const content = response.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = {\n    sessionGoal: 'Revisión general de avances y acuerdos',\n    agendaTopics: ['Revisión de compromisos anteriores'],\n    uncertainties: ['Salida de modelo no estructurada']\n  };\n}\n\nconst proposals = (parsed.agendaTopics || []).map(topic => ({\n  type: 'agenda_topic',\n  title: topic,\n  needsHumanApproval: true,\n  uncertainties: []\n}));\n\nconst callbackPayload = {\n  operationId: 'op_prep_' + Date.now(),\n  correlationId: prep.correlationId,\n  workflowId: 'RAX-05',\n  workflowVersion: '1.0.0',\n  status: 'completed',\n  usage: {\n    model: response.model || prep.model,\n    promptTokens: response.usage?.prompt_tokens || 0,\n    completionTokens: response.usage?.completion_tokens || 0\n  },\n  data: {\n    summary: parsed.currentStatusSummary || parsed.sessionGoal,\n    proposals,\n    rawOutput: parsed,\n    uncertainties: parsed.uncertainties || [],\n    nextStepRecommendation: (parsed.suggestedQuestions || []).join(' | ')\n  }\n};\n\nreturn [{\n  json: {\n    callbackUrl: prep.callbackUrl,\n    payload: callbackPayload\n  }\n}];"
+      },
+      "id": "node-code-format-prep-callback",
+      "name": "Format Prep Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-rax-correlation-id",
+              "value": "={{ $json.payload.correlationId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-http-send-prep-callback",
+      "name": "Send Callback to RAX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Session Prep Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Session Prep Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter Prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter Prep": {
+      "main": [
+        [
+          {
+            "node": "Format Prep Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Prep Callback": {
+      "main": [
+        [
+          {
+            "node": "Send Callback to RAX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Session"
+    }
+  ]
+}

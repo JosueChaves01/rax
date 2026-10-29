@@ -7,10 +7,12 @@ import { assignMentor } from "@/lib/services/admin";
 import {
   approveHypothesis,
   createExperiment,
+  createTasksBatch,
   markExperimentReady,
   proposeHypothesis,
   submitHypothesis,
   suggestExperiment,
+  suggestExperimentTasks,
   suggestHypotheses,
   updateExperiment,
 } from "@/lib/services/validation";
@@ -194,5 +196,103 @@ describe("Asistencia de IA en Etapa 3 (Hipótesis y Experimentos)", () => {
     const inWs = ws.experiments.find((e) => e.id === expDraft.id);
     expect(inWs?.status).toBe("ready");
     expect(inWs?.metric).toContain("$50 USD");
+  });
+
+  it("genera tareas operativas con IA para los experimentos en base a su contexto y permite crearlas en lote", async () => {
+    const { as, repo, id } = await world();
+    const ent = as("ent1");
+    const mentor = as("men1");
+    const stranger = as("ent2");
+    const adm = as("adm");
+
+    // 1. Proyecto con mentor y una hipótesis aprobada
+    const p = await createProject(ent, {
+      name: "SmartRetail",
+      description: "Analítica de tráfico peatonal para comercios minoristas",
+      nature: "designing_solution",
+    });
+    await assignMentor(adm, p.id, id("men1"));
+
+    const hyp = await proposeHypothesis(ent, p.id, {
+      statement: "Al menos 8 de 20 dueños de locales comerciales permitirán instalar un sensor de prueba por 2 semanas tras una demostración.",
+      segment: "Dueños de comercios minoristas en centros comerciales",
+      whyItMatters: "Verifica si los comerciantes confían en la instalación física en sus tiendas.",
+      currentEvidence: "No hay evidencia directa previa",
+      uncertainty: "high",
+      costOfBeingWrong: "Diseñar una solución que nadie permita instalar físicamente.",
+      evaluationCriterion: "Al menos 40% de aprobación para colocación de sensores piloto.",
+    });
+    await submitHypothesis(ent, hyp.id);
+    await approveHypothesis(mentor, hyp.id);
+
+    // 2. Crear experimento con actividades, recursos, método y métrica definidos
+    const exp = await createExperiment(ent, hyp.id, {
+      question: "¿Permitirán los comerciantes minoristas colocar sensores piloto en sus locales?",
+      method: "Visitas presenciales y demostración con dispositivo prototipo",
+      participants: "20 dueños o encargados de locales minoristas en centros comerciales",
+      activities: [
+        "Preparar 5 prototipos funcionales de sensores con batería",
+        "Confeccionar guía de visita y ficha de consentimiento de instalación",
+        "Recorrer los locales seleccionados y realizar la demostración presencial",
+        "Instalar sensores en los locales que den consentimiento",
+        "Descargar datos tras 14 días y recopilar feedback del comerciante",
+      ],
+      resources: "5 dispositivos prototipo, guía de visita, hojas de consentimiento",
+      budget: 150,
+      durationDays: 14,
+      metric: "Porcentaje de comercios que aceptan la colocación del sensor piloto",
+      successCriterion: "Al menos 8 de 20 locales (≥40%) aceptan la instalación",
+      rejectionCriterion: "Menos de 3 locales (<15%) dan su autorización",
+      risks: "Desconfianza sobre privacidad de clientes o consumo eléctrico del sensor",
+      evidencePlan: "Fichas de consentimiento firmadas y fotografías del sensor instalado",
+    });
+
+    // 3. Control de acceso: un usuario ajeno al proyecto no puede generar tareas
+    await expect(suggestExperimentTasks(stranger, p.id, exp.id)).rejects.toMatchObject({
+      name: "DomainError",
+      code: "not_found",
+    });
+
+    // 4. Generar tareas operativas con IA para el experimento
+    const taskSuggestion = await suggestExperimentTasks(ent, p.id, exp.id);
+
+    expect(taskSuggestion.tasks).toBeDefined();
+    expect(taskSuggestion.tasks.length).toBeGreaterThanOrEqual(3);
+
+    // Cada tarea debe tener título concreto y válido
+    for (const t of taskSuggestion.tasks) {
+      expect(t.title.trim().length).toBeGreaterThanOrEqual(3);
+      expect(t.title.length).toBeLessThanOrEqual(200);
+    }
+
+    // Se registró auditoría
+    const auditEvents = await repo.auditEvents.list({ projectId: p.id, action: "ai.invoked" });
+    expect(auditEvents.some((a) => a.meta?.task === "experiment_tasks_suggestion")).toBe(true);
+
+    // 5. Crear tareas en lote asociadas al experimento
+    const selectedToCreate = taskSuggestion.tasks.slice(0, 3).map((t) => ({
+      title: t.title,
+      experimentId: exp.id,
+    }));
+
+    const createdTasks = await createTasksBatch(ent, p.id, selectedToCreate);
+    expect(createdTasks).toHaveLength(3);
+    for (const ct of createdTasks) {
+      expect(ct.experimentId).toBe(exp.id);
+      expect(ct.status).toBe("todo");
+      expect(ct.projectId).toBe(p.id);
+    }
+
+    // Verificar que las tareas aparecen asociadas al experimento en el workspace
+    const ws = await getWorkspace(ent, p.id);
+    const expTasksInWs = ws.tasks.filter((t) => t.experimentId === exp.id);
+    expect(expTasksInWs).toHaveLength(3);
+
+    // 6. Al pedir nuevas sugerencias, el asistente conoce las tareas existentes y no las duplica
+    const nextSuggestion = await suggestExperimentTasks(ent, p.id, exp.id);
+    const createdTitles = new Set(createdTasks.map((t) => t.title.toLowerCase().trim()));
+    for (const t of nextSuggestion.tasks) {
+      expect(createdTitles.has(t.title.toLowerCase().trim())).toBe(false);
+    }
   });
 });

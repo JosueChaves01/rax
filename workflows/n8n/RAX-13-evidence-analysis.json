@@ -1,0 +1,162 @@
+{
+  "name": "RAX-13 — Análisis de Resultados y Evidencia",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "node-trigger-evidence-analysis",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el evaluador metodológico de experimentos de RAX.\\nTu labor es contrastar la evidencia y los datos observados con los criterios de éxito y refutación fijados de antemano.\\nREGLAS IMPERATIVAS:\\n1. Compara estrictamente lo observado (observedMetric) contra los criterios previstos.\\n2. Clasifica el resultado en uno de estos estados: 'supported', 'weakened', 'mixed', 'inconclusive', 'evidence_insufficient'.\\n3. No intentes maquillar resultados negativos; un aprendizaje de refutación ahorra meses de trabajo.\\n4. Si los datos aportados no son suficientes para concluir, declara 'evidence_insufficient' en lugar de adivinar.\\n5. Salida en JSON estricto con: evaluatedOutcome (string), observedVsPlanned (string), keyLearnings (string), limitations (string), recommendedNextStep (string), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  experimentId: event.entityId,\n  hypothesisStatement: payload.hypothesisStatement,\n  metricPlanned: payload.metric,\n  successCriterion: payload.successCriterion,\n  rejectionCriterion: payload.rejectionCriterion,\n  observedValue: payload.metricValue || payload.observed,\n  evidenceNotes: payload.evidenceNotes || payload.learnings || ''\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "id": "node-code-prep-evidence-prompt",
+      "name": "Build Evidence Analysis Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "RAX Evidence Analysis"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.model }}\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.1,\n  \"max_tokens\": 1600\n}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "node-http-openrouter-evidence",
+      "name": "Call OpenRouter Evidence",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Build Evidence Analysis Prompt').first().json;\n\nlet parsed = {};\ntry {\n  const content = response.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { evaluatedOutcome: 'inconclusive', keyLearnings: 'Error en análisis', uncertainties: ['Salida JSON no válida'] };\n}\n\nconst proposals = [{\n  type: 'intervention',\n  title: `Evaluación de experimento: ${parsed.evaluatedOutcome}`,\n  description: `${parsed.observedVsPlanned || ''} | Aprendizajes: ${parsed.keyLearnings || ''}`,\n  ownerSuggestion: 'mentor',\n  needsHumanApproval: true,\n  uncertainties: parsed.uncertainties || []\n}];\n\nconst callbackPayload = {\n  operationId: 'op_evi_' + Date.now(),\n  correlationId: prep.correlationId,\n  workflowId: 'RAX-13',\n  workflowVersion: '1.0.0',\n  status: 'completed',\n  usage: {\n    model: response.model || prep.model,\n    promptTokens: response.usage?.prompt_tokens || 0,\n    completionTokens: response.usage?.completion_tokens || 0\n  },\n  data: {\n    summary: `Resultado: ${parsed.evaluatedOutcome}. ${parsed.observedVsPlanned}`,\n    proposals,\n    uncertainties: parsed.uncertainties || [],\n    nextStepRecommendation: parsed.recommendedNextStep\n  }\n};\n\nreturn [{\n  json: {\n    callbackUrl: prep.callbackUrl,\n    payload: callbackPayload\n  }\n}];"
+      },
+      "id": "node-code-format-evidence-callback",
+      "name": "Format Evidence Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-rax-correlation-id",
+              "value": "={{ $json.payload.correlationId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-http-send-evidence-callback",
+      "name": "Send Callback to RAX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Evidence Analysis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Evidence Analysis Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter Evidence": {
+      "main": [
+        [
+          {
+            "node": "Format Evidence Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Evidence Callback": {
+      "main": [
+        [
+          {
+            "node": "Send Callback to RAX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Validation"
+    }
+  ]
+}

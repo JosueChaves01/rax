@@ -10,12 +10,16 @@ import type {
   ExperimentResult,
   Hypothesis,
   MentorAssignment,
+  MentorshipAgreement,
+  MentorshipGoal,
+  MentorshipRelation,
   MentorSession,
   Message,
   Profile,
   Project,
   ProjectMember,
   SessionNote,
+  RoadmapMilestone,
   Task,
 } from "@/types/domain";
 
@@ -51,9 +55,13 @@ export interface Repository {
   comments: Table<Comment>;
   mentorSessions: Table<MentorSession>;
   sessionNotes: Table<SessionNote>;
+  mentorshipRelations: Table<MentorshipRelation>;
+  mentorshipAgreements: Table<MentorshipAgreement>;
+  mentorshipGoals: Table<MentorshipGoal>;
   hypotheses: Table<Hypothesis>;
   experiments: Table<Experiment>;
   experimentResults: Table<ExperimentResult>;
+  roadmapMilestones: Table<RoadmapMilestone>;
   tasks: Table<Task>;
   evidence: Table<Evidence>;
   auditEvents: Table<AuditEvent>;

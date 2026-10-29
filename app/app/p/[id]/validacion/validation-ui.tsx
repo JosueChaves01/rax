@@ -621,17 +621,15 @@ function ExperimentCard({
       )}
       {e.criteriaLockedAt && <p className="mt-3 text-xs text-cyan">🔒 Criterios bloqueados el {formatDate(e.criteriaLockedAt)}, antes de observar resultados.</p>}
 
-      {e.status !== "design" && (
-        <ExperimentWork
-          projectId={projectId}
-          e={e}
-          tasks={tasks}
-          attached={evidence.filter((x) => results.some((r) => r.evidenceIds.includes(x.id)))}
-          projectEvidence={evidence.length}
-          canManageTasks={perms["task.manage"]}
-          canAddEvidence={perms["evidence.add"]}
-        />
-      )}
+      <ExperimentWork
+        projectId={projectId}
+        e={e}
+        tasks={tasks}
+        attached={evidence.filter((x) => results.some((r) => r.evidenceIds.includes(x.id)))}
+        projectEvidence={evidence.length}
+        canManageTasks={perms["task.manage"]}
+        canAddEvidence={perms["evidence.add"]}
+      />
 
       {results.map((r) => (
         <div key={r.id} className="mt-3 rounded-lg border border-line p-3 text-sm">

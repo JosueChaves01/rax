@@ -12,8 +12,12 @@ import type {
   AiResult,
   ExperimentSuggestionContext,
   ExperimentSuggestionResult,
+  ExperimentTasksContext,
+  ExperimentTasksResult,
   FirstReviewContext,
   FirstReviewResult,
+  GoalsSuggestionContext,
+  GoalsSuggestionResult,
   HypothesisSuggestionContext,
   HypothesesSuggestionResult,
   InterviewContext,
@@ -21,6 +25,7 @@ import type {
 import type {
   AiProposal,
   AiTurn,
+  GoalsSuggestion,
   SuggestedExperiment,
   SuggestedHypothesis,
   SuggestedNote,
@@ -116,84 +121,83 @@ export class SimulatedProvider implements AiProvider {
 
     const targetProblem = problemItems[0]?.content ?? mainProblem;
     const priorityQuestion = openQuestionItems[0]?.content ?? "quién es el pagador real y cuánto está dispuesto a pagar";
-    const missingEvidence = assumptions[0]?.content ?? "evidencia directa de clientes experimentando el problema";
 
-    const agreement = `Investigar primero el problema central: "${targetProblem}". Priorizar responder: "${priorityQuestion}". Falta validar con evidencia: "${missingEvidence}".`;
+    const agreement = `Investigar primero: «${targetProblem.slice(0, 160)}». Antes de avanzar con desarrollos técnicos o inversiones, el foco exclusivo del equipo debe estar en comprobar: ${priorityQuestion.slice(0, 180)}.`;
 
     const suggestedNotes: SuggestedNote[] = [];
 
-    if (openQuestionItems[0]) {
+    if (openQuestionItems.length > 0) {
+      const q = openQuestionItems[0];
       suggestedNotes.push({
         kind: "question",
-        body: `¿Cómo podemos responder a corto plazo la incógnita sobre "${openQuestionItems[0].title}" sin requerir inversión previa?`,
-        relatedItemId: openQuestionItems[0].id,
+        body: `¿Quién es la persona o rol específico que hoy sufre este problema y qué alternativas manuales o de la competencia usa hoy?`,
+        relatedItemId: q.id,
       });
     }
 
-    if (assumptions[0]) {
+    if (assumptions.length > 0) {
+      const asm = assumptions[0];
       suggestedNotes.push({
         kind: "observation",
-        body: `Se identificó el supuesto crítico: "${assumptions[0].content}". Requiere comprobarse antes de diseñar experimentos costosos.`,
-        relatedItemId: assumptions[0].id,
+        body: `Detectamos que «${asm.title}» es un supuesto crítico no contrastado empíricamente. Conviene no darlo por sentado.`,
+        relatedItemId: asm.id,
       });
     }
 
-    if (problemItems[0]) {
-      suggestedNotes.push({
-        kind: "suggestion",
-        body: `Realizar al menos 5 entrevistas de descubrimiento enfocadas exclusivamente en "${problemItems[0].title}", evitando proponer soluciones prematuras.`,
-        relatedItemId: problemItems[0].id,
-      });
-    } else {
-      suggestedNotes.push({
-        kind: "suggestion",
-        body: "Iniciar entrevistas de descubrimiento con potenciales usuarios para caracterizar la frecuencia y gravedad del problema.",
-        relatedItemId: null,
-      });
-    }
+    suggestedNotes.push({
+      kind: "suggestion",
+      body: "Recomendamos coordinar de 5 a 10 conversaciones breves de descubrimiento sin vender nada, solo escuchando cómo resuelven hoy esta dificultad.",
+      relatedItemId: problemItems[0]?.id ?? null,
+    });
 
     return {
       suggestion: {
-        agreement: agreement.slice(0, 2000),
-        suggestedNotes,
+        agreement,
+        suggestedNotes: suggestedNotes.slice(0, 5),
       },
       provider: "simulated",
     };
   }
 
   async suggestHypotheses(ctx: HypothesisSuggestionContext): Promise<HypothesesSuggestionResult> {
-    const targetProblem = ctx.prioritizedProblems[0] ?? ctx.otherProblems[0];
-    const targetTitle = targetProblem?.title ?? ctx.projectName;
-    const segment = ctx.founderContext?.sector
-      ? `Clientes y usuarios potenciales en el sector ${ctx.founderContext.sector}`
-      : "Personas afectadas directamente por el problema identificado";
+    const pProb = ctx.prioritizedProblems[0];
+    const targetTitle = pProb ? pProb.title : ctx.projectName;
+    const targetId = pProb ? pProb.id : null;
+    const segment =
+      ctx.founderContext?.stage && ctx.founderContext?.sector
+        ? `Clientes en etapa ${ctx.founderContext.stage} en el sector ${ctx.founderContext.sector}`
+        : "Usuarios con el problema priorizado";
 
-    const suggestions: SuggestedHypothesis[] = [
-      {
-        statement: `Al menos 6 de cada 15 personas del segmento objetivo contactadas confirmarán que experimentan "${targetTitle}" semanalmente y agendarán una sesión de demostración.`,
-        segment,
-        relatedItemId: targetProblem?.id ?? null,
-        whyItMatters: "Permite comprobar empíricamente la frecuencia y severidad del problema antes de construir una solución.",
-        currentEvidence: "Declaraciones y observaciones registradas durante la etapa inicial de diagnóstico.",
-        uncertainty: "high",
-        costOfBeingWrong: "Invertir tiempo y recursos en resolver una situación que los clientes no perciben como prioritaria.",
-        evaluationCriterion: "Alcanzar al menos un 40% de conversiones a entrevistas o pilotos demostrativos.",
-        rationale: "Basada en el problema priorizado para validar la demanda real antes de desarrollar producto.",
-      },
-      {
-        statement: `Al menos 4 de 12 clientes potenciales que sufren "${targetTitle}" manifestarán disposición explícita a pagar un abono periódico por resolverlo.`,
-        segment: "Decisores económicos y responsables de presupuesto",
-        relatedItemId: targetProblem?.id ?? null,
-        whyItMatters: "Verifica si existe viabilidad comercial y disposición de pago real frente al costo de oportunidad.",
-        currentEvidence: "No hay evidencia transaccional previa ni acuerdos de pago registrados.",
-        uncertainty: "high",
-        costOfBeingWrong: "Diseñar una solución que resulta atractiva pero por la cual nadie tiene presupuesto para pagar.",
-        evaluationCriterion: "Obtener al menos un 30% de cartas de intención o pre-reservas comerciales.",
-        rationale: "Permite contrastar la hipótesis de modelo comercial temprano.",
-      },
-    ];
+    const suggestions: SuggestedHypothesis[] = [];
 
-    if (ctx.keyAssumptions[0]) {
+    // Hipótesis 1: Conducta de dolor / necesidad
+    suggestions.push({
+      statement: `Al menos 7 de cada 10 entrevistados del segmento objetivo declararán que resolver "${targetTitle}" es una de sus tres principales prioridades operativas de este mes.`,
+      segment,
+      relatedItemId: targetId,
+      whyItMatters: "Si el problema no está entre sus prioridades inmediatas, no dedicarán tiempo ni presupuesto a resolverlo.",
+      currentEvidence: "Mencionado en las entrevistas iniciales de diagnóstico como punto crítico.",
+      uncertainty: "high",
+      costOfBeingWrong: "Diseñar una solución para una dificultad que los clientes consideran secundaria o postergable.",
+      evaluationCriterion: "Respuestas directas registradas en una pauta estructurada de 10 entrevistas.",
+      rationale: "Foco en confirmar la urgencia y prioridad real del dolor del cliente.",
+    });
+
+    // Hipótesis 2: Compromiso verificable / Disposición a pagar
+    suggestions.push({
+      statement: `Al menos 4 de 10 clientes potenciales que reconozcan el problema solicitarán formalmente participar en una prueba piloto no remunerada o firmarán una carta de interés.`,
+      segment,
+      relatedItemId: targetId,
+      whyItMatters: "Verifica que el interés verbal se traduce en un compromiso concreto de tiempo y atención.",
+      currentEvidence: "Aún no se cuenta con compromisos formales por escrito.",
+      uncertainty: "high",
+      costOfBeingWrong: "Construir producto asumiendo adopción que luego no se materializa.",
+      evaluationCriterion: "Compromiso escrito u orden de trabajo provisoria al cierre de la conversación.",
+      rationale: "Filtra el sesgo de cortesía habitual en las conversaciones iniciales.",
+    });
+
+    // Hipótesis 3 si hay supuestos clave
+    if (ctx.keyAssumptions.length > 0) {
       const asm = ctx.keyAssumptions[0];
       suggestions.push({
         statement: `Al menos el 50% de los usuarios evaluados considerará que "${asm.title}" es un factor indispensable para sustituir su alternativa actual.`,
@@ -241,6 +245,124 @@ export class SimulatedProvider implements AiProvider {
       risks: "Sesgo de cortesía por parte de los entrevistados; dificultad para coordinar agendas dentro de la ventana de tiempo.",
       evidencePlan: "Grabaciones o notas de las entrevistas, formulario de registro y confirmaciones por correo o mensaje.",
       rationale: "Diseño pragmático, rápido y sin costo monetario para validar la hipótesis antes de programar o invertir capital.",
+    };
+
+    return {
+      suggestion,
+      provider: "simulated",
+    };
+  }
+
+  async suggestExperimentTasks(ctx: ExperimentTasksContext): Promise<ExperimentTasksResult> {
+    const exp = ctx.experiment;
+    const existingTitles = new Set(ctx.existingTasks.map((t) => t.title.toLowerCase().trim()));
+    const rawTasks: string[] = [];
+
+    // Si el experimento tiene actividades definidas, las usamos como base directa
+    if (exp.activities && exp.activities.length > 0) {
+      for (const act of exp.activities) {
+        const trimmed = act.trim();
+        if (trimmed && !existingTitles.has(trimmed.toLowerCase())) {
+          rawTasks.push(trimmed);
+        }
+      }
+    }
+
+    // Si aún quedan pocas tareas, generamos pasos derivados del contexto metodológico
+    if (rawTasks.length < 3) {
+      const candidates: string[] = [];
+
+      if (exp.resources) {
+        candidates.push(`Preparar materiales y herramientas: ${exp.resources.slice(0, 100)}`);
+      } else {
+        candidates.push(`Preparar guion e instrumentos para la prueba: ${exp.method.slice(0, 100)}`);
+      }
+
+      if (exp.participants) {
+        candidates.push(`Contactar y reclutar participantes objetivo: ${exp.participants.slice(0, 100)}`);
+      }
+
+      candidates.push(`Conducir pruebas y registrar métrica: ${exp.metric.slice(0, 100)}`);
+
+      if (exp.evidencePlan) {
+        candidates.push(`Recopilar y documentar evidencia: ${exp.evidencePlan.slice(0, 100)}`);
+      }
+
+      candidates.push(`Tabular resultados observados y comparar contra criterios de éxito/rechazo`);
+
+      for (const cand of candidates) {
+        if (!existingTitles.has(cand.toLowerCase()) && !rawTasks.includes(cand)) {
+          rawTasks.push(cand);
+        }
+      }
+    }
+
+    const tasks = (rawTasks.length > 0 ? rawTasks : ["Ejecutar las actividades planificadas del experimento", "Documentar los resultados observados"])
+      .slice(0, 10)
+      .map((t) => ({ title: t.slice(0, 200) }));
+
+    return {
+      suggestion: {
+        tasks,
+        rationale: `Tareas operativas organizadas para ejecutar el experimento de ${exp.method.slice(0, 60)}.`,
+      },
+      provider: "simulated",
+    };
+  }
+
+  async suggestGoalsAndAgreement(ctx: GoalsSuggestionContext): Promise<GoalsSuggestionResult> {
+    const pProb = ctx.prioritizedProblems[0];
+    const problemText = pProb ? pProb.title : "propuesta de valor y demanda real";
+
+    const suggestedGoals = [
+      {
+        title: "Validar con evidencia la propuesta de valor con clientes objetivo",
+        description: `Conducir entrevistas en profundidad y pruebas cualitativas con al menos 10 clientes potenciales para verificar si «${problemText}» justifica el pago o adopción.`,
+        whyItMatters: "Evita construir funcionalidades o invertir recursos antes de confirmar la disposición real a pagar.",
+        kind: "qualitative" as const,
+        baseline: "El diagnóstico cuenta con supuestos de validación temprana sin entrevistas estructuradas ni evidencia directa documentada.",
+        targetResult: "10 entrevistas documentadas con al menos 6 clientes confirmando que el problema es prioritario y pagarían por resolverlo.",
+        priority: "high" as const,
+        rationale: "Alineado con el foco principal detectado en el diagnóstico inicial del proyecto.",
+      },
+      {
+        title: "Estructurar métricas clave y tablero de seguimiento semanal",
+        description: "Definir e implementar un sistema simple de registro para medir avance comercial, tiempo invertido y feedback de usuarios.",
+        whyItMatters: "Permite tomar decisiones basadas en evidencia concreta y no en sensaciones subjetivas.",
+        kind: "capability" as const,
+        baseline: "No existe registro sistemático ni métricas formalizadas entre sesiones.",
+        targetResult: "Tablero o planilla de métricas actualizado semanalmente con revisión compartida en cada sesión.",
+        priority: "medium" as const,
+        rationale: "Construye la capacidad analítica y la disciplina de gestión del equipo emprendedor.",
+      },
+      {
+        title: "Lograr los primeros compromisos verificables de clientes",
+        description: "Conseguir que clientes interesados manifiesten interés formal a través de cartas de intención, reservas o pagos piloto.",
+        whyItMatters: "Es la prueba más contundente de tracción real y viabilidad comercial antes de escalar.",
+        kind: "metric" as const,
+        baseline: "0 clientes con compromiso formal o pago confirmado.",
+        targetResult: "Al menos 3 compromisos verificables (cartas de intención firmadas o prepagos piloto).",
+        metricIndicator: "Compromisos verificables firmados",
+        priority: "high" as const,
+        rationale: "Genera evidencia empírica contrastable para la siguiente etapa del negocio.",
+      },
+    ];
+
+    const suggestedAgreementTerms = {
+      frequency: "biweekly" as const,
+      sessionDurationMinutes: 60,
+      authorizedChannels: ["Google Meet", "WhatsApp"],
+      scope: "Acompañamiento metodológico en validación de propuesta de valor, definición de experimentos, revisión de métricas y orientación estratégica. No incluye ejecución operativa directa ni asesoría legal o contable vinculante.",
+      mentorCommitments: "Preparación previa de cada sesión revisando el tablero de RAX, puntualidad, devoluciones constructivas en un plazo menor a 48h y estricta confidencialidad.",
+      entrepreneurCommitments: "Actualizar avances y bloqueos en la plataforma 24 horas antes de cada sesión, transparencia en métricas y cumplimiento riguroso de compromisos asumidos.",
+      confidentialityTerms: "Confidencialidad recíproca respecto a métricas, información comercial, listados de clientes y propiedad intelectual.",
+      expectedDurationWeeks: 12,
+    };
+
+    const suggestion: GoalsSuggestion = {
+      suggestedGoals,
+      suggestedAgreementTerms,
+      rationale: "Propuesta equilibrada de 3 objetivos y términos de trabajo bilateral orientados a validar tracción y profesionalizar la toma de decisiones basada en evidencia.",
     };
 
     return {

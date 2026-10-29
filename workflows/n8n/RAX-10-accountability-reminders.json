@@ -1,0 +1,187 @@
+{
+  "name": "RAX-10 — Accountability y Recordatorios Programados",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-accountability",
+      "name": "Daily 9AM Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RAX_API_URL || 'http://localhost:3000' }}/api/n8n/health",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "node-http-check-rax",
+      "name": "Check RAX API Available",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const correlationId = 'corr_acc_' + Date.now();\n\nconst systemPrompt = `Eres el gestor de accountability y recordatorios de RAX.\\nTu función es evaluar compromisos en riesgo o vencidos y formular borradores de seguimiento no invasivos.\\nREGLAS:\\n1. No dispares comunicaciones externas; solo genera borradores de notificación para revisión del mentor.\\n2. Distingue entre tareas por vencer y tareas con bloqueo declarado.\\n3. Salida en JSON estricto con: reminderDrafts (array de objetos con taskId, recipientRole, messageDraft, urgency), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  scheduledRunAt: new Date().toISOString(),\n  criteria: 'overdue_or_upcoming_48h'\n});\n\nreturn [{\n  json: {\n    correlationId,\n    callbackUrl: ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "id": "node-code-prep-acc-prompt",
+      "name": "Build Accountability Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $env.NEXT_PUBLIC_APP_URL || 'https://rax.app' }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "RAX Accountability Reminders"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.model }}\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.2,\n  \"max_tokens\": 1200\n}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "node-http-openrouter-acc",
+      "name": "Call OpenRouter Reminders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Build Accountability Prompt').first().json;\n\nlet parsed = {};\ntry {\n  const content = response.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { reminderDrafts: [], uncertainties: ['Salida JSON no válida'] };\n}\n\nconst proposals = (parsed.reminderDrafts || []).map(r => ({\n  type: 'intervention',\n  title: `Borrador recordatorio: ${r.recipientRole}`,\n  description: r.messageDraft,\n  ownerSuggestion: 'mentor',\n  needsHumanApproval: true,\n  uncertainties: []\n}));\n\nconst callbackPayload = {\n  operationId: 'op_acc_' + Date.now(),\n  correlationId: prep.correlationId,\n  workflowId: 'RAX-10',\n  workflowVersion: '1.0.0',\n  status: 'completed',\n  usage: {\n    model: response.model || prep.model,\n    promptTokens: response.usage?.prompt_tokens || 0,\n    completionTokens: response.usage?.completion_tokens || 0\n  },\n  data: {\n    summary: `Se prepararon ${proposals.length} borradores de seguimiento para revisión.`,\n    proposals,\n    uncertainties: parsed.uncertainties || []\n  }\n};\n\nreturn [{\n  json: {\n    callbackUrl: prep.callbackUrl,\n    payload: callbackPayload\n  }\n}];"
+      },
+      "id": "node-code-format-acc-callback",
+      "name": "Format Accountability Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1160, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-rax-correlation-id",
+              "value": "={{ $json.payload.correlationId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-http-send-acc-callback",
+      "name": "Send Callback to RAX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 300]
+    }
+  ],
+  "connections": {
+    "Daily 9AM Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check RAX API Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check RAX API Available": {
+      "main": [
+        [
+          {
+            "node": "Build Accountability Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Accountability Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter Reminders": {
+      "main": [
+        [
+          {
+            "node": "Format Accountability Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Accountability Callback": {
+      "main": [
+        [
+          {
+            "node": "Send Callback to RAX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "RAX"
+    },
+    {
+      "name": "Accountability"
+    }
+  ]
+}

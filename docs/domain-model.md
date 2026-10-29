@@ -1,6 +1,6 @@
 # Modelo de dominio
 
-Tipos en `types/domain.ts`; tablas equivalentes (snake_case, ids uuid) en `supabase/migrations/20261028000001_rax_core.sql`.
+Tipos en `types/domain.ts`; tablas equivalentes (snake_case, ids uuid) en `supabase/migrations/20261028000001_rax_core.sql` y `supabase/migrations/20261029000001_rax_mentorship_core.sql`.
 
 ## Entidades
 
@@ -10,12 +10,15 @@ Tipos en `types/domain.ts`; tablas equivalentes (snake_case, ids uuid) en `supab
 | Project | Iniciativa del emprendedor | `shareConversationWithMentor`, `status` (active/paused/archived) |
 | ProjectMember | Dueño o colaborador | El dueño se crea al crear el proyecto |
 | MentorAssignment | Mentor asignado a un proyecto | `active` / `revoked`; la revocación conserva la fila |
-| Conversation, Message | Entrevista | `Message.provider` (simulated/openrouter) y `dimension` preguntada |
+| **MentorshipRelation** | Vínculo de acompañamiento entre mentor y emprendedor | Etapas: `exploration`, `diagnosis`, `agreement`, `active_mentoring`, `evaluation`, `renewed`, `closed`. Decisión de compatibilidad explícita |
+| **MentorshipAgreement** | Acuerdo formal y versionado de mentoría | Frecuencia, duración de sesiones, canales autorizados, compromisos mutuos, confidencialidad, estado (`draft`, `confirmed_by_mentor`, `confirmed_by_entrepreneur`, `active`, `superseded`) |
+| **MentorshipGoal** | Objetivos cualitativos o métricos vinculados a diagnósticos | Línea base documentada, indicador, resultado esperado, prioridad (`high`, `medium`, `low`) y estado (`active`, `achieved`, `partially_achieved`, `deferred`, `discarded`) |
+| Conversation, Message | Entrevista y chat de expediente | `Message.provider` (simulated/openrouter) y `dimension` preguntada |
 | Diagnosis | Resumen del proyecto | `summaryConfirmedAt/By`; editar el resumen anula la confirmación |
 | DiagnosisItem | Unidad de información | Ver abajo |
 | DiagnosisItemHistory | Versión completa antes/después de cada cambio | Solo se agrega, nunca se edita |
 | Comment | Comentario sobre elemento, hipótesis o experimento | |
-| MentorSession | Primera o segunda revisión | `briefing`, `decision` + justificación |
+| MentorSession | Primera o segunda revisión / Sesiones de mentoría | `briefing`, `decision` + justificación |
 | SessionNote | Nota del mentor | observation / question / suggestion / agreement |
 | Hypothesis | Supuesto comprobable | 9 estados (abajo) |
 | Experiment | Prueba de una hipótesis | Criterios bloqueados al iniciar (`criteriaLockedAt`) |
@@ -23,6 +26,24 @@ Tipos en `types/domain.ts`; tablas equivalentes (snake_case, ids uuid) en `supab
 | Task | Trabajo concreto | Opcionalmente ligada a un experimento |
 | Evidence | Nota, enlace o archivo | Archivo: ≤10 MB, tipos permitidos |
 | AuditEvent | Registro de acciones | Nunca guarda secretos ni contenido completo de prompts |
+
+## Proceso de Mentoría
+
+### MentorshipRelation: Etapas y Compatibilidad
+- **Etapa 1 (Exploración):** Comienza con `stage = 'exploration'` y `compatibilityStatus = 'pending'`.
+- Si las expectativas no coinciden, se decide `compatibilityStatus = 'declined'`, cerrando formalmente la relación (`stage = 'closed'`) sin forzar un programa.
+- Si existe compatibilidad profesional, se decide `compatibilityStatus = 'proceed'`, avanzando a `diagnosis`.
+- Transiciones controladas por `assertMentorshipStageTransition`:
+  `exploration → diagnosis → agreement → active_mentoring → evaluation → renewed | closed`.
+
+### MentorshipAgreement: Confirmación Bidireccional
+- Mentor y emprendedor redactan y ajustan los términos en estado `draft`.
+- Exige confirmación de ambas partes: cuando uno confirma pasa a `confirmed_by_mentor` o `confirmed_by_entrepreneur`; al confirmar la contraparte se activa (`active`) y la relación avanza automáticamente a `active_mentoring`.
+
+### MentorshipGoal: Línea Base y Trazabilidad
+- Cada objetivo define qué se espera alcanzar (`targetResult`) y el punto de partida documentado (`baseline`).
+- Pueden ser cuantitativos (`kind = 'metric'`) o cualitativos (`kind = 'qualitative' | 'capability' | 'strategic'`).
+- Conectan el plan de trabajo con los elementos de diagnóstico relevantes (`relatedDiagnosisItemIds`).
 
 ## DiagnosisItem: trazabilidad
 

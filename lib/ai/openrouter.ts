@@ -1,24 +1,39 @@
 import "server-only";
-import { AiTurnSchema, FirstReviewSuggestionSchema, HypothesesSuggestionSchema, SuggestedExperimentSchema } from "./schema";
+import {
+  AiTurnSchema,
+  ExperimentTasksSuggestionSchema,
+  FirstReviewSuggestionSchema,
+  GoalsSuggestionSchema,
+  HypothesesSuggestionSchema,
+  SuggestedExperimentSchema,
+} from "./schema";
 import {
   AiUnavailableError,
   type AiProvider,
   type AiResult,
   type ExperimentSuggestionContext,
   type ExperimentSuggestionResult,
+  type ExperimentTasksContext,
+  type ExperimentTasksResult,
   type FirstReviewContext,
   type FirstReviewResult,
+  type GoalsSuggestionContext,
+  type GoalsSuggestionResult,
   type HypothesisSuggestionContext,
   type HypothesesSuggestionResult,
   type InterviewContext,
 } from "./provider";
 import {
   EXPERIMENT_SUGGESTION_SYSTEM_PROMPT,
+  EXPERIMENT_TASKS_SYSTEM_PROMPT,
   FIRST_REVIEW_SYSTEM_PROMPT,
+  GOALS_SUGGESTION_SYSTEM_PROMPT,
   HYPOTHESIS_SUGGESTION_SYSTEM_PROMPT,
   renderContext,
   renderExperimentSuggestionContext,
+  renderExperimentTasksContext,
   renderFirstReviewContext,
+  renderGoalsSuggestionContext,
   renderHypothesisSuggestionContext,
   SYSTEM_PROMPT,
 } from "./prompt";
@@ -151,6 +166,77 @@ export class OpenRouterProvider implements AiProvider {
     throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
   }
 
+  async suggestExperimentTasks(ctx: ExperimentTasksContext): Promise<ExperimentTasksResult> {
+    const base: ChatMessage[] = [
+      { role: "system", content: EXPERIMENT_TASKS_SYSTEM_PROMPT },
+      { role: "user", content: renderExperimentTasksContext(ctx) },
+    ];
+    let last: ModelFailure | null = null;
+    for (const model of this.models) {
+      try {
+        return await this.suggestExperimentTasksWith(model, base);
+      } catch (e) {
+        if (!(e instanceof ModelFailure)) throw e;
+        last = e;
+        if (!e.retryOther) break;
+      }
+    }
+    const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
+    throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  async suggestGoalsAndAgreement(ctx: GoalsSuggestionContext): Promise<GoalsSuggestionResult> {
+    const base: ChatMessage[] = [
+      { role: "system", content: GOALS_SUGGESTION_SYSTEM_PROMPT },
+      { role: "user", content: renderGoalsSuggestionContext(ctx) },
+    ];
+    let last: ModelFailure | null = null;
+    for (const model of this.models) {
+      try {
+        return await this.suggestGoalsAndAgreementWith(model, base);
+      } catch (e) {
+        if (!(e instanceof ModelFailure)) throw e;
+        last = e;
+        if (!e.retryOther) break;
+      }
+    }
+    const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
+    throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  private async suggestGoalsAndAgreementWith(model: string, base: ChatMessage[]): Promise<GoalsSuggestionResult> {
+    const messages = [...base];
+    const opts = { mergeSystem: false, jsonMode: true };
+    let lastProblem = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const data = await this.callAdapting(model, messages, opts);
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const parsed = safeJson(raw);
+      const result = GoalsSuggestionSchema.safeParse(parsed);
+      if (result.success) {
+        return {
+          suggestion: result.data,
+          provider: "openrouter",
+          usage: {
+            model: data.model ?? model,
+            inputTokens: data.usage?.prompt_tokens ?? 0,
+            outputTokens: data.usage?.completion_tokens ?? 0,
+          },
+        };
+      }
+      lastProblem = result.error.issues
+        .slice(0, 5)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      messages.push(
+        { role: "assistant", content: raw.slice(0, 4000) },
+        { role: "user", content: `Tu respuesta no cumple el esquema (${lastProblem}). Respondé solo con el JSON corregido.` },
+      );
+    }
+    console.error(`[openrouter] ${model}: salida inválida tras ${MAX_ATTEMPTS} intentos: ${lastProblem}`);
+    throw new ModelFailure("invalid_output", `El modelo devolvió una respuesta inválida: ${lastProblem}`, true);
+  }
+
   private async suggestHypothesesWith(model: string, base: ChatMessage[]): Promise<HypothesesSuggestionResult> {
     const messages = [...base];
     const opts = { mergeSystem: false, jsonMode: true };
@@ -202,6 +288,39 @@ export class OpenRouterProvider implements AiProvider {
       const raw = data.choices?.[0]?.message?.content ?? "";
       const parsed = safeJson(raw);
       const result = SuggestedExperimentSchema.safeParse(parsed);
+      if (result.success) {
+        return {
+          suggestion: result.data,
+          provider: "openrouter",
+          usage: {
+            model: data.model ?? model,
+            inputTokens: data.usage?.prompt_tokens ?? 0,
+            outputTokens: data.usage?.completion_tokens ?? 0,
+          },
+        };
+      }
+      lastProblem = result.error.issues
+        .slice(0, 5)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      messages.push(
+        { role: "assistant", content: raw.slice(0, 4000) },
+        { role: "user", content: `Tu respuesta no cumple el esquema (${lastProblem}). Respondé solo con el JSON corregido.` },
+      );
+    }
+    console.error(`[openrouter] ${model}: salida inválida tras ${MAX_ATTEMPTS} intentos: ${lastProblem}`);
+    throw new ModelFailure("invalid_output", `El modelo devolvió una respuesta inválida: ${lastProblem}`, true);
+  }
+
+  private async suggestExperimentTasksWith(model: string, base: ChatMessage[]): Promise<ExperimentTasksResult> {
+    const messages = [...base];
+    const opts = { mergeSystem: false, jsonMode: true };
+    let lastProblem = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const data = await this.callAdapting(model, messages, opts);
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const parsed = safeJson(raw);
+      const result = ExperimentTasksSuggestionSchema.safeParse(parsed);
       if (result.success) {
         return {
           suggestion: result.data,

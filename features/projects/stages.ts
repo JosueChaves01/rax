@@ -90,7 +90,14 @@ export const SECTIONS: Section[] = [
       { slug: "diagnostico", label: "Diagnóstico" },
     ],
   },
-  { id: "orientar", label: "Orientar", pages: [{ slug: "orientar", label: "Revisión y prioridad" }] },
+  {
+    id: "orientar",
+    label: "Orientar",
+    pages: [
+      { slug: "orientar", label: "Revisión y prioridad" },
+      { slug: "acuerdos", label: "Acuerdo y objetivos" },
+    ],
+  },
   { id: "probar", label: "Probar", pages: [{ slug: "validacion", label: "Hipótesis y experimentos" }] },
   { id: "decidir", label: "Decidir", pages: [{ slug: "decidir", label: "Segunda revisión" }] },
   {

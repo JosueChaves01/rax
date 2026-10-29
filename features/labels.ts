@@ -20,6 +20,16 @@ import type {
   SessionNoteKind,
   TaskStatus,
   Uncertainty,
+  AgreementFrequency,
+  AgreementStatus,
+  CompatibilityStatus,
+  GoalKind,
+  GoalPriority,
+  GoalStatus,
+  MentorshipStage,
+  ActionType,
+  DelayCauseCategory,
+  MilestoneStatus,
 } from "@/types/domain";
 
 /** Textos visibles centralizados (es). Ningún componente define etiquetas de dominio por su cuenta. */
@@ -230,4 +240,89 @@ export const MENTOR_STATUS_LABEL: Record<MentorStatus, string> = {
   pending: "Solicitud pendiente",
   approved: "Aprobado",
   rejected: "No aprobada",
+};
+
+/* ── Proceso de Mentoría (Etapas y Acuerdos) ── */
+
+export const MENTORSHIP_STAGE_LABEL: Record<MentorshipStage, string> = {
+  exploration: "1. Exploración y compatibilidad",
+  diagnosis: "2. Diagnóstico continuo",
+  agreement: "3. Acuerdos y objetivos",
+  active_mentoring: "4. Ejecución y seguimiento",
+  evaluation: "5. Evaluación de resultados",
+  renewed: "6. Renovación / Nueva etapa",
+  closed: "Finalizada",
+};
+
+export const COMPATIBILITY_STATUS_LABEL: Record<CompatibilityStatus, string> = {
+  pending: "Pendiente de evaluación",
+  proceed: "Compatibles · Avanzar",
+  needs_info: "Requiere más información",
+  declined: "No compatible · Declinado",
+};
+
+export const AGREEMENT_FREQUENCY_LABEL: Record<AgreementFrequency, string> = {
+  weekly: "Semanal",
+  biweekly: "Quincenal",
+  monthly: "Mensual",
+  on_demand: "A demanda",
+};
+
+export const AGREEMENT_STATUS_LABEL: Record<AgreementStatus, string> = {
+  draft: "Borrador en edición",
+  confirmed_by_mentor: "Confirmado por mentor/a",
+  confirmed_by_entrepreneur: "Confirmado por emprendedor/a",
+  active: "Vigente y acordado",
+  superseded: "Reemplazado por nueva versión",
+};
+
+export const GOAL_KIND_LABEL: Record<GoalKind, string> = {
+  metric: "Métrica observable",
+  qualitative: "Cualitativo",
+  capability: "Desarrollo de capacidad",
+  strategic: "Decisión estratégica",
+};
+
+export const GOAL_PRIORITY_LABEL: Record<GoalPriority, string> = {
+  high: "Alta",
+  medium: "Media",
+  low: "Baja",
+};
+
+export const GOAL_STATUS_LABEL: Record<GoalStatus, string> = {
+  active: "En progreso",
+  achieved: "Alcanzado",
+  partially_achieved: "Parcialmente alcanzado",
+  deferred: "Postergado",
+  discarded: "Descartado",
+};
+
+/* ── Hoja de ruta y Acciones Multimodales ── */
+
+export const ACTION_TYPE_LABEL: Record<ActionType, string> = {
+  operational_task: "Tarea operativa",
+  skill_learning: "Aprendizaje / Habilidad",
+  business_decision: "Decisión estratégica",
+  conversation_third_party: "Conversación con tercero",
+  financial_review: "Revisión financiera",
+  mentor_intervention: "Intervención del mentor",
+  experiment: "Experimento empírico",
+  research: "Investigación",
+  expert_referral: "Derivación a especialista",
+};
+
+export const DELAY_CAUSE_LABEL: Record<DelayCauseCategory, string> = {
+  clarity: "Falta de claridad en la definición",
+  time: "Sobrecarga o tiempo insuficiente",
+  resources: "Falta de herramientas o presupuesto",
+  external: "Factores o demoras externas",
+  priority_change: "Cambio justificado de prioridad",
+  execution_difficulty: "Dificultad técnica o metodológica",
+};
+
+export const MILESTONE_STATUS_LABEL: Record<MilestoneStatus, string> = {
+  pending: "Pendiente",
+  in_progress: "En curso",
+  achieved: "Alcanzado",
+  deferred: "Postergado",
 };

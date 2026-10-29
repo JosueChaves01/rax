@@ -24,6 +24,12 @@ export type Action =
   | "experiment.record_result"
   | "evidence.add"
   | "task.manage"
+  | "mentorship.manage"
+  | "agreement.edit"
+  | "agreement.confirm"
+  | "goal.manage"
+  | "roadmap.manage"
+  | "task.diagnose_delay"
   | "admin.manage";
 
 /** Relación del actor con el proyecto, resuelta desde la base de datos (nunca desde el cliente). */
@@ -56,6 +62,12 @@ const MATRIX: Record<Exclude<Action, "admin.manage">, Who[]> = {
   "experiment.record_result": ["owner", "collaborator"],
   "evidence.add": ["owner", "collaborator"],
   "task.manage": ["owner", "collaborator", "mentor"],
+  "mentorship.manage": ["owner", "mentor"],
+  "agreement.edit": ["owner", "mentor"],
+  "agreement.confirm": ["owner", "mentor"],
+  "goal.manage": ["owner", "mentor"],
+  "roadmap.manage": ["owner", "mentor"],
+  "task.diagnose_delay": ["owner", "mentor"],
 };
 
 export function can(actor: Profile, action: Action, rel: ProjectRelation = NO_RELATION): boolean {
