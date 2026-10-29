@@ -17,12 +17,12 @@ services:
       - N8N_HOST=0.0.0.0
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
-      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-${N8N_WEBHOOK_BASE_URL:-http://localhost:5678/}}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-meta-llama/llama-3.3-70b-instruct:free}
-      - RAX_API_URL=${NEXT_PUBLIC_APP_URL:-http://host.docker.internal:3000}
+      - RAX_API_URL=${NEXT_PUBLIC_APP_URL:-https://rax-red.vercel.app}
       - RAX_N8N_SHARED_SECRET=${RAX_N8N_SHARED_SECRET:-${SUPABASE_SERVICE_ROLE_KEY}}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://host.docker.internal:3000}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://rax-red.vercel.app}
       - N8N_DIAGNOSTICS_ENABLED=false
       - N8N_VERSION_NOTIFICATIONS_ENABLED=false
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true

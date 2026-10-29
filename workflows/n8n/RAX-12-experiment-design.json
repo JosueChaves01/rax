@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el científico de validación y experimentación de RAX.\\nTu misión es convertir suposiciones críticas en hipótesis comprobables y experimentos con criterios EX-ANTE.\\nREGLAS FUNDAMENTALES:\\n1. La hipótesis debe ser falsable (mínimo 25 caracteres, sin fórmulas vagas como 'a la gente le gustará').\\n2. Define de antemano tanto el criterio de éxito (successCriterion) como el de refutación (rejectionCriterion).\\n3. Propón un método concreto (entrevistas de problema, prueba de humo, concierge, prototipo de baja fidelidad).\\n4. Salida en JSON estricto con: proposedHypotheses (array con statement, segment, whyItMatters, uncertainty, costOfBeingWrong, evaluationCriterion), proposedExperiment (objeto con question, method, metric, successCriterion, rejectionCriterion, durationDays, participants, evidencePlan), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  problem: payload.problem || '',\n  assumptions: payload.assumptions || [],\n  founderContext: payload.founderContext || {}\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el científico de validación y experimentación de RAX.\\nTu misión es convertir suposiciones críticas en hipótesis comprobables y experimentos con criterios EX-ANTE.\\nREGLAS FUNDAMENTALES:\\n1. La hipótesis debe ser falsable (mínimo 25 caracteres, sin fórmulas vagas como 'a la gente le gustará').\\n2. Define de antemano tanto el criterio de éxito (successCriterion) como el de refutación (rejectionCriterion).\\n3. Propón un método concreto (entrevistas de problema, prueba de humo, concierge, prototipo de baja fidelidad).\\n4. Salida en JSON estricto con: proposedHypotheses (array con statement, segment, whyItMatters, uncertainty, costOfBeingWrong, evaluationCriterion), proposedExperiment (objeto con question, method, metric, successCriterion, rejectionCriterion, durationDays, participants, evidencePlan), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  problem: payload.problem || '',\n  assumptions: payload.assumptions || [],\n  founderContext: payload.founderContext || {}\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'https://rax-red.vercel.app') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-exp-prompt",
       "name": "Build Experiment Design Prompt",
@@ -48,7 +48,7 @@
             },
             {
               "name": "HTTP-Referer",
-              "value": "https://rax.app"
+              "value": "https://rax-red.vercel.app"
             },
             {
               "name": "X-Title",

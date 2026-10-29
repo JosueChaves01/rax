@@ -18,6 +18,7 @@ import { assertHypothesisTransition } from "@/features/hypotheses/rules";
 import { forbidden, notFound, validation } from "@/lib/errors";
 import { audit, guard, sysRepo, type ServiceDeps } from "./base";
 import { touch } from "./projects";
+import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 
 /**
  * El emprendedor solicita una revisión. La primera requiere el resumen confirmado;
@@ -235,6 +236,23 @@ export async function completeSecondReview(d: ServiceDeps, sessionId: string, de
     decision: { value: decision, justification: justification.trim().slice(0, 2000), hypothesisId, decidedAt: d.now() },
   });
   await audit(d, "mentor.session_completed", { projectId: s.projectId, targetId: sessionId, meta: { kind: s.kind, decision } });
+  dispatchEventToN8n({
+    eventId: d.newId("evt"),
+    eventType: "session.completed",
+    occurredAt: d.now(),
+    schemaVersion: "1.0.0",
+    correlationId: `ses_comp_${sessionId}`,
+    actor: { id: d.actor.id, role: d.actor.role, verified: true },
+    relationshipId: s.relationId,
+    projectId: s.projectId,
+    entityType: "session",
+    entityId: sessionId,
+    payload: {
+      sessionKind: s.kind,
+      decision,
+      justification,
+    },
+  }).catch((err) => console.warn("[n8n-dispatch] No se pudo despachar session.completed:", err));
 }
 
 
@@ -278,6 +296,23 @@ export async function scheduleSession(
     meta: { kind: session.kind, scheduledAt: input.scheduledAt ?? "" },
   });
   await touch(d, projectId);
+  dispatchEventToN8n({
+    eventId: d.newId("evt"),
+    eventType: "session.scheduled",
+    occurredAt: now,
+    schemaVersion: "1.0.0",
+    correlationId: `ses_${session.id}`,
+    actor: { id: d.actor.id, role: d.actor.role, verified: true },
+    relationshipId: input.relationId,
+    projectId,
+    entityType: "session",
+    entityId: session.id,
+    payload: {
+      sessionKind: session.kind,
+      scheduledAt: session.scheduledAt ?? "",
+      mentorId: session.mentorId,
+    },
+  }).catch((err) => console.warn("[n8n-dispatch] No se pudo despachar session.scheduled:", err));
   return session;
 }
 
@@ -391,6 +426,24 @@ export async function generatePreSessionBriefing(
       meta: { provider: res.provider },
     });
     await touch(d, s.projectId);
+    dispatchEventToN8n({
+      eventId: d.newId("evt"),
+      eventType: "session.prep_requested",
+      occurredAt: d.now(),
+      schemaVersion: "1.0.0",
+      correlationId: `briefing_${sessionId}`,
+      actor: { id: d.actor.id, role: d.actor.role, verified: true },
+      relationshipId: s.relationId,
+      projectId: s.projectId,
+      entityType: "session",
+      entityId: sessionId,
+      payload: {
+        sessionKind: s.kind,
+        agendaTopics: briefing.suggestedAgenda || [],
+        suggestedQuestions: briefing.suggestedQuestions || [],
+        goals: allGoals.map((g) => g.title),
+      },
+    }).catch((err) => console.warn("[n8n-dispatch] No se pudo despachar session.prep_requested:", err));
     return briefing;
   } catch (e) {
     await audit(d, "ai.failed", {

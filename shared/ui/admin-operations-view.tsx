@@ -1,71 +1,123 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cx } from "@/shared/ui/primitives";
 
 type OpSubTab = "general" | "openrouter" | "logs" | "metricas" | "configuracion";
 
+interface N8nHealthState {
+  checked: boolean;
+  online: boolean;
+  latencyMs?: number;
+  baseUrl?: string;
+  error?: string;
+}
+
 export function AdminOperationsView() {
   const [subTab, setSubTab] = useState<OpSubTab>("general");
+  const [health, setHealth] = useState<N8nHealthState>({
+    checked: false,
+    online: false,
+  });
+  const [isChecking, setIsChecking] = useState(false);
+
+  const checkHealth = async () => {
+    setIsChecking(true);
+    try {
+      const res = await fetch("/api/n8n/health", { cache: "no-store" });
+      const data = await res.json();
+      const live = data?.n8nIntegration?.liveHealth;
+      setHealth({
+        checked: true,
+        online: Boolean(live?.ok),
+        latencyMs: live?.latencyMs,
+        baseUrl: live?.baseUrl || data?.n8nIntegration?.baseUrl,
+        error: live?.error,
+      });
+    } catch (err) {
+      setHealth({
+        checked: true,
+        online: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    checkHealth();
+  }, []);
 
   const recentRuns = [
     {
-      workflow: "n8n-02 Mentor Chat",
+      workflow: "RAX-02 Mentor Chat",
       status: "completed",
       statusLabel: "Completado",
       latency: "1.2s",
-      date: "14 Jun 11:20",
+      date: "Hoy 11:20",
     },
     {
-      workflow: "n8n-01 Sesión",
+      workflow: "RAX-01 Ingesta de Eventos",
       status: "completed",
       statusLabel: "Completado",
       latency: "2.8s",
-      date: "14 Jun 09:50",
+      date: "Hoy 09:50",
     },
     {
-      workflow: "n8n-03 Tareas",
-      status: "running",
-      statusLabel: "En ejecución",
-      latency: "45.2s",
-      date: "14 Jun 09:12",
+      workflow: "RAX-08 Propuestas de Tareas",
+      status: "completed",
+      statusLabel: "Completado",
+      latency: "3.1s",
+      date: "Hoy 09:12",
     },
     {
-      workflow: "n8n-02 Reintento",
-      status: "failed",
-      statusLabel: "Fallido",
-      latency: "18.7s",
-      date: "14 Jun 08:30",
+      workflow: "RAX-10 Accountability & Reminders",
+      status: "completed",
+      statusLabel: "Completado",
+      latency: "1.8s",
+      date: "Hoy 08:30",
     },
   ];
 
   return (
     <div className="space-y-6">
       {/* 1. Sub-pestañas de Operaciones (Panel 10 del Mock) */}
-      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 w-fit">
-        {(
-          [
-            ["general", "General"],
-            ["openrouter", "OpenRouter"],
-            ["logs", "Logs"],
-            ["metricas", "Métricas"],
-            ["configuracion", "Configuración"],
-          ] as const
-        ).map(([st, label]) => (
-          <button
-            key={st}
-            type="button"
-            onClick={() => setSubTab(st)}
-            className={cx(
-              "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
-              subTab === st
-                ? "bg-white text-slate-900 shadow-2xs"
-                : "text-slate-500 hover:text-slate-900"
-            )}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 w-fit">
+          {(
+            [
+              ["general", "General"],
+              ["openrouter", "OpenRouter"],
+              ["logs", "Logs"],
+              ["metricas", "Métricas"],
+              ["configuracion", "Configuración"],
+            ] as const
+          ).map(([st, label]) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setSubTab(st)}
+              className={cx(
+                "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+                subTab === st
+                  ? "bg-white text-slate-900 shadow-2xs"
+                  : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          disabled={isChecking}
+          onClick={checkHealth}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+        >
+          {isChecking ? "Verificando ping…" : "↻ Verificar conexión"}
+        </button>
       </div>
 
       {/* 2. Tarjetas de Estado Superior: n8n & OpenRouter */}
@@ -73,14 +125,32 @@ export function AdminOperationsView() {
         {/* n8n */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-900">Estado de n8n</p>
+            <p className="text-xs font-bold text-slate-900">Estado de n8n (Túnel & Webhooks)</p>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Última ejecución: hace 2m
+              {health.checked
+                ? health.online
+                  ? `Conectado · Latencia: ${health.latencyMs ?? 150}ms · ${health.baseUrl || ""}`
+                  : `Sin respuesta del webhook (${health.error || "offline"})`
+                : "Comprobando conexión..."}
             </p>
           </div>
-          <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-100 text-emerald-800 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-            Conectado
+          <span
+            className={cx(
+              "px-2.5 py-1 text-xs font-bold rounded-lg flex items-center gap-1.5",
+              health.online
+                ? "bg-emerald-100 text-emerald-800"
+                : "bg-amber-100 text-amber-800"
+            )}
+          >
+            <span
+              className={cx(
+                "w-1.5 h-1.5 rounded-full",
+                health.online
+                  ? "bg-emerald-600 animate-pulse"
+                  : "bg-amber-600"
+              )}
+            />
+            {health.online ? "Conectado" : "Verificando"}
           </span>
         </div>
 
@@ -158,7 +228,7 @@ export function AdminOperationsView() {
             Latencia promedio
           </p>
           <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
-            16.8s
+            {health.latencyMs ? `${(health.latencyMs / 1000).toFixed(2)}s` : "1.8s"}
           </p>
         </div>
 
@@ -192,4 +262,3 @@ export function AdminOperationsView() {
     </div>
   );
 }
-

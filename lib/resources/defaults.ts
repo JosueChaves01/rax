@@ -2,6 +2,61 @@ import type { MentorResource } from "@/types/domain";
 
 export const DEFAULT_MENTOR_RESOURCES: MentorResource[] = [
   {
+    id: "minto",
+    title: "Principio de la Pirámide de Minto",
+    category: "guide",
+    description: "Aprende a estructurar tus ideas empezando por la conclusión principal, seguida de argumentos de apoyo y finalmente los datos y detalles.",
+    tags: ["guía", "comunicación", "estrategia", "minto"],
+    content: `### Principio de la Pirámide de Minto
+
+#### 1. Conclusión Principal
+Empieza siempre por la recomendación, decisión o tesis central en una sola frase contundente.
+
+#### 2. Argumentos de Apoyo
+Agrupa tus razones en máximo 3 pilares clave estructurados de manera lógica y mutuamente excluyente:
+- Facilidad de implementación y costo marginal bajo.
+- Soporte personalizado y validación directa con primeros clientes.
+- Integración ágil con herramientas ya adoptadas.
+
+#### 3. Datos y Evidencia
+Aporta métricas cuantitativas, casos reales o testimonios para sustentar cada argumento sin abrumar con detalles prematuros.`,
+    isPublic: true,
+    createdAt: "2026-10-29T12:00:00.000Z",
+    updatedAt: "2026-10-29T12:00:00.000Z",
+  },
+  {
+    id: "business-plan",
+    title: "Plantilla de Plan de Negocio",
+    category: "template",
+    description: "Formato sintético para presentar propuesta de valor, estructura de costos, proyecciones de tracción y necesidades de capital.",
+    tags: ["plantilla", "estructura", "finanzas", "estrategia"],
+    content: `### Plantilla Ejecutiva de Plan de Negocio
+
+1. **Resumen Ejecutivo**: El propósito de la empresa y la oportunidad insatisfecha en el mercado actual.
+2. **Problema y Propuesta Única de Valor**: La tensión que sufre el usuario y el beneficio diferenciador comprobado.
+3. **Modelo de Monetización**: Mecanismos de captura de valor, precios unitarios y márgenes brutos estimados.
+4. **Plan Operativo y Proyección Financiera**: Metas e hitos trimestrales a 12 meses con supuestos de costo y adquisición.`,
+    isPublic: true,
+    createdAt: "2026-10-29T12:00:00.000Z",
+    updatedAt: "2026-10-29T12:00:00.000Z",
+  },
+  {
+    id: "prep-exercise",
+    title: "Ejercicio PREP - Objeciones de clientes",
+    category: "framework",
+    description: "Estructura respuestas contundentes ante dudas comerciales usando la fórmula Punto, Razón, Ejemplo y Punto final.",
+    tags: ["ejercicio", "ventas", "validación", "prep"],
+    content: `### Método PREP para Argumentación Comercial
+
+- **P (Punto)**: Formula tu afirmación o respuesta directa en una sola oración concisa.
+- **R (Razón)**: Explica el porqué subyacente de tu solución y la lógica detrás del precio o funcionalidad.
+- **E (Ejemplo)**: Comparte una experiencia real, caso de estudio o métrica demostrable que valide la razón.
+- **P (Punto final)**: Reitera la conclusión y haz un llamado a la acción concreto hacia el cliente o mentor.`,
+    isPublic: true,
+    createdAt: "2026-10-29T12:00:00.000Z",
+    updatedAt: "2026-10-29T12:00:00.000Z",
+  },
+  {
     id: "res-canvas-lean-01",
     title: "Lean Business Model Canvas para Validación Rápida",
     category: "framework",
@@ -18,6 +73,21 @@ export const DEFAULT_MENTOR_RESOURCES: MentorResource[] = [
 7. **Estructura de costos**: Costos fijos y variables indispensables para poner a prueba la oferta.
 8. **Métricas clave**: La señal vital que demuestra tracción semanal.
 9. **Ventaja injusta**: Algo que no se pueda copiar ni comprar fácilmente.`,
+    isPublic: true,
+    createdAt: "2026-10-29T12:00:00.000Z",
+    updatedAt: "2026-10-29T12:00:00.000Z",
+  },
+  {
+    id: "mece",
+    title: "Marco MECE - Análisis de mercado",
+    category: "guide",
+    description: "Principio de exclusión mutua y exhaustividad colectiva para segmentar clientes y competidores sin solapamientos ni omisiones.",
+    tags: ["guía", "estrategia", "análisis", "mece"],
+    content: `### Principio MECE (Mutually Exclusive, Collectively Exhaustive)
+
+- **Mutuamente Excluyentes (ME)**: Cada categoría, segmento o hipótesis debe ser única e independiente. Ningún dato puede pertenecer a dos clasificaciones a la vez.
+- **Colectivamente Exhaustivos (CE)**: La suma total de todas las categorías debe cubrir el 100% del universo de análisis sin dejar cabos sueltos.
+- **Aplicación**: Úsalo al diagnosticar causas de baja tracción, segmentar perfiles de comprador o priorizar competidores directos e indirectos.`,
     isPublic: true,
     createdAt: "2026-10-29T12:00:00.000Z",
     updatedAt: "2026-10-29T12:00:00.000Z",
@@ -134,4 +204,3 @@ Cuando un compromiso o tarea no se cumplió a la fecha prevista:
     updatedAt: "2026-10-29T12:00:00.000Z",
   },
 ];
-

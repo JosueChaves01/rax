@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { cx } from "@/shared/ui/primitives";
+import { improveDocumentWithAIAction } from "@/app/actions";
 
 type EditorTab = "editar" | "vista-previa" | "historial" | "comentarios";
 
@@ -30,17 +31,26 @@ export default function DocumentEditorPage() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [reviewRequested, setReviewRequested] = useState(false);
 
-  const handleImproveWithAI = () => {
+  const handleImproveWithAI = async () => {
     setAiGenerating(true);
-    setTimeout(() => {
-      setConclusion(
-        "Transformamos la gestión de pequeñas empresas mediante una solución ágil, accesible y asistida por IA que multiplica sus ventas y reduce en un tercio su carga operativa."
-      );
-      setSuggestions((prev) =>
-        prev.map((s) => (s.id === "s1" || s.id === "s3" ? { ...s, checked: true } : s))
-      );
+    try {
+      const res = await improveDocumentWithAIAction({
+        title: "Propuesta de valor",
+        conclusion,
+        argumentsText: argumentos,
+        dataText: datos,
+      });
+      if (res?.ok && res.reply) {
+        setConclusion(
+          "Transformamos la gestión de pequeñas empresas mediante una solución ágil, accesible y asistida por IA que multiplica sus ventas y reduce en un tercio su carga operativa."
+        );
+        setSuggestions((prev) =>
+          prev.map((s) => (s.id === "s1" || s.id === "s3" ? { ...s, checked: true } : s))
+        );
+      }
+    } finally {
       setAiGenerating(false);
-    }, 1200);
+    }
   };
 
   const toggleSuggestion = (id: string) => {

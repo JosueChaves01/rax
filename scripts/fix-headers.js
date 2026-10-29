@@ -17,6 +17,10 @@ for (const file of files) {
           "model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',"
         );
       }
+      node.parameters.jsCode = node.parameters.jsCode.replace(
+        /'http:\/\/localhost:3000'/g,
+        "'https://rax-red.vercel.app'"
+      );
     }
 
     // 2. En nodos HTTP Request que llaman a OpenRouter
@@ -35,7 +39,7 @@ for (const file of files) {
           },
           {
             name: 'HTTP-Referer',
-            value: 'https://rax.app'
+            value: 'https://rax-red.vercel.app'
           },
           {
             name: 'X-Title',

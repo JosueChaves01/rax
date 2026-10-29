@@ -21,7 +21,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.RAX_API_URL || 'http://localhost:3000' }}/api/n8n/health",
+        "url": "={{ $env.RAX_API_URL || 'https://rax-red.vercel.app' }}/api/n8n/health",
         "options": {
           "timeout": 5000
         }
@@ -49,7 +49,7 @@
             },
             {
               "name": "HTTP-Referer",
-              "value": "https://rax.app"
+              "value": "https://rax-red.vercel.app"
             },
             {
               "name": "X-Title",

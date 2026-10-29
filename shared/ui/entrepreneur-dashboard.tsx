@@ -19,7 +19,9 @@ export function EntrepreneurDashboard({
 
   const goalsCount = primaryWorkspace?.mentorshipGoals?.filter((g) => g.status !== "discarded").length || 3;
   const pendingTasksCount = primaryWorkspace?.tasks?.filter((t) => t.status !== "done").length || 5;
-  const progressPercent = 62;
+  const totalTasks = primaryWorkspace?.tasks?.length || 0;
+  const doneTasks = primaryWorkspace?.tasks?.filter((t) => t.status === "done").length || 0;
+  const progressPercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 62;
 
   // Pasos del proceso de mentoría (Panel 2 del Mock)
   const processSteps = [

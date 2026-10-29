@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el gestor de tareas de RAX.\\nTu misión es proponer compromisos accionables y medibles para el plan de mentoría.\\nREGLAS:\\n1. No dupliques compromisos ya existentes en la lista de tareas activas.\\n2. Cada tarea debe tener un criterio de finalización tangible (successCriteria) y la evidencia que se requerirá (evidenceRequired).\\n3. Si una tarea depende de otra o tiene bloqueos evidentes, indícalo.\\n4. Salida en JSON estricto con: suggestedTasks (array de objetos con title, description, ownerSuggestion, dueDateSuggestion, successCriteria, evidenceRequired, relatedGoalId), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  goals: payload.goals || [],\n  existingTasks: payload.existingTasks || [],\n  contextSource: payload.contextSource || 'session'\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el gestor de tareas de RAX.\\nTu misión es proponer compromisos accionables y medibles para el plan de mentoría.\\nREGLAS:\\n1. No dupliques compromisos ya existentes en la lista de tareas activas.\\n2. Cada tarea debe tener un criterio de finalización tangible (successCriteria) y la evidencia que se requerirá (evidenceRequired).\\n3. Si una tarea depende de otra o tiene bloqueos evidentes, indícalo.\\n4. Salida en JSON estricto con: suggestedTasks (array de objetos con title, description, ownerSuggestion, dueDateSuggestion, successCriteria, evidenceRequired, relatedGoalId), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  goals: payload.goals || [],\n  existingTasks: payload.existingTasks || [],\n  contextSource: payload.contextSource || 'session'\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'https://rax-red.vercel.app') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-tasks-prompt",
       "name": "Build Task Proposals Prompt",
@@ -48,7 +48,7 @@
             },
             {
               "name": "HTTP-Referer",
-              "value": "https://rax.app"
+              "value": "https://rax-red.vercel.app"
             },
             {
               "name": "X-Title",

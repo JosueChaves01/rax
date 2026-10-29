@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el asistente de preparación de sesiones de mentoría de RAX.\\nTu misión es preparar un Briefing estructurado para el mentor antes de la sesión.\\nREGLAS:\\n1. Analiza los cambios desde la última sesión y el avance en los objetivos acordados.\\n2. Formula de 3 a 5 preguntas potentes y abiertas para el mentor.\\n3. Señala decisiones pendientes o bloqueos que requieren atención.\\n4. Si no hay registros de un hecho, no lo asumas.\\n5. Salida en JSON estricto con los campos: sessionGoal (string), currentStatusSummary (string), agendaTopics (array de strings), suggestedQuestions (array de strings), pendingDecisions (array de strings), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  sessionKind: payload.sessionKind || 'follow_up',\n  goals: payload.goals || [],\n  previousNotes: payload.previousNotes || [],\n  recentEvidence: payload.recentEvidence || [],\n  pendingTasks: payload.pendingTasks || []\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el asistente de preparación de sesiones de mentoría de RAX.\\nTu misión es preparar un Briefing estructurado para el mentor antes de la sesión.\\nREGLAS:\\n1. Analiza los cambios desde la última sesión y el avance en los objetivos acordados.\\n2. Formula de 3 a 5 preguntas potentes y abiertas para el mentor.\\n3. Señala decisiones pendientes o bloqueos que requieren atención.\\n4. Si no hay registros de un hecho, no lo asumas.\\n5. Salida en JSON estricto con los campos: sessionGoal (string), currentStatusSummary (string), agendaTopics (array de strings), suggestedQuestions (array de strings), pendingDecisions (array de strings), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  sessionKind: payload.sessionKind || 'follow_up',\n  goals: payload.goals || [],\n  previousNotes: payload.previousNotes || [],\n  recentEvidence: payload.recentEvidence || [],\n  pendingTasks: payload.pendingTasks || []\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'https://rax-red.vercel.app') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-session-prompt",
       "name": "Build Session Prep Prompt",
@@ -48,7 +48,7 @@
             },
             {
               "name": "HTTP-Referer",
-              "value": "https://rax.app"
+              "value": "https://rax-red.vercel.app"
             },
             {
               "name": "X-Title",

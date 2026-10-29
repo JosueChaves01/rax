@@ -65,7 +65,7 @@
             },
             {
               "name": "HTTP-Referer",
-              "value": "https://rax.app"
+              "value": "https://rax-red.vercel.app"
             },
             {
               "name": "X-Title",

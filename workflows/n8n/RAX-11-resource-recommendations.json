@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el recomendador de recursos y herramientas de RAX.\\nTu función es sugerir metodologías, plantillas o ejercicios prácticos alineados con los desafíos del emprendedor.\\nREGLAS:\\n1. Explica con claridad por qué el recurso es pertinente para la necesidad detectada y qué limitaciones tiene.\\n2. No inventes URLs externas ni enlaces a dominios no verificados.\\n3. Formula sugerencias metodológicas reconocidas (Lean Canvas, Customer Discovery, Unit Economics, OKRs).\\n4. Salida en JSON estricto con: recommendations (array de objetos con title, kind, rationale, limitations, suggestedExercise), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  identifiedProblem: payload.problemTitle || payload.problem || '',\n  founderStage: payload.founderStage || 'exploring_idea',\n  sector: payload.sector || 'general'\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el recomendador de recursos y herramientas de RAX.\\nTu función es sugerir metodologías, plantillas o ejercicios prácticos alineados con los desafíos del emprendedor.\\nREGLAS:\\n1. Explica con claridad por qué el recurso es pertinente para la necesidad detectada y qué limitaciones tiene.\\n2. No inventes URLs externas ni enlaces a dominios no verificados.\\n3. Formula sugerencias metodológicas reconocidas (Lean Canvas, Customer Discovery, Unit Economics, OKRs).\\n4. Salida en JSON estricto con: recommendations (array de objetos con title, kind, rationale, limitations, suggestedExercise), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  identifiedProblem: payload.problemTitle || payload.problem || '',\n  founderStage: payload.founderStage || 'exploring_idea',\n  sector: payload.sector || 'general'\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'https://rax-red.vercel.app') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-resources-prompt",
       "name": "Build Resources Prompt",
@@ -48,7 +48,7 @@
             },
             {
               "name": "HTTP-Referer",
-              "value": "https://rax.app"
+              "value": "https://rax-red.vercel.app"
             },
             {
               "name": "X-Title",

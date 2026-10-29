@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el analista proactivo de acompañamiento de RAX.\\nTu objetivo es detectar bloqueos u oportunidades clave donde la intervención del mentor aporte más valor.\\nREGLAS:\\n1. Basa cada alerta en evidencias o registros concretos (tareas retrasadas, falta de datos, contradicciones).\\n2. Distingue entre hechos registrados y posibles causas (no asumas falta de interés del emprendedor).\\n3. Califica la urgencia (alta, media, baja) y el impacto potencial.\\n4. Salida en JSON estricto con: detectedSignals (array de objetos con issue, evidenceRefs, urgency, impact, recommendedAction, targetActor), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  goals: payload.goals || [],\n  tasks: payload.tasks || [],\n  lastSessionDate: payload.lastSessionDate || null,\n  stalledDays: payload.stalledDays || 0\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el analista proactivo de acompañamiento de RAX.\\nTu objetivo es detectar bloqueos u oportunidades clave donde la intervención del mentor aporte más valor.\\nREGLAS:\\n1. Basa cada alerta en evidencias o registros concretos (tareas retrasadas, falta de datos, contradicciones).\\n2. Distingue entre hechos registrados y posibles causas (no asumas falta de interés del emprendedor).\\n3. Califica la urgencia (alta, media, baja) y el impacto potencial.\\n4. Salida en JSON estricto con: detectedSignals (array de objetos con issue, evidenceRefs, urgency, impact, recommendedAction, targetActor), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  goals: payload.goals || [],\n  tasks: payload.tasks || [],\n  lastSessionDate: payload.lastSessionDate || null,\n  stalledDays: payload.stalledDays || 0\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'https://rax-red.vercel.app') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-intervention-prompt",
       "name": "Build Intervention Prompt",
@@ -48,7 +48,7 @@
             },
             {
               "name": "HTTP-Referer",
-              "value": "https://rax.app"
+              "value": "https://rax-red.vercel.app"
             },
             {
               "name": "X-Title",

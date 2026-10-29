@@ -2,6 +2,7 @@ import { notFound } from "@/lib/errors";
 import { CycleEvaluationInput, parse } from "@/lib/validation/inputs";
 import type { CycleEvaluation } from "@/types/domain";
 import { guard, type ServiceDeps } from "./base";
+import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 
 export async function recordCycleEvaluation(
   d: ServiceDeps,
@@ -111,6 +112,27 @@ export async function recordCycleEvaluation(
       goalsEvaluated: parsed.goalEvaluations.length,
     },
     createdAt: now,
+  });
+
+  dispatchEventToN8n({
+    eventId: d.newId("evt"),
+    eventType: "cycle.evaluated",
+    occurredAt: now,
+    schemaVersion: "1.0.0",
+    correlationId: `eval_${saved.id}`,
+    actor: { id: d.actor.id, role: d.actor.role, verified: true },
+    relationshipId: rel.id,
+    projectId: rel.projectId,
+    entityType: "cycle_evaluation",
+    entityId: saved.id,
+    payload: {
+      cycleNumber: parsed.cycleNumber,
+      decision: parsed.decision,
+      autonomyAssessment: parsed.autonomyAssessment,
+      nextCycleFocus: parsed.nextCycleFocus,
+      mentorFeedback: parsed.mentorFeedback,
+      entrepreneurFeedback: parsed.entrepreneurFeedback,
+    },
   });
 
   return saved;

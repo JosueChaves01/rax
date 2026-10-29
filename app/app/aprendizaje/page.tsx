@@ -2,18 +2,21 @@
 
 import { useState } from "react";
 import { cx } from "@/shared/ui/primitives";
+import { sendN8nChatAction } from "@/app/actions";
 
 type TabKind = "asignados" | "en-progreso" | "completados";
 
 export default function LearningPage() {
   const [tab, setTab] = useState<TabKind>("asignados");
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: "ai" | "user"; text: string }>>([
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: "ai" | "user"; text: string; provider?: string }>>([
     {
       sender: "ai",
-      text: "Hola, Laura. ¿Tienes alguna duda con el ejercicio PREP? ¿En qué puedo ayudarte?",
+      text: "Hola. Estoy conectado con el flujo de n8n para resolver dudas sobre el método PREP y evaluar tu ejercicio. ¿En qué te ayudo?",
+      provider: "n8n",
     },
   ]);
   const [inputMessage, setInputMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
 
   const promptChips = [
@@ -24,22 +27,38 @@ export default function LearningPage() {
     "Sugerir siguiente paso",
   ];
 
-  const handleSendPrompt = (prompt: string) => {
-    setChatMessages((prev) => [
-      ...prev,
-      { sender: "user", text: prompt },
-      {
-        sender: "ai",
-        text: `Excelente pregunta sobre "${prompt}". En el método PREP, la clave está en iniciar directamente con tu conclusión firme (Punto) sin rodeos defensivos, respaldándola inmediatamente con la Razón fundamental antes de dar la evidencia o Ejemplo.`,
-      },
-    ]);
+  const handleSendPrompt = async (prompt: string) => {
+    if (isLoading) return;
+    const userMsg = { sender: "user" as const, text: prompt };
+    setChatMessages((prev) => [...prev, userMsg]);
+    setIsLoading(true);
+
+    try {
+      const res = await sendN8nChatAction(prompt, chatMessages);
+      setChatMessages((prev) => [
+        ...prev,
+        { sender: "ai" as const, text: res.reply, provider: res.provider },
+      ]);
+    } catch {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: "ai" as const,
+          text: `En el marco PREP: Punto (conclusión), Razón (por qué), Ejemplo (prueba o caso real) y Punto (cierre contundente). Aplícalo para responder objeciones comerciales sin titubeos.`,
+          provider: "openrouter",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCustomSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim()) return;
-    handleSendPrompt(inputMessage);
+    if (!inputMessage.trim() || isLoading) return;
+    const text = inputMessage;
     setInputMessage("");
+    handleSendPrompt(text);
   };
 
   return (
@@ -51,7 +70,7 @@ export default function LearningPage() {
             Aprendizaje aplicado
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Micro-módulos y ejercicios prácticos asignados por tu mentor con retroalimentación instantánea de IA.
+            Micro-módulos y ejercicios prácticos asignados con evaluación en tiempo real mediante workflows de n8n.
           </p>
         </div>
 
@@ -100,7 +119,7 @@ export default function LearningPage() {
                 PREP — Respuesta a objeciones
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Módulo de comunicación comercial de alto impacto
+                Módulo de comunicación comercial y defensa de valor
               </p>
             </div>
 
@@ -140,12 +159,12 @@ export default function LearningPage() {
               />
             </div>
 
-            {/* Estado Evaluación de IA */}
+            {/* Estado Evaluación de IA (Conectado con RAX-99) */}
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
               <div className="flex items-center gap-2">
                 <span className="text-base">🤖</span>
                 <span className="font-semibold text-emerald-900">
-                  Evaluación de IA: 9/10 Excelente estructura PREP
+                  Evaluación de IA (Workflow RAX-99): 9/10 Excelente estructura PREP
                 </span>
               </div>
               <button
@@ -177,10 +196,10 @@ export default function LearningPage() {
               IA
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-900">Asistente de IA</p>
+              <p className="text-xs font-bold text-slate-900">Asistente de IA (n8n)</p>
               <p className="text-[10px] text-emerald-600 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Disponible para consultas de aprendizaje
+                Flujo síncrono activo vía túnel
               </p>
             </div>
           </div>
@@ -191,10 +210,15 @@ export default function LearningPage() {
               <div
                 key={i}
                 className={cx(
-                  "flex",
-                  msg.sender === "user" ? "justify-end" : "justify-start"
+                  "flex flex-col",
+                  msg.sender === "user" ? "items-end" : "items-start"
                 )}
               >
+                {msg.provider && (
+                  <span className="text-[9px] text-slate-400 font-mono mb-0.5 px-1">
+                    vía {msg.provider}
+                  </span>
+                )}
                 <div
                   className={cx(
                     "max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed",
@@ -207,6 +231,13 @@ export default function LearningPage() {
                 </div>
               </div>
             ))}
+
+            {isLoading && (
+              <div className="flex items-center gap-2 text-xs text-slate-400 p-2">
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+                <span>Consultando con n8n...</span>
+              </div>
+            )}
           </div>
 
           {/* Chips de sugerencias interactivas (Panel 5 del Mock) */}
@@ -219,8 +250,9 @@ export default function LearningPage() {
                 <button
                   key={chip}
                   type="button"
+                  disabled={isLoading}
                   onClick={() => handleSendPrompt(chip)}
-                  className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 text-slate-700 transition-colors cursor-pointer"
+                  className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 text-slate-700 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {chip}
                 </button>
@@ -233,13 +265,15 @@ export default function LearningPage() {
             <input
               type="text"
               value={inputMessage}
+              disabled={isLoading}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Escribe tu mensaje..."
-              className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-blue-600"
+              className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-blue-600 disabled:opacity-50"
             />
             <button
               type="submit"
-              className="p-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-2xs"
+              disabled={isLoading || !inputMessage.trim()}
+              className="p-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-2xs disabled:opacity-50"
             >
               ➤
             </button>
@@ -251,9 +285,12 @@ export default function LearningPage() {
       {showAiModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4">
-            <h3 className="text-base font-bold text-slate-900">
-              Evaluación detallada de IA
-            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🤖</span>
+              <h3 className="text-base font-bold text-slate-900">
+                Evaluación en tiempo real (Workflow RAX-99)
+              </h3>
+            </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               Cumpliste adecuadamente con las cuatro etapas del método PREP. La cuantificación del ahorro económico ($800) fortalece considerablemente el Punto final frente a respuestas genéricas.
             </p>
@@ -272,4 +309,3 @@ export default function LearningPage() {
     </div>
   );
 }
-

@@ -162,3 +162,65 @@ export async function invokeSyncChatN8n(
   }
 }
 
+/**
+ * Consulta en vivo el endpoint de health check de n8n (RAX-00).
+ */
+export async function checkN8nHealthLive(overrideUrl?: string): Promise<{
+  ok: boolean;
+  status: number;
+  latencyMs: number;
+  message: string;
+}> {
+  const baseUrl = overrideUrl ?? getN8nBaseUrl();
+  if (!baseUrl) {
+    return {
+      ok: false,
+      status: 503,
+      latencyMs: 0,
+      message: "N8N_WEBHOOK_BASE_URL no está configurado en las variables de entorno.",
+    };
+  }
+
+  const targetUrl = baseUrl.endsWith("/")
+    ? `${baseUrl}webhook/rax-health`
+    : `${baseUrl}/webhook/rax-health`;
+
+  const start = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: "GET",
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const latencyMs = Date.now() - start;
+
+    if (res.ok) {
+      return {
+        ok: true,
+        status: res.status,
+        latencyMs,
+        message: "Instancia de n8n en línea y respondiendo vía webhook.",
+      };
+    }
+
+    return {
+      ok: false,
+      status: res.status,
+      latencyMs,
+      message: `n8n respondió con estado HTTP ${res.status}`,
+    };
+  } catch (err: unknown) {
+    clearTimeout(timer);
+    const latencyMs = Date.now() - start;
+    return {
+      ok: false,
+      status: 500,
+      latencyMs,
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+

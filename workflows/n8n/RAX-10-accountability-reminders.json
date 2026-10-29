@@ -40,7 +40,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const correlationId = 'corr_acc_' + Date.now();\n\nconst systemPrompt = `Eres el gestor de accountability y recordatorios de RAX.\\nTu función es evaluar compromisos en riesgo o vencidos y formular borradores de seguimiento no invasivos.\\nREGLAS:\\n1. No dispares comunicaciones externas; solo genera borradores de notificación para revisión del mentor.\\n2. Distingue entre tareas por vencer y tareas con bloqueo declarado.\\n3. Salida en JSON estricto con: reminderDrafts (array de objetos con taskId, recipientRole, messageDraft, urgency), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  scheduledRunAt: new Date().toISOString(),\n  criteria: 'overdue_or_upcoming_48h'\n});\n\nreturn [{\n  json: {\n    correlationId,\n    callbackUrl: ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const correlationId = 'corr_acc_' + Date.now();\n\nconst systemPrompt = `Eres el gestor de accountability y recordatorios de RAX.\\nTu función es evaluar compromisos en riesgo o vencidos y formular borradores de seguimiento no invasivos.\\nREGLAS:\\n1. No dispares comunicaciones externas; solo genera borradores de notificación para revisión del mentor.\\n2. Distingue entre tareas por vencer y tareas con bloqueo declarado.\\n3. Salida en JSON estricto con: reminderDrafts (array de objetos con taskId, recipientRole, messageDraft, urgency), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  scheduledRunAt: new Date().toISOString(),\n  criteria: 'overdue_or_upcoming_48h'\n});\n\nreturn [{\n  json: {\n    correlationId,\n    callbackUrl: ($env.RAX_API_URL || 'https://rax-red.vercel.app') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-acc-prompt",
       "name": "Build Accountability Prompt",
@@ -65,7 +65,7 @@
             },
             {
               "name": "HTTP-Referer",
-              "value": "https://rax.app"
+              "value": "https://rax-red.vercel.app"
             },
             {
               "name": "X-Title",

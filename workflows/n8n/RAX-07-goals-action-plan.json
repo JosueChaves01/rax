@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el especialista en diseño de objetivos y hojas de ruta de RAX.\\nTu misión es proponer objetivos SMART vinculados al diagnóstico y estructurar un plan de acción.\\nREGLAS:\\n1. Cada objetivo debe contar con línea base (baseline), resultado esperado (targetResult), indicador verificable y prioridad.\\n2. Distingue entre la meta final y las actividades requeridas.\\n3. No impongas métricas artificiales; si un objetivo no puede medirse numéricamente, formula un indicador cualitativo verificable.\\n4. Salida en JSON estricto con: proposedGoals (array de objetos con title, description, whyItMatters, kind, baseline, targetResult, metricIndicator, priority), milestoneSuggestions (array), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  relationshipId: event.relationshipId,\n  confirmedDiagnosis: payload.confirmedDiagnosis || [],\n  prioritizedProblems: payload.prioritizedProblems || [],\n  founderContext: payload.founderContext || {}\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'http://localhost:3000') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const event = $input.first().json.event || $input.first().json;\nconst payload = event.payload || {};\n\nconst systemPrompt = `Eres el especialista en diseño de objetivos y hojas de ruta de RAX.\\nTu misión es proponer objetivos SMART vinculados al diagnóstico y estructurar un plan de acción.\\nREGLAS:\\n1. Cada objetivo debe contar con línea base (baseline), resultado esperado (targetResult), indicador verificable y prioridad.\\n2. Distingue entre la meta final y las actividades requeridas.\\n3. No impongas métricas artificiales; si un objetivo no puede medirse numéricamente, formula un indicador cualitativo verificable.\\n4. Salida en JSON estricto con: proposedGoals (array de objetos con title, description, whyItMatters, kind, baseline, targetResult, metricIndicator, priority), milestoneSuggestions (array), uncertainties (array).`;\n\nconst userPrompt = JSON.stringify({\n  projectId: event.projectId,\n  relationshipId: event.relationshipId,\n  confirmedDiagnosis: payload.confirmedDiagnosis || [],\n  prioritizedProblems: payload.prioritizedProblems || [],\n  founderContext: payload.founderContext || {}\n});\n\nreturn [{\n  json: {\n    correlationId: event.correlationId || 'corr_' + Date.now(),\n    callbackUrl: event.callback?.url || ($env.RAX_API_URL || 'https://rax-red.vercel.app') + '/api/n8n/callback',\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "node-code-prep-goals-prompt",
       "name": "Build Goals Prompt",
@@ -48,7 +48,7 @@
             },
             {
               "name": "HTTP-Referer",
-              "value": "https://rax.app"
+              "value": "https://rax-red.vercel.app"
             },
             {
               "name": "X-Title",
