@@ -411,7 +411,20 @@ export async function addEvidence(
 
 /* ───────────── Tareas ───────────── */
 
-export async function createTask(d: ServiceDeps, projectId: string, input: { title: string; experimentId?: string; assigneeId?: string; dueDate?: string }): Promise<Task> {
+export async function createTask(
+  d: ServiceDeps,
+  projectId: string,
+  input: {
+    title: string;
+    experimentId?: string;
+    assigneeId?: string;
+    dueDate?: string;
+    actionType?: ActionType;
+    milestoneId?: string;
+    goalId?: string;
+    blockedReason?: string;
+  },
+): Promise<Task> {
   await guard(d, projectId, "task.manage");
   const title = input.title.trim();
   if (!title) throw validation("La tarea necesita un título.");
@@ -419,8 +432,31 @@ export async function createTask(d: ServiceDeps, projectId: string, input: { tit
     const e = await d.repo.experiments.get(input.experimentId);
     if (!e || e.projectId !== projectId) throw notFound("El experimento no pertenece a este proyecto.");
   }
+  if (input.milestoneId) {
+    const m = await d.repo.roadmapMilestones.get(input.milestoneId);
+    if (!m || m.projectId !== projectId) throw notFound("El hito no pertenece a este proyecto.");
+  }
+  if (input.goalId) {
+    const g = await d.repo.mentorshipGoals.get(input.goalId);
+    if (!g || g.projectId !== projectId) throw notFound("El objetivo no pertenece a este proyecto.");
+  }
+  const actionType: ActionType = input.actionType ?? (input.experimentId ? "experiment" : "operational_task");
   const now = d.now();
-  const t: Task = { id: d.newId("task"), projectId, title: title.slice(0, 200), experimentId: input.experimentId, assigneeId: input.assigneeId ?? d.actor.id, status: "todo", dueDate: input.dueDate, createdAt: now, updatedAt: now };
+  const t: Task = {
+    id: d.newId("task"),
+    projectId,
+    title: title.slice(0, 200),
+    actionType,
+    milestoneId: input.milestoneId,
+    goalId: input.goalId,
+    experimentId: input.experimentId,
+    assigneeId: input.assigneeId ?? d.actor.id,
+    status: input.blockedReason?.trim() ? "blocked" : "todo",
+    dueDate: input.dueDate,
+    blockedReason: input.blockedReason?.trim().slice(0, 500),
+    createdAt: now,
+    updatedAt: now,
+  };
   await d.repo.tasks.insert(t);
   return t;
 }
@@ -428,7 +464,16 @@ export async function createTask(d: ServiceDeps, projectId: string, input: { tit
 export async function createTasksBatch(
   d: ServiceDeps,
   projectId: string,
-  tasks: Array<{ title: string; experimentId?: string; dueDate?: string }>,
+  tasks: Array<{
+    title: string;
+    experimentId?: string;
+    assigneeId?: string;
+    dueDate?: string;
+    actionType?: ActionType;
+    milestoneId?: string;
+    goalId?: string;
+    blockedReason?: string;
+  }>,
 ): Promise<Task[]> {
   await guard(d, projectId, "task.manage");
   const created: Task[] = [];

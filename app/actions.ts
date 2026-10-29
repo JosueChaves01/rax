@@ -15,6 +15,7 @@ import type {
   ResultOutcome,
   SessionNoteKind,
   TaskStatus,
+  MilestoneStatus,
   CompatibilityStatus,
   GoalStatus,
   MentorshipStage,
@@ -66,6 +67,17 @@ import {
   type MentorshipAgreementInput,
   type MentorshipGoalInput,
 } from "@/lib/services/mentorship-relation";
+import {
+  attachEvidenceToTask,
+  createMilestone,
+  deleteMilestone,
+  diagnoseTaskDelay,
+  setTaskBlocked,
+  updateMilestone,
+  updateMilestoneStatus,
+  type DelayDiagnosisInput,
+  type MilestoneInput,
+} from "@/lib/services/roadmap";
 import * as V from "@/lib/validation/inputs";
 
 export type ActionResult<T = undefined> = { ok: true; data?: T; notice?: string } | { ok: false; error: string; code?: string };
@@ -353,13 +365,16 @@ export const addEvidenceAction = async (
   run(projectId, async (d) => {
     await addEvidence(d, V.parse(V.Ids, projectId), V.parse(V.EvidenceInput, input));
   });
-export const createTaskAction = async (projectId: string, input: { title: string; experimentId?: string; dueDate?: string }) =>
+export const createTaskAction = async (
+  projectId: string,
+  input: Parameters<typeof createTask>[2],
+) =>
   run(projectId, async (d) => {
-    await createTask(d, V.parse(V.Ids, projectId), V.parse(V.TaskInput, input));
+    return await createTask(d, V.parse(V.Ids, projectId), V.parse(V.TaskInput, input));
   });
 export const createTasksBatchAction = async (
   projectId: string,
-  tasks: Array<{ title: string; experimentId?: string; dueDate?: string }>,
+  tasks: Parameters<typeof createTasksBatch>[2],
 ) =>
   run(projectId, async (d) => {
     return createTasksBatch(
@@ -375,6 +390,63 @@ export const suggestExperimentTasksAction = async (projectId: string, experiment
 export const setTaskStatusAction = async (projectId: string, taskId: string, status: TaskStatus) =>
   run(projectId, async (d) => {
     await setTaskStatus(d, V.parse(V.Ids, taskId), V.parse(V.TaskStatus, status));
+  });
+
+/* ── Hoja de Ruta y Tareas Multimodales ── */
+
+export const createMilestoneAction = async (projectId: string, input: MilestoneInput) =>
+  run(projectId, async (d) => {
+    return createMilestone(d, V.parse(V.Ids, projectId), V.parse(V.MilestoneInput, input));
+  });
+
+export const updateMilestoneAction = async (
+  projectId: string,
+  milestoneId: string,
+  patch: Partial<MilestoneInput>,
+) =>
+  run(projectId, async (d) => {
+    return updateMilestone(d, V.parse(V.Ids, milestoneId), patch);
+  });
+
+export const updateMilestoneStatusAction = async (
+  projectId: string,
+  milestoneId: string,
+  status: MilestoneStatus,
+) =>
+  run(projectId, async (d) => {
+    return updateMilestoneStatus(d, V.parse(V.Ids, milestoneId), V.parse(V.MilestoneStatus, status));
+  });
+
+export const deleteMilestoneAction = async (projectId: string, milestoneId: string) =>
+  run(projectId, async (d) => {
+    await deleteMilestone(d, V.parse(V.Ids, milestoneId));
+  });
+
+export const diagnoseTaskDelayAction = async (
+  projectId: string,
+  taskId: string,
+  input: DelayDiagnosisInput,
+) =>
+  run(projectId, async (d) => {
+    return diagnoseTaskDelay(d, V.parse(V.Ids, taskId), V.parse(V.DelayHypothesisInput, input));
+  });
+
+export const setTaskBlockedAction = async (
+  projectId: string,
+  taskId: string,
+  blockedReason: string,
+) =>
+  run(projectId, async (d) => {
+    return setTaskBlocked(d, V.parse(V.Ids, taskId), blockedReason);
+  });
+
+export const attachEvidenceToTaskAction = async (
+  projectId: string,
+  taskId: string,
+  evidenceId: string,
+) =>
+  run(projectId, async (d) => {
+    return attachEvidenceToTask(d, V.parse(V.Ids, taskId), V.parse(V.Ids, evidenceId));
   });
 
 /* ── Administración ── */
