@@ -16,7 +16,10 @@
       "name": "Execute Workflow Trigger",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
-      "position": [200, 300]
+      "position": [
+        200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -26,7 +29,10 @@
       "name": "Build Intervention Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -58,7 +64,10 @@
       "name": "Call OpenRouter Intervention",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -68,7 +77,10 @@
       "name": "Format Intervention Callback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [920, 300]
+      "position": [
+        920,
+        300
+      ]
     },
     {
       "parameters": {
@@ -98,7 +110,10 @@
       "name": "Send Callback to RAX",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1160, 300]
+      "position": [
+        1160,
+        300
+      ]
     }
   ],
   "connections": {
@@ -151,13 +166,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": [
-    {
-      "name": "RAX"
-    },
-    {
-      "name": "Intervention"
-    }
-  ]
+  "tags": []
 }
-

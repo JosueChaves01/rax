@@ -12,7 +12,10 @@
       "name": "Webhook Event Ingress",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [180, 300],
+      "position": [
+        180,
+        300
+      ],
       "webhookId": "rax-events-ingress"
     },
     {
@@ -23,7 +26,10 @@
       "name": "Verify HMAC & Schema",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 300]
+      "position": [
+        400,
+        300
+      ]
     },
     {
       "parameters": {
@@ -40,7 +46,10 @@
       "name": "Is Signature Valid?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [620, 300]
+      "position": [
+        620,
+        300
+      ]
     },
     {
       "parameters": {
@@ -54,7 +63,10 @@
       "name": "Reject Unauthorized",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [840, 180]
+      "position": [
+        840,
+        180
+      ]
     },
     {
       "parameters": {
@@ -68,7 +80,10 @@
       "name": "Respond 202 Accepted",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [840, 420]
+      "position": [
+        840,
+        420
+      ]
     },
     {
       "parameters": {
@@ -104,7 +119,10 @@
       "name": "Route by EventType",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [1080, 420]
+      "position": [
+        1080,
+        420
+      ]
     }
   ],
   "connections": {
@@ -164,13 +182,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": [
-    {
-      "name": "RAX"
-    },
-    {
-      "name": "Ingress"
-    }
-  ]
+  "tags": []
 }
-

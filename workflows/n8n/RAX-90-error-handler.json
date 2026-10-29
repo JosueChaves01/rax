@@ -7,7 +7,10 @@
       "name": "Workflow Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [200, 300]
+      "position": [
+        200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -17,7 +20,10 @@
       "name": "Classify & Sanitize Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -47,7 +53,10 @@
       "name": "Report Error to RAX",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     }
   ],
   "connections": {
@@ -78,13 +87,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": [
-    {
-      "name": "RAX"
-    },
-    {
-      "name": "Error"
-    }
-  ]
+  "tags": []
 }
-

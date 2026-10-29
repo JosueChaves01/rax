@@ -12,7 +12,10 @@
       "name": "Webhook Health Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [220, 300],
+      "position": [
+        220,
+        300
+      ],
       "webhookId": "rax-health-check"
     },
     {
@@ -27,7 +30,10 @@
       "name": "Ping RAX API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -59,7 +65,10 @@
       "name": "Ping OpenRouter Model",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -69,7 +78,10 @@
       "name": "Evaluate Diagnostics",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -83,7 +95,10 @@
       "name": "Respond Diagnostic Report",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     }
   ],
   "connections": {
@@ -136,13 +151,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": [
-    {
-      "name": "RAX"
-    },
-    {
-      "name": "Integration"
-    }
-  ]
+  "tags": []
 }
-

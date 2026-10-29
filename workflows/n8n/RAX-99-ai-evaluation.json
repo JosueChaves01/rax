@@ -12,7 +12,10 @@
       "name": "Webhook Run Eval Suite",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "rax-eval-suite-ingress"
     },
     {
@@ -23,7 +26,10 @@
       "name": "Execute 12 Test Cases",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -37,7 +43,10 @@
       "name": "Respond Suite Report",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     }
   ],
   "connections": {
@@ -68,13 +77,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": [
-    {
-      "name": "RAX"
-    },
-    {
-      "name": "Testing"
-    }
-  ]
+  "tags": []
 }
-

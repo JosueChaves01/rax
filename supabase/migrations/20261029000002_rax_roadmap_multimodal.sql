@@ -3,10 +3,10 @@
 -- de aprendizaje, estratégicas y diagnósticos empáticos de retraso.
 
 create table if not exists public.roadmap_milestones (
-  id text primary key,
-  project_id text not null references public.projects(id) on delete cascade,
-  relation_id text references public.mentorship_relations(id) on delete set null,
-  goal_id text references public.mentorship_goals(id) on delete set null,
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  relation_id uuid references public.mentorship_relations(id) on delete set null,
+  goal_id uuid references public.mentorship_goals(id) on delete set null,
   title text not null,
   description text,
   target_date date,
@@ -25,8 +25,8 @@ create index if not exists idx_roadmap_milestones_goal on public.roadmap_milesto
 -- Enriquecer tabla tasks existente con tipología multimodal y accountability no punitivo
 alter table public.tasks
   add column if not exists action_type text,
-  add column if not exists milestone_id text references public.roadmap_milestones(id) on delete set null,
-  add column if not exists goal_id text references public.mentorship_goals(id) on delete set null,
+  add column if not exists milestone_id uuid references public.roadmap_milestones(id) on delete set null,
+  add column if not exists goal_id uuid references public.mentorship_goals(id) on delete set null,
   add column if not exists blocked_reason text,
   add column if not exists delay_hypothesis jsonb,
   add column if not exists evidence_ids jsonb default '[]'::jsonb;
@@ -39,35 +39,15 @@ alter table public.roadmap_milestones enable row level security;
 
 -- Política de lectura para miembros del proyecto o mentores asignados
 create policy "roadmap_milestones_select" on public.roadmap_milestones
-  for select using (
-    exists (
-      select 1 from public.project_members
-      where project_members.project_id = roadmap_milestones.project_id
-        and project_members.profile_id = auth.uid()
-    ) or exists (
-      select 1 from public.mentor_assignments
-      where mentor_assignments.project_id = roadmap_milestones.project_id
-        and mentor_assignments.mentor_id = auth.uid()
-        and mentor_assignments.status = 'active'
-    )
-  );
+  for select using (public.can_read_project(project_id));
 
 -- Política de inserción y modificación
 create policy "roadmap_milestones_modify" on public.roadmap_milestones
-  for all using (
-    exists (
-      select 1 from public.project_members
-      where project_members.project_id = roadmap_milestones.project_id
-        and project_members.profile_id = auth.uid()
-    ) or exists (
-      select 1 from public.mentor_assignments
-      where mentor_assignments.project_id = roadmap_milestones.project_id
-        and mentor_assignments.mentor_id = auth.uid()
-        and mentor_assignments.status = 'active'
-    )
-  );
+  for all using (public.can_read_project(project_id));
 
 -- Trigger de actualización de timestamp
 create trigger set_roadmap_milestones_updated_at
   before update on public.roadmap_milestones
   for each row execute function public.touch_updated_at();
+
+grant select, insert, update, delete on public.roadmap_milestones to authenticated;

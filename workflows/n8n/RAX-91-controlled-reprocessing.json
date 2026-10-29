@@ -12,7 +12,10 @@
       "name": "Webhook Reprocess Ingress",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "rax-reprocess-ingress"
     },
     {
@@ -23,7 +26,10 @@
       "name": "Verify Admin Authorization",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -40,7 +46,10 @@
       "name": "Is Authorized?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -54,7 +63,10 @@
       "name": "Respond 202 Reprocess Queued",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [920, 240]
+      "position": [
+        920,
+        240
+      ]
     },
     {
       "parameters": {
@@ -68,7 +80,10 @@
       "name": "Respond 403 Forbidden",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [920, 420]
+      "position": [
+        920,
+        420
+      ]
     }
   ],
   "connections": {
@@ -117,13 +132,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": [
-    {
-      "name": "RAX"
-    },
-    {
-      "name": "Reprocessing"
-    }
-  ]
+  "tags": []
 }
-

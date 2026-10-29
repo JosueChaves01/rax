@@ -12,7 +12,10 @@
       "name": "Webhook Chat Ingress",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [180, 300],
+      "position": [
+        180,
+        300
+      ],
       "webhookId": "rax-chat-ingress"
     },
     {
@@ -23,7 +26,10 @@
       "name": "Sanitize & Build Chat Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 300]
+      "position": [
+        400,
+        300
+      ]
     },
     {
       "parameters": {
@@ -40,7 +46,10 @@
       "name": "Is Chat Authorized?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [620, 300]
+      "position": [
+        620,
+        300
+      ]
     },
     {
       "parameters": {
@@ -72,7 +81,10 @@
       "name": "Call OpenRouter Chat Model",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [840, 240]
+      "position": [
+        840,
+        240
+      ]
     },
     {
       "parameters": {
@@ -82,7 +94,10 @@
       "name": "Validate & Structure Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1060, 240]
+      "position": [
+        1060,
+        240
+      ]
     },
     {
       "parameters": {
@@ -96,7 +111,10 @@
       "name": "Respond Synchronous Chat",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1280, 240]
+      "position": [
+        1280,
+        240
+      ]
     },
     {
       "parameters": {
@@ -110,7 +128,10 @@
       "name": "Respond Unauthorized",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [840, 420]
+      "position": [
+        840,
+        420
+      ]
     }
   ],
   "connections": {
@@ -181,13 +202,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": [
-    {
-      "name": "RAX"
-    },
-    {
-      "name": "Chat"
-    }
-  ]
+  "tags": []
 }
-

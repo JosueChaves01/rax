@@ -105,3 +105,8 @@ create policy cycle_evaluations_manage on public.cycle_evaluations
       where id = auth.uid() and role in ('mentor', 'admin')
     )
   );
+
+grant select, insert, update on public.mentor_resources to authenticated;
+grant select, insert, update, delete on public.mentor_interventions to authenticated;
+grant select, insert, update on public.cycle_evaluations to authenticated;
+

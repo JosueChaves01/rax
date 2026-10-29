@@ -16,7 +16,10 @@
       "name": "Daily 9AM Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [200, 300]
+      "position": [
+        200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -30,7 +33,10 @@
       "name": "Check RAX API Available",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -40,7 +46,10 @@
       "name": "Build Accountability Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -72,7 +81,10 @@
       "name": "Call OpenRouter Reminders",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [920, 300]
+      "position": [
+        920,
+        300
+      ]
     },
     {
       "parameters": {
@@ -82,7 +94,10 @@
       "name": "Format Accountability Callback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1160, 300]
+      "position": [
+        1160,
+        300
+      ]
     },
     {
       "parameters": {
@@ -112,7 +127,10 @@
       "name": "Send Callback to RAX",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1400, 300]
+      "position": [
+        1400,
+        300
+      ]
     }
   ],
   "connections": {
@@ -176,13 +194,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": [
-    {
-      "name": "RAX"
-    },
-    {
-      "name": "Accountability"
-    }
-  ]
+  "tags": []
 }
-

@@ -279,19 +279,3 @@ export const CycleEvaluationInput = z.object({
   decision: CycleDecision,
   nextCycleFocus: str(2000).optional(),
 });
-
-
-export const SessionScheduleInput = z.object({
-  kind: SessionKind,
-  scheduledAt: z.string().max(40).optional(),
-  relationId: id.optional(),
-});
-
-export const SessionNoteInput = z.object({
-  kind: NoteKind,
-  body: str(2000),
-  isPrivate: z.boolean().optional(),
-  relatedItemId: id.optional(),
-});
-
-export const SessionNotesBatchInput = z.array(SessionNoteInput).min(1).max(25);
