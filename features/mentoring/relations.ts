@@ -5,7 +5,7 @@ export const MENTORSHIP_STAGE_TRANSITIONS: Record<MentorshipStage, MentorshipSta
   exploration: ["diagnosis", "closed"],
   diagnosis: ["exploration", "agreement", "closed"],
   agreement: ["diagnosis", "active_mentoring", "closed"],
-  active_mentoring: ["agreement", "evaluation", "closed"],
+  active_mentoring: ["agreement", "evaluation", "renewed", "closed"],
   evaluation: ["renewed", "closed", "active_mentoring"],
   renewed: ["diagnosis", "agreement", "active_mentoring", "closed"],
   closed: ["renewed"],

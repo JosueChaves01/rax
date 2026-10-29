@@ -279,19 +279,57 @@ export interface Comment {
 
 /* ───────────── Mentoría ───────────── */
 
-export type MentorSessionKind = "first_review" | "second_review";
+export type MentorSessionKind =
+  | "first_review"
+  | "second_review"
+  | "exploratory"
+  | "follow_up"
+  | "evaluation";
 export type MentorSessionStatus = "pending" | "in_progress" | "completed";
 
 export type MentorDecision = "continue" | "reformulate" | "deepen" | "pause" | "discard";
+
+export interface PreSessionBriefing {
+  generatedAt: ISODate;
+  activeAgreementsAndGoalsSummary: string;
+  recentProgressSummary: string;
+  pendingTopicsSummary: string;
+  suggestedAgenda: string[];
+  suggestedQuestions: string[];
+  rationale?: string;
+}
+
+export interface PostSessionSynthesis {
+  generatedAt: ISODate;
+  summary: string;
+  agreedDecisions: string[];
+  entrepreneurCommitments: Array<{
+    title: string;
+    actionType?: ActionType;
+    dueDate?: string;
+    goalId?: string;
+  }>;
+  mentorCommitments: Array<{
+    title: string;
+    dueDate?: string;
+  }>;
+  nextSteps?: string;
+  suggestedNextSessionInDays?: number;
+}
 
 export interface MentorSession {
   id: Id;
   projectId: Id;
   mentorId: Id;
+  relationId?: Id;
   kind: MentorSessionKind;
   status: MentorSessionStatus;
+  scheduledAt?: ISODate;
+  startedAt?: ISODate;
   /** Resumen preparado (determinista desde el diagnóstico) que el mentor lee antes de intervenir. */
   briefing?: MentorBriefing;
+  preSessionBriefing?: PreSessionBriefing;
+  postSessionSynthesis?: PostSessionSynthesis;
   decision?: { value: MentorDecision; justification: string; hypothesisId?: Id; decidedAt: ISODate };
   createdAt: ISODate;
   completedAt?: ISODate;
@@ -308,7 +346,14 @@ export interface MentorBriefing {
   questionsForMentor: string[];
 }
 
-export type SessionNoteKind = "observation" | "question" | "suggestion" | "agreement";
+export type SessionNoteKind =
+  | "observation"
+  | "question"
+  | "suggestion"
+  | "agreement"
+  | "commitment"
+  | "blocker"
+  | "decision";
 
 export interface SessionNote {
   id: Id;
@@ -317,6 +362,7 @@ export interface SessionNote {
   authorId: Id;
   kind: SessionNoteKind;
   body: string;
+  isPrivate?: boolean;
   relatedItemId?: Id;
   createdAt: ISODate;
 }
@@ -555,6 +601,88 @@ export interface Evidence {
   createdAt: ISODate;
 }
 
+/* ───────────── Cartera del Mentor y Recursos ───────────── */
+
+export type ResourceCategory = "framework" | "questionnaire" | "template" | "guide" | "experiment_pattern";
+
+export interface MentorResource {
+  id: Id;
+  title: string;
+  category: ResourceCategory;
+  description: string;
+  content: string;
+  tags: string[];
+  authorMentorId?: Id;
+  isPublic: boolean;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export type InterventionUrgency = "high" | "medium" | "low";
+export type InterventionCategory =
+  | "unresolved_blocker"
+  | "stalled_progress"
+  | "session_prep_needed"
+  | "pending_agreement"
+  | "goal_stalled"
+  | "cycle_review_needed";
+export type InterventionStatus = "pending" | "accepted" | "dismissed" | "snoozed";
+
+export interface MentorIntervention {
+  id: Id;
+  mentorId: Id;
+  relationId: Id;
+  projectId: Id;
+  projectName: string;
+  urgency: InterventionUrgency;
+  category: InterventionCategory;
+  title: string;
+  explanation: {
+    whatHappened: string;
+    whyItMatters: string;
+    supportingData: string;
+    suggestedAction: string;
+  };
+  status: InterventionStatus;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+/* ───────────── Evaluación de Ciclo, Cierre y Renovación ───────────── */
+
+export type AutonomyRating = "nascent" | "developing" | "autonomous";
+export type CycleDecision = "renew" | "close" | "new_stage";
+
+export interface GoalEvaluation {
+  goalId: Id;
+  goalTitle: string;
+  baseline: string;
+  targetResult: string;
+  actualResult: string;
+  status: GoalStatus;
+  evidenceNotes: string;
+}
+
+export interface CycleEvaluation {
+  id: Id;
+  relationId: Id;
+  projectId: Id;
+  cycleNumber: number;
+  evaluatedAt: ISODate;
+  evaluatedBy: Id;
+  goalEvaluations: GoalEvaluation[];
+  autonomyAssessment: {
+    rating: AutonomyRating;
+    observations: string;
+  };
+  mentorFeedback: string;
+  entrepreneurFeedback?: string;
+  decision: CycleDecision;
+  nextCycleFocus?: string;
+  version: number;
+  createdAt: ISODate;
+}
+
 /* ───────────── Auditoría ───────────── */
 
 export type AuditAction =
@@ -588,7 +716,19 @@ export type AuditAction =
   | "roadmap.milestone_created"
   | "roadmap.milestone_updated"
   | "roadmap.milestone_status_changed"
-  | "task.delay_diagnosed";
+  | "task.delay_diagnosed"
+  | "session.scheduled"
+  | "session.started"
+  | "session.briefing_generated"
+  | "session.synthesis_generated"
+  | "session.commitments_adopted"
+  | "session.completed"
+  | "mentorship.cycle_evaluated"
+  | "mentorship.closed"
+  | "mentorship.renewed"
+  | "resource.created"
+  | "resource.updated"
+  | "intervention.dismissed";
 
 export interface AuditEvent {
   id: Id;

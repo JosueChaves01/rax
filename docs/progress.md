@@ -27,13 +27,18 @@ Estados: PLANNED · IN_PROGRESS · IMPLEMENTED · PARTIAL · BLOCKED · DEPRECAT
 | **Hitos de Hoja de Ruta (`RoadmapMilestones`) (Etapa 4)** | IMPLEMENTED | `lib/services/roadmap.ts`, `app/app/p/[id]/tareas`, `tests/roadmap-multimodal.test.ts` (Escenario D1) |
 | **Acciones Multimodales sin experimentos forzados (Etapa 4)** | IMPLEMENTED | `lib/services/validation.ts`, `types/domain.ts`, `app/app/p/[id]/tareas`, `tests/roadmap-multimodal.test.ts` (Escenario D2) |
 | **Accountability no punitivo y diagnóstico de causas (Etapa 6)** | IMPLEMENTED | `lib/services/roadmap.ts`, `DelayHypothesis`, modal en `task-board.tsx`, `tests/roadmap-multimodal.test.ts` (Escenario D3) |
-| **Ciclo de sesiones, briefing contextual y privacidad (Etapa 5)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts`, `tests/mentoring-ai.test.ts`, `briefing.ts` |
-| **Evaluación de resultados, cierre y renovación (Etapa 7)** | IMPLEMENTED | `tests/mentorship-lifecycle.test.ts` (Escenario I Global, preservación histórica) |
+| **Ciclo de sesiones con briefing 4-capas y privacidad dual (Etapa 4)** | IMPLEMENTED | `lib/services/mentoring.ts`, `/app/p/[id]/orientar`, `tests/mentorship-sessions.test.ts` (Escenarios E1–E3) |
+| **Productividad del mentor y cartera de clientes (Fase 5)** | IMPLEMENTED | `lib/services/portfolio.ts`, `/app/mentor`, `tests/mentor-portfolio.test.ts` (Escenarios F1–F2) |
+| **Biblioteca de recursos y recomendación contextual (Fase 5)** | IMPLEMENTED | `lib/services/resources.ts`, `/app/mentor/recursos`, `tests/mentor-resources.test.ts` (Escenarios G1–G3) |
+| **Evaluación de resultados, cierre y renovación (Fase 6)** | IMPLEMENTED | `lib/services/evaluation.ts`, `/app/p/[id]/evaluacion`, `tests/cycle-evaluation.test.ts` (Escenarios H1–H2) |
 | **Integración n8n + OpenRouter (Catálogo RAX-00..RAX-99)** | IMPLEMENTED | 19 workflows en `workflows/n8n/`, contratos Zod en `lib/n8n/contracts.ts`, endpoints `/api/n8n/*`, HMAC en `lib/n8n/security.ts`, tests en `tests/n8n/` |
 
-
-## Punto de continuación (Plan Swarm)
-
-1. **Fase 4:** Ciclo de sesiones de mentoría (briefing pre-sesión con 4 capas de memoria, notas en vivo, resumen pos-sesión con compromisos y privacidad entre notas privadas/compartidas).
-2. **Fase 5:** Productividad del mentor (cartera de clientes, priorización de intervenciones y alertas tempranas de riesgo de abandono).
-3. **Fase 6:** Evaluación, cierre de ciclo o renovación con reporte longitudinal.
+## Resumen del Swarm de Implementación
+- **Fase 0 (Auditoría):** Completada.
+- **Fase 1 (Fundamentos y Relación de Mentoría):** Completada y verificada.
+- **Fase 2 (Exploración, Diagnóstico y Acuerdos):** Completada y verificada.
+- **Fase 3 (Hoja de Ruta y Ejecución Multimodal):** Completada y verificada.
+- **Fase 4 (Sesiones, Chat y Memoria Contextual):** Completada y verificada.
+- **Fase 5 (Productividad del Mentor: Cartera y Recursos):** Completada y verificada.
+- **Fase 6 (Evaluación de Resultados, Cierre y Renovación):** Completada y verificada.
+- **Fase 7 (Medición de Impacto, Instrumentación y Piloto):** Preparada para verificación y piloto con 81/81 pruebas automatizadas pasando.

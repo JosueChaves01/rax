@@ -79,7 +79,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
   const { project, rel } = await guard(d, projectId, "project.read");
   const r = d.repo;
   const where = { projectId };
-  const [diagnoses, items, history, comments, messages, sessions, notes, hypotheses, experiments, results, tasks, evidence, assignments, auditEvents, mentorshipRelations, roadmapMilestones] =
+  const [diagnoses, items, history, comments, messages, sessions, notes, hypotheses, experiments, results, tasks, evidence, assignments, auditEvents, mentorshipRelations, roadmapMilestones, cycleEvaluations] =
     await Promise.all([
       r.diagnoses.list(where),
       r.diagnosisItems.list(where),
@@ -97,6 +97,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
       r.auditEvents.list(where),
       r.mentorshipRelations.list(where),
       r.roadmapMilestones.list(where),
+      r.cycleEvaluations.list(where),
     ]);
   const diagnosis = diagnoses[0];
   const status = deriveDiagnosisStatus(diagnosis, items, sessions, hypotheses);
@@ -159,6 +160,8 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
         "goal.manage",
         "roadmap.manage",
         "task.diagnose_delay",
+        "cycle.evaluate",
+        "resource.manage",
       ] as const
     ).map((a) => [a, can(d.actor, a, rel)]),
   ) as Record<string, boolean>;
@@ -177,11 +180,12 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
     messages: canSeeConversation ? byTime(messages) : [],
     conversationHidden: !canSeeConversation,
     sessions: byTime(sessions),
-    notes: byTime(notes),
+    notes: byTime(notes.filter((n) => !n.isPrivate || n.authorId === d.actor.id)),
     hypotheses: byTime(hypotheses),
     experiments: byTime(experiments),
     results: byTime(results),
     tasks: byTime(tasks),
+    cycleEvaluations: byTime(cycleEvaluations),
     mentorshipRelation: activeMentorshipRelation,
     mentorshipRelations: byTime(mentorshipRelations),
     mentorshipAgreements: byTime(mentorshipAgreements),

@@ -21,11 +21,17 @@ import type {
   HypothesisSuggestionContext,
   HypothesesSuggestionResult,
   InterviewContext,
+  PostSessionSynthesisContext,
+  PostSessionSynthesisResult,
+  PreSessionBriefingContext,
+  PreSessionBriefingResult,
 } from "./provider";
 import type {
   AiProposal,
   AiTurn,
   GoalsSuggestion,
+  PostSessionSynthesisSuggestion,
+  PreSessionBriefingSuggestion,
   SuggestedExperiment,
   SuggestedHypothesis,
   SuggestedNote,
@@ -367,6 +373,114 @@ export class SimulatedProvider implements AiProvider {
 
     return {
       suggestion,
+      provider: "simulated",
+    };
+  }
+
+  async generatePreSessionBriefing(ctx: PreSessionBriefingContext): Promise<PreSessionBriefingResult> {
+    const goalsSummary = ctx.goals.length
+      ? ctx.goals.map((g) => `• [${g.status}] ${g.title} (Línea base: ${g.baseline} → Esperado: ${g.targetResult})`).join("\n")
+      : "No hay objetivos formalizados todavía.";
+
+    const agreementSummary = ctx.agreement
+      ? `Acuerdo bilateral: Frecuencia ${ctx.agreement.frequency ?? "quincenal"}, alcance: ${ctx.agreement.scope ?? "acompañamiento estratégico"}.`
+      : "Acuerdo bilateral pendiente de formalización.";
+
+    const completed = ctx.recentCompletedTasks.length
+      ? ctx.recentCompletedTasks.map((t) => `• ${t.title} (${t.actionType ?? "tarea"})`).join("\n")
+      : "Sin tareas completadas recientemente.";
+
+    const blocked = ctx.blockedOrDelayedTasks.length
+      ? ctx.blockedOrDelayedTasks.map((t) => `• ${t.title}: ${t.delayCause ? `Causa: ${t.delayCause}${t.delayDetail ? ` (${t.delayDetail})` : ""}` : t.blockedReason ?? "demora informada"}`).join("\n")
+      : "Sin bloqueos ni demoras reportadas.";
+
+    const exps = ctx.experimentsInProgress.length
+      ? ctx.experimentsInProgress.map((e) => `• Experimento en curso: ${e.question} (${e.metric ?? "métrica"})`).join("\n")
+      : "";
+
+    const recentProgressSummary = `Avances realizados:\n${completed}\n\nDificultades y bloqueos:\n${blocked}${exps ? `\n\nExperimentos:\n${exps}` : ""}`;
+
+    const prevNotes = ctx.previousSessionNotes.length
+      ? ctx.previousSessionNotes.map((n) => `• [${n.kind}] ${n.body}`).join("\n")
+      : "Primera sesión o sin notas registradas de la reunión anterior.";
+
+    const pendingTopicsSummary = `Temas arrastrados de la última sesión:\n${prevNotes}`;
+
+    const suggestedAgenda = [
+      "1. Revisión de estado de ánimo, disponibilidad de tiempo y contexto general (5 min)",
+      "2. Análisis de avances y causas explicativas de bloqueos o demoras (15 min)",
+      "3. Discusión estratégica sobre el objetivo prioritario vigente (25 min)",
+      "4. Definición y asignación de nuevos compromisos mutuos (15 min)",
+    ];
+
+    const suggestedQuestions = [
+      "¿Qué fue lo más retador o inesperado que encontraste desde la última sesión?",
+      "De los compromisos pendientes, ¿cuál destrabaría mayor valor si lo resolvemos primero?",
+      "¿Qué apoyo específico o recurso clave necesitás de mi parte como mentor esta semana?",
+    ];
+
+    const briefing: PreSessionBriefingSuggestion = {
+      activeAgreementsAndGoalsSummary: `${agreementSummary}\n\nObjetivos vigentes:\n${goalsSummary}`,
+      recentProgressSummary,
+      pendingTopicsSummary,
+      suggestedAgenda,
+      suggestedQuestions,
+      rationale: "Briefing estructurado en 4 capas de memoria para preparación ágil de la sesión.",
+    };
+
+    return {
+      briefing,
+      provider: "simulated",
+    };
+  }
+
+  async generatePostSessionSynthesis(ctx: PostSessionSynthesisContext): Promise<PostSessionSynthesisResult> {
+    const agreementsAndDecisions = ctx.sessionNotes
+      .filter((n) => n.kind === "agreement" || n.kind === "decision")
+      .map((n) => n.body);
+
+    const commitmentsNotes = ctx.sessionNotes
+      .filter((n) => n.kind === "commitment")
+      .map((n) => n.body);
+
+    const generalNotes = ctx.sessionNotes
+      .filter((n) => !n.isPrivate)
+      .map((n) => `[${n.kind}] ${n.body}`)
+      .join("\n");
+
+    const summary = ctx.sessionNotes.length
+      ? `Sesión enfocada en ${ctx.sessionKind}. Se revisaron avances, se destrabaron dificultades y se definieron los próximos pasos inmediatos.\n\nPuntos tratados:\n${generalNotes.slice(0, 800)}`
+      : `Sesión de ${ctx.sessionKind} completada exitosamente.`;
+
+    const entrepreneurCommitments = commitmentsNotes.length
+      ? commitmentsNotes.map((c) => ({
+          title: c.slice(0, 180),
+          actionType: "operational_task" as const,
+        }))
+      : [
+          {
+            title: "Ejecutar las acciones acordadas en la sesión",
+            actionType: "operational_task" as const,
+          },
+        ];
+
+    const mentorCommitments = [
+      {
+        title: "Revisar avances en la plataforma RAX antes del próximo encuentro",
+      },
+    ];
+
+    const synthesis: PostSessionSynthesisSuggestion = {
+      summary,
+      agreedDecisions: agreementsAndDecisions.length ? agreementsAndDecisions : ["Continuar con el plan de acción acordado."],
+      entrepreneurCommitments,
+      mentorCommitments,
+      nextSteps: "El emprendedor comenzará la ejecución de los compromisos asumidos; el mentor estará disponible para consultas asincrónicas.",
+      suggestedNextSessionInDays: 14,
+    };
+
+    return {
+      synthesis,
       provider: "simulated",
     };
   }

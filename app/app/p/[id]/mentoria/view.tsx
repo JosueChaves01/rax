@@ -1,12 +1,14 @@
 import Link from "next/link";
 import type { MentorSession } from "@/types/domain";
 import { Empty, Notice, Tag } from "@/shared/ui/primitives";
-import { EXPERTISE_LABEL, GOAL_LABEL, WEEKLY_HOURS_LABEL } from "@/features/labels";
+import { EXPERTISE_LABEL, GOAL_LABEL, WEEKLY_HOURS_LABEL, RESOURCE_CATEGORY_LABEL } from "@/features/labels";
+import { getDeps } from "@/lib/runtime";
+import { suggestContextualResources } from "@/lib/services/resources";
 import { loadWorkspace } from "../data";
 import { ReviewRequests, SessionCard, SharingToggle } from "./sessions";
 import { PriorityPanel } from "../orientar/priority-panel";
 
-const COPY = {
+const COPY: Record<MentorSession["kind"], { stage: string; title: readonly [string, string]; empty: string }> = {
   first_review: {
     stage: "Etapa 2 · Orientar",
     title: ["Primera", "revisión."],
@@ -18,14 +20,35 @@ const COPY = {
     title: ["Segunda", "revisión."],
     empty: "La segunda revisión se pide cuando hay al menos un resultado registrado. Ahí se contrastan los resultados con los criterios y se decide cómo seguir.",
   },
-} as const;
+
+  exploratory: {
+    stage: "Etapa 1 · Explorar",
+    title: ["Sesión", "exploratoria."],
+    empty: "Espacio para evaluar química, expectativas de tiempo y compatibilidad mutua antes de fijar acuerdos formales.",
+  },
+  follow_up: {
+    stage: "Etapa 3 · Ejecución",
+    title: ["Sesión de", "seguimiento."],
+    empty: "Encuentro periódico de acompañamiento para revisar avances, desbloquear obstáculos y acordar nuevos compromisos.",
+  },
+  evaluation: {
+    stage: "Etapa 5 · Evaluar",
+    title: ["Evaluación de", "ciclo."],
+    empty: "Evaluación formal de resultados contrastados con la línea base y cierre o renovación de etapa.",
+  },
+};
 
 /** Revisión del mentor de una etapa: la primera orienta (etapa 2), la segunda decide (etapa 4). */
 export async function MentoringView({ id, kind }: { id: string; kind: MentorSession["kind"] }) {
   const { w, actor } = await loadWorkspace(id);
   const copy = COPY[kind];
+  const d = await getDeps();
+  const suggestedResources = d && w.isMentorView ? await suggestContextualResources(d, id) : [];
   const mentorNames = w.mentors.map((m) => w.people[m]?.name).filter(Boolean);
-  const sessions = w.sessions.filter((s) => s.kind === kind).reverse();
+  const sessions =
+    kind === "second_review"
+      ? w.sessions.filter((s) => s.kind === "second_review" || s.kind === "evaluation").reverse()
+      : w.sessions.filter((s) => s.kind !== "second_review" && s.kind !== "evaluation").reverse();
   const firstDone = w.sessions.some((s) => s.kind === "first_review" && s.status === "completed");
 
   return (
@@ -90,6 +113,28 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
         </Notice>
       )}
 
+      {w.isMentorView && suggestedResources.length > 0 && (
+        <div className="rounded-2xl border border-cyan/40 bg-cyan/5 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="eyebrow text-cyan">Recursos recomendados para el momento actual</p>
+            <Link href="/app/mentor/recursos" className="text-xs font-semibold text-cyan hover:underline">
+              Ver biblioteca completa →
+            </Link>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {suggestedResources.map((s) => (
+              <div key={s.resource.id} className="rounded-xl border border-line bg-panel p-3 text-xs space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-ink">{s.resource.title}</span>
+                  <Tag color="var(--color-cyan)">{RESOURCE_CATEGORY_LABEL[s.resource.category]}</Tag>
+                </div>
+                <p className="text-muted text-[0.6875rem]">{s.whyItHelpsNow}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {sessions.length === 0 ? (
         <Empty title="Sin revisión todavía">{copy.empty}</Empty>
       ) : (
@@ -106,6 +151,8 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
               hypotheses={w.hypotheses}
               experiments={w.experiments}
               results={w.results}
+              goals={w.mentorshipGoals}
+              roadmapMilestones={w.roadmapMilestones}
             />
           ))}
         </ul>

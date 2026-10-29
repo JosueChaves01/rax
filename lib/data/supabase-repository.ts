@@ -20,6 +20,9 @@ import type {
   SessionNote,
   RoadmapMilestone,
   Task,
+  MentorResource,
+  MentorIntervention,
+  CycleEvaluation,
 } from "@/types/domain";
 import { conflict, notFound } from "@/lib/errors";
 import type { Db, Row } from "./db";
@@ -310,7 +313,12 @@ const session: Spec<MentorSession> = {
     mentorId: ["mentor_id", same],
     kind: ["kind", same],
     status: ["status", same],
+    relationId: ["relation_id", nul],
+    scheduledAt: ["scheduled_at", ts],
+    startedAt: ["started_at", ts],
     briefing: ["briefing", nul],
+    preSessionBriefing: ["pre_session_briefing", nul],
+    postSessionSynthesis: ["post_session_synthesis", nul],
     createdAt: ["created_at", tsReq],
     completedAt: ["completed_at", ts],
   },
@@ -343,6 +351,7 @@ const note: Spec<SessionNote> = {
     authorId: ["author_id", same],
     kind: ["kind", same],
     body: ["body", same],
+    isPrivate: ["is_private", { to: (v) => v === true, from: (v) => v === true }],
     relatedItemId: ["related_item_id", nul],
     createdAt: ["created_at", tsReq],
   },
@@ -577,6 +586,64 @@ const roadmapMilestoneSpec: Spec<RoadmapMilestone> = {
   readOnly: ["version", "updatedAt"],
 };
 
+
+const mentorResourceSpec: Spec<MentorResource> = {
+  table: "mentor_resources",
+  fields: {
+    id: ["id", same],
+    title: ["title", same],
+    category: ["category", same],
+    description: ["description", same],
+    content: ["content", same],
+    tags: ["tags", arr],
+    authorMentorId: ["author_mentor_id", nul],
+    isPublic: ["is_public", same],
+    createdAt: ["created_at", tsReq],
+    updatedAt: ["updated_at", tsReq],
+  },
+  readOnly: ["updatedAt"],
+};
+
+const mentorInterventionSpec: Spec<MentorIntervention> = {
+  table: "mentor_interventions",
+  fields: {
+    id: ["id", same],
+    mentorId: ["mentor_id", same],
+    relationId: ["relation_id", same],
+    projectId: ["project_id", same],
+    projectName: ["project_name", same],
+    urgency: ["urgency", same],
+    category: ["category", same],
+    title: ["title", same],
+    explanation: ["explanation", nul],
+    status: ["status", same],
+    createdAt: ["created_at", tsReq],
+    updatedAt: ["updated_at", tsReq],
+  },
+  readOnly: ["updatedAt"],
+};
+
+const cycleEvaluationSpec: Spec<CycleEvaluation> = {
+  table: "cycle_evaluations",
+  fields: {
+    id: ["id", same],
+    relationId: ["relation_id", same],
+    projectId: ["project_id", same],
+    cycleNumber: ["cycle_number", num],
+    evaluatedAt: ["evaluated_at", tsReq],
+    evaluatedBy: ["evaluated_by", same],
+    goalEvaluations: ["goal_evaluations", arr],
+    autonomyAssessment: ["autonomy_assessment", nul],
+    mentorFeedback: ["mentor_feedback", same],
+    entrepreneurFeedback: ["entrepreneur_feedback", nul],
+    decision: ["decision", same],
+    nextCycleFocus: ["next_cycle_focus", nul],
+    version: ["version", same],
+    createdAt: ["created_at", tsReq],
+  },
+  readOnly: ["version"],
+};
+
 class HistoryTable extends PgTable<DiagnosisItemHistory> {
   constructor(private readonly hdb: Db) {
     super(hdb, history);
@@ -614,5 +681,8 @@ export function createPgRepository(db: Db): Repository {
     tasks: new PgTable(db, task),
     evidence: new PgTable(db, evidence),
     auditEvents: new PgTable(db, auditSpec),
+    mentorResources: new PgTable(db, mentorResourceSpec),
+    mentorInterventions: new PgTable(db, mentorInterventionSpec),
+    cycleEvaluations: new PgTable(db, cycleEvaluationSpec),
   };
 }

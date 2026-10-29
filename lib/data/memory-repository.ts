@@ -1,5 +1,7 @@
 import { conflict, notFound } from "@/lib/errors";
 import type { Repository, Table } from "./repository";
+import { DEFAULT_MENTOR_RESOURCES } from "@/lib/resources/defaults";
+import type { MentorResource } from "@/types/domain";
 
 /**
  * Implementación en memoria del repositorio. Se usa en las pruebas.
@@ -64,5 +66,12 @@ export function createMemoryRepository(): Repository {
     tasks: new MemoryTable(),
     evidence: new MemoryTable(),
     auditEvents: new MemoryTable(),
+    mentorResources: (() => {
+      const t = new MemoryTable<MentorResource>();
+      for (const r of DEFAULT_MENTOR_RESOURCES) void t.insert(r);
+      return t;
+    })(),
+    mentorInterventions: new MemoryTable(),
+    cycleEvaluations: new MemoryTable(),
   };
 }

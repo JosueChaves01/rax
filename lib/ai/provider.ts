@@ -1,5 +1,5 @@
 import type { DiagnosisItem, InterviewDimension, Message } from "@/types/domain";
-import type { AiTurn, ExperimentTasksSuggestion, FirstReviewSuggestion, GoalsSuggestion, HypothesesSuggestion, SuggestedExperiment } from "./schema";
+import type { AiTurn, ExperimentTasksSuggestion, FirstReviewSuggestion, GoalsSuggestion, HypothesesSuggestion, PostSessionSynthesisSuggestion, PreSessionBriefingSuggestion, SuggestedExperiment } from "./schema";
 
 /**
  * Contexto seleccionado para una invocación. No se envía todo el historial:
@@ -218,6 +218,57 @@ export interface GoalsSuggestionResult {
   usage?: AiUsage;
 }
 
+export interface PreSessionBriefingContext {
+  projectName: string;
+  projectNature: string;
+  projectSummary: string;
+  sessionKind: string;
+  mentorName?: string;
+  entrepreneurName?: string;
+  // Capa 1: Acuerdos y Objetivos vigentes
+  agreement?: {
+    scope?: string;
+    frequency?: string;
+    mentorCommitments?: string;
+    entrepreneurCommitments?: string;
+  };
+  goals: Array<{
+    id: string;
+    title: string;
+    baseline: string;
+    targetResult: string;
+    status: string;
+    priority: string;
+  }>;
+  // Capa 2: Progreso y Ejecución reciente
+  recentCompletedTasks: Array<{ title: string; actionType?: string }>;
+  blockedOrDelayedTasks: Array<{ title: string; blockedReason?: string; delayCause?: string; delayDetail?: string }>;
+  experimentsInProgress: Array<{ question: string; status: string; metric?: string }>;
+  // Capa 3: Temas pendientes y notas previas
+  previousSessionNotes: Array<{ kind: string; body: string }>;
+  recentMessages?: Array<{ author: string; content: string }>;
+}
+
+export interface PreSessionBriefingResult {
+  briefing: PreSessionBriefingSuggestion;
+  provider: "simulated" | "openrouter";
+  usage?: AiUsage;
+}
+
+export interface PostSessionSynthesisContext {
+  projectName: string;
+  sessionKind: string;
+  sessionNotes: Array<{ kind: string; body: string; isPrivate?: boolean }>;
+  briefingAgenda?: string[];
+  goals: Array<{ id: string; title: string }>;
+}
+
+export interface PostSessionSynthesisResult {
+  synthesis: PostSessionSynthesisSuggestion;
+  provider: "simulated" | "openrouter";
+  usage?: AiUsage;
+}
+
 export interface AiProvider {
   readonly id: "simulated" | "openrouter";
   /** Texto visible que describe el proveedor (la simulación se declara como tal). */
@@ -228,6 +279,8 @@ export interface AiProvider {
   suggestExperiment(ctx: ExperimentSuggestionContext): Promise<ExperimentSuggestionResult>;
   suggestExperimentTasks(ctx: ExperimentTasksContext): Promise<ExperimentTasksResult>;
   suggestGoalsAndAgreement(ctx: GoalsSuggestionContext): Promise<GoalsSuggestionResult>;
+  generatePreSessionBriefing(ctx: PreSessionBriefingContext): Promise<PreSessionBriefingResult>;
+  generatePostSessionSynthesis(ctx: PostSessionSynthesisContext): Promise<PostSessionSynthesisResult>;
 }
 
 export class AiUnavailableError extends Error {

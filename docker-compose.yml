@@ -1,0 +1,70 @@
+version: "3.8"
+
+services:
+  n8n:
+    build:
+      context: .
+      dockerfile: Dockerfile.n8n
+    image: rax-n8n:latest
+    container_name: rax-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-meta-llama/llama-3.3-70b-instruct:free}
+      - RAX_API_URL=${NEXT_PUBLIC_APP_URL:-http://host.docker.internal:3000}
+      - RAX_N8N_SHARED_SECRET=${RAX_N8N_SHARED_SECRET:-${SUPABASE_SERVICE_ROLE_KEY}}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://host.docker.internal:3000}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows/n8n:/workflows:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - rax-network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: rax-cloudflared
+    restart: unless-stopped
+    environment:
+      - CLOUDFLARED_TUNNEL_ID=${CLOUDFLARED_TUNNEL_ID:-7db304ca-f8b7-475b-899f-277390502c09}
+      - CLOUDFLARED_TUNNEL_TOKEN=${CLOUDFLARED_TUNNEL_TOKEN:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "
+      if [ -n \"$$CLOUDFLARED_TUNNEL_TOKEN\" ]; then
+        echo '=> Iniciando Cloudflare Tunnel con token gestionado...'
+        exec cloudflared tunnel --no-autoupdate run --token \"$$CLOUDFLARED_TUNNEL_TOKEN\"
+      elif [ -f \"/etc/cloudflared/credentials.json\" ]; then
+        echo '=> Iniciando Cloudflare Tunnel con credentials.json y Tunnel ID $$CLOUDFLARED_TUNNEL_ID...'
+        exec cloudflared tunnel --no-autoupdate --config /etc/cloudflared/config.yml run \"$$CLOUDFLARED_TUNNEL_ID\"
+      else
+        echo '=> AVISO: No se detectó CLOUDFLARED_TUNNEL_TOKEN ni credentials.json.'
+        echo '=> Iniciando tunel provisional para n8n...'
+        exec cloudflared tunnel --no-autoupdate --url http://n8n:5678
+      fi
+      "
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - n8n
+    networks:
+      - rax-network
+
+networks:
+  rax-network:
+    driver: bridge
+
+volumes:
+  n8n_data:
+

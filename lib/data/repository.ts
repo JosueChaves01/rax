@@ -21,6 +21,9 @@ import type {
   SessionNote,
   RoadmapMilestone,
   Task,
+  MentorResource,
+  MentorIntervention,
+  CycleEvaluation,
 } from "@/types/domain";
 
 /**
@@ -65,4 +68,7 @@ export interface Repository {
   tasks: Table<Task>;
   evidence: Table<Evidence>;
   auditEvents: Table<AuditEvent>;
+  mentorResources: Table<MentorResource>;
+  mentorInterventions: Table<MentorIntervention>;
+  cycleEvaluations: Table<CycleEvaluation>;
 }

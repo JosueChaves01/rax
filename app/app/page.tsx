@@ -27,9 +27,19 @@ export default async function ProjectsPage() {
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <p className="eyebrow">Hola, {d.actor.name.split(" ")[0]}</p>
       {isMentor ? (
-        <Heading level={1} highlight={inbox.length === 0 ? "pendiente." : inbox.length === 1 ? "1 cosa." : `${inbox.length} cosas.`} className="mt-3">
-          {inbox.length ? (inbox.length === 1 ? "Te espera" : "Te esperan") : "Nada"}
-        </Heading>
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <Heading level={1} highlight={inbox.length === 0 ? "pendiente." : inbox.length === 1 ? "1 cosa." : `${inbox.length} cosas.`}>
+            {inbox.length ? (inbox.length === 1 ? "Te espera" : "Te esperan") : "Nada"}
+          </Heading>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/app/mentor" className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white hover:bg-accent-strong">
+              🎛️ Cartera y próximas intervenciones →
+            </Link>
+            <Link href="/app/mentor/recursos" className="inline-flex items-center gap-2 rounded-full border border-line-strong bg-panel px-4 py-2 text-xs font-semibold text-ink hover:bg-raised">
+              📚 Recursos
+            </Link>
+          </div>
+        </div>
       ) : (
         <Heading level={1} highlight="proyectos." className="mt-3">
           Tus

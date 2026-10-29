@@ -1,0 +1,14 @@
+FROM docker.n8n.io/n8nio/n8n:latest
+
+USER root
+
+# Crear directorios y copiar workflows preconfigurados
+RUN mkdir -p /workflows
+COPY workflows/n8n/ /workflows/
+COPY scripts/entrypoint-n8n.sh /entrypoint-n8n.sh
+RUN chmod +x /entrypoint-n8n.sh
+
+USER node
+
+ENTRYPOINT ["/entrypoint-n8n.sh"]
+

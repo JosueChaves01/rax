@@ -13,6 +13,7 @@ import type {
   InitiativeNature,
   InterviewDimension,
   MentorDecision,
+  MentorSessionKind,
   ProjectPhase,
   ResultOutcome,
   ReviewStatus,
@@ -30,6 +31,12 @@ import type {
   ActionType,
   DelayCauseCategory,
   MilestoneStatus,
+  ResourceCategory,
+  AutonomyRating,
+  CycleDecision,
+  InterventionUrgency,
+  InterventionCategory,
+  InterventionStatus,
 } from "@/types/domain";
 
 /** Textos visibles centralizados (es). Ningún componente define etiquetas de dominio por su cuenta. */
@@ -179,6 +186,17 @@ export const NOTE_KIND_LABEL: Record<SessionNoteKind, string> = {
   question: "Pregunta",
   suggestion: "Sugerencia",
   agreement: "Acuerdo",
+  commitment: "Compromiso",
+  blocker: "Bloqueo",
+  decision: "Decisión",
+};
+
+export const SESSION_KIND_LABEL: Record<MentorSessionKind, string> = {
+  first_review: "Primera revisión",
+  second_review: "Segunda revisión",
+  exploratory: "Sesión exploratoria",
+  follow_up: "Sesión de seguimiento",
+  evaluation: "Evaluación de ciclo / Cierre",
 };
 
 export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
@@ -325,4 +343,52 @@ export const MILESTONE_STATUS_LABEL: Record<MilestoneStatus, string> = {
   in_progress: "En curso",
   achieved: "Alcanzado",
   deferred: "Postergado",
+};
+
+/* ── Recursos del Mentor ── */
+
+export const RESOURCE_CATEGORY_LABEL: Record<ResourceCategory, string> = {
+  framework: "Framework de trabajo",
+  questionnaire: "Cuestionario / Guía de entrevista",
+  template: "Plantilla operativa",
+  guide: "Guía metodológica",
+  experiment_pattern: "Patrón de experimento",
+};
+
+/* ── Cartera e Intervenciones ── */
+
+export const INTERVENTION_URGENCY_LABEL: Record<InterventionUrgency, string> = {
+  high: "Urgente",
+  medium: "Atención sugerida",
+  low: "Oportunidad de mejora",
+};
+
+export const INTERVENTION_CATEGORY_LABEL: Record<InterventionCategory, string> = {
+  unresolved_blocker: "Bloqueo operativo no diagnosticado",
+  stalled_progress: "Retraso o falta de actividad reciente",
+  session_prep_needed: "Preparación de sesión requerida",
+  pending_agreement: "Acuerdo de trabajo pendiente",
+  goal_stalled: "Objetivo prioritario sin avance",
+  cycle_review_needed: "Ciclo listo para evaluación",
+};
+
+export const INTERVENTION_STATUS_LABEL: Record<InterventionStatus, string> = {
+  pending: "Pendiente",
+  accepted: "Atendida",
+  dismissed: "Descartada",
+  snoozed: "Pospuesta",
+};
+
+/* ── Evaluación de Ciclo y Cierre ── */
+
+export const AUTONOMY_RATING_LABEL: Record<AutonomyRating, string> = {
+  nascent: "Inicial · Requiere acompañamiento estrecho",
+  developing: "En desarrollo · Resuelve con retroalimentación periódica",
+  autonomous: "Autónomo · Criterio propio y ejecución independiente",
+};
+
+export const CYCLE_DECISION_LABEL: Record<CycleDecision, string> = {
+  renew: "Renovar acompañamiento (nuevo ciclo)",
+  close: "Cierre exitoso del proceso de mentoría",
+  new_stage: "Ajustar objetivos y continuar",
 };

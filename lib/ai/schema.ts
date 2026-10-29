@@ -176,3 +176,52 @@ export type SuggestedGoal = z.infer<typeof SuggestedGoalSchema>;
 export type SuggestedAgreementTerms = z.infer<typeof SuggestedAgreementTermsSchema>;
 export type GoalsSuggestion = z.infer<typeof GoalsSuggestionSchema>;
 
+
+
+/* ── Fase 4: Sesiones y Memoria Contextual ── */
+
+export const PreSessionBriefingSchema = z.object({
+  activeAgreementsAndGoalsSummary: z.string().max(2000),
+  recentProgressSummary: z.string().max(2000),
+  pendingTopicsSummary: z.string().max(2000),
+  suggestedAgenda: z.array(z.string().max(300)).min(1).max(6),
+  suggestedQuestions: z.array(z.string().max(300)).min(1).max(6),
+  rationale: z.string().max(500).optional(),
+});
+
+export const PostSessionCommitmentSchema = z.object({
+  title: z.string().min(3).max(200),
+  actionType: z
+    .enum([
+      "operational_task",
+      "skill_learning",
+      "business_decision",
+      "conversation_third_party",
+      "financial_review",
+      "mentor_intervention",
+      "experiment",
+      "research",
+      "expert_referral",
+    ])
+    .default("operational_task"),
+  dueDate: z.string().max(40).optional(),
+  goalId: z.string().optional(),
+});
+
+export const MentorCommitmentSchema = z.object({
+  title: z.string().min(3).max(200),
+  dueDate: z.string().max(40).optional(),
+});
+
+export const PostSessionSynthesisSchema = z.object({
+  summary: z.string().min(10).max(3000),
+  agreedDecisions: z.array(z.string().max(400)).max(10).default([]),
+  entrepreneurCommitments: z.array(PostSessionCommitmentSchema).max(10).default([]),
+  mentorCommitments: z.array(MentorCommitmentSchema).max(10).default([]),
+  nextSteps: z.string().max(1000).optional(),
+  suggestedNextSessionInDays: z.number().int().min(1).max(90).optional(),
+});
+
+export type PreSessionBriefingSuggestion = z.infer<typeof PreSessionBriefingSchema>;
+export type PostSessionSynthesisSuggestion = z.infer<typeof PostSessionSynthesisSchema>;
+export type SuggestedPostSessionCommitment = z.infer<typeof PostSessionCommitmentSchema>;

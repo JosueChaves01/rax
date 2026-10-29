@@ -1,0 +1,16 @@
+# Configuración de Cloudflare Tunnel para RAX n8n
+# Documentación: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+
+tunnel: 7db304ca-f8b7-475b-899f-277390502c09
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  # Enrutar el tráfico entrante al contenedor de n8n
+  - service: http://n8n:5678
+    originRequest:
+      noTLSVerify: true
+      connectTimeout: 30s
+
+  # Regla final de captura obligatoria en cloudflared
+  - service: http_status:404
+

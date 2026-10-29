@@ -5,6 +5,8 @@ import {
   FirstReviewSuggestionSchema,
   GoalsSuggestionSchema,
   HypothesesSuggestionSchema,
+  PostSessionSynthesisSchema,
+  PreSessionBriefingSchema,
   SuggestedExperimentSchema,
 } from "./schema";
 import {
@@ -22,6 +24,10 @@ import {
   type HypothesisSuggestionContext,
   type HypothesesSuggestionResult,
   type InterviewContext,
+  type PostSessionSynthesisContext,
+  type PostSessionSynthesisResult,
+  type PreSessionBriefingContext,
+  type PreSessionBriefingResult,
 } from "./provider";
 import {
   EXPERIMENT_SUGGESTION_SYSTEM_PROMPT,
@@ -29,12 +35,16 @@ import {
   FIRST_REVIEW_SYSTEM_PROMPT,
   GOALS_SUGGESTION_SYSTEM_PROMPT,
   HYPOTHESIS_SUGGESTION_SYSTEM_PROMPT,
+  POST_SESSION_SYNTHESIS_SYSTEM_PROMPT,
+  PRE_SESSION_BRIEFING_SYSTEM_PROMPT,
   renderContext,
   renderExperimentSuggestionContext,
   renderExperimentTasksContext,
   renderFirstReviewContext,
   renderGoalsSuggestionContext,
   renderHypothesisSuggestionContext,
+  renderPostSessionSynthesisContext,
+  renderPreSessionBriefingContext,
   SYSTEM_PROMPT,
 } from "./prompt";
 import { hypothesisIssues } from "@/features/hypotheses/rules";
@@ -202,6 +212,110 @@ export class OpenRouterProvider implements AiProvider {
     }
     const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
     throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  async generatePreSessionBriefing(ctx: PreSessionBriefingContext): Promise<PreSessionBriefingResult> {
+    const base: ChatMessage[] = [
+      { role: "system", content: PRE_SESSION_BRIEFING_SYSTEM_PROMPT },
+      { role: "user", content: renderPreSessionBriefingContext(ctx) },
+    ];
+    let last: ModelFailure | null = null;
+    for (const model of this.models) {
+      try {
+        return await this.generatePreSessionBriefingWith(model, base);
+      } catch (e) {
+        if (!(e instanceof ModelFailure)) throw e;
+        last = e;
+        if (!e.retryOther) break;
+      }
+    }
+    const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
+    throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  private async generatePreSessionBriefingWith(model: string, base: ChatMessage[]): Promise<PreSessionBriefingResult> {
+    const messages = [...base];
+    const opts = { mergeSystem: false, jsonMode: true };
+    let lastProblem = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const data = await this.callAdapting(model, messages, opts);
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const parsed = safeJson(raw);
+      const result = PreSessionBriefingSchema.safeParse(parsed);
+      if (result.success) {
+        return {
+          briefing: result.data,
+          provider: "openrouter",
+          usage: {
+            model: data.model ?? model,
+            inputTokens: data.usage?.prompt_tokens ?? 0,
+            outputTokens: data.usage?.completion_tokens ?? 0,
+          },
+        };
+      }
+      lastProblem = result.error.issues
+        .slice(0, 5)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      messages.push(
+        { role: "assistant", content: raw.slice(0, 4000) },
+        { role: "user", content: `Tu respuesta no cumple el esquema (${lastProblem}). Respondé solo con el JSON corregido.` },
+      );
+    }
+    console.error(`[openrouter] ${model}: salida inválida tras ${MAX_ATTEMPTS} intentos: ${lastProblem}`);
+    throw new ModelFailure("invalid_output", `El modelo devolvió una respuesta inválida: ${lastProblem}`, true);
+  }
+
+  async generatePostSessionSynthesis(ctx: PostSessionSynthesisContext): Promise<PostSessionSynthesisResult> {
+    const base: ChatMessage[] = [
+      { role: "system", content: POST_SESSION_SYNTHESIS_SYSTEM_PROMPT },
+      { role: "user", content: renderPostSessionSynthesisContext(ctx) },
+    ];
+    let last: ModelFailure | null = null;
+    for (const model of this.models) {
+      try {
+        return await this.generatePostSessionSynthesisWith(model, base);
+      } catch (e) {
+        if (!(e instanceof ModelFailure)) throw e;
+        last = e;
+        if (!e.retryOther) break;
+      }
+    }
+    const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
+    throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  private async generatePostSessionSynthesisWith(model: string, base: ChatMessage[]): Promise<PostSessionSynthesisResult> {
+    const messages = [...base];
+    const opts = { mergeSystem: false, jsonMode: true };
+    let lastProblem = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const data = await this.callAdapting(model, messages, opts);
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const parsed = safeJson(raw);
+      const result = PostSessionSynthesisSchema.safeParse(parsed);
+      if (result.success) {
+        return {
+          synthesis: result.data,
+          provider: "openrouter",
+          usage: {
+            model: data.model ?? model,
+            inputTokens: data.usage?.prompt_tokens ?? 0,
+            outputTokens: data.usage?.completion_tokens ?? 0,
+          },
+        };
+      }
+      lastProblem = result.error.issues
+        .slice(0, 5)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      messages.push(
+        { role: "assistant", content: raw.slice(0, 4000) },
+        { role: "user", content: `Tu respuesta no cumple el esquema (${lastProblem}). Respondé solo con el JSON corregido.` },
+      );
+    }
+    console.error(`[openrouter] ${model}: salida inválida tras ${MAX_ATTEMPTS} intentos: ${lastProblem}`);
+    throw new ModelFailure("invalid_output", `El modelo devolvió una respuesta inválida: ${lastProblem}`, true);
   }
 
   private async suggestGoalsAndAgreementWith(model: string, base: ChatMessage[]): Promise<GoalsSuggestionResult> {

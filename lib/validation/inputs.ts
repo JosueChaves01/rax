@@ -17,8 +17,8 @@ export const Uncertainty = z.enum(["low", "medium", "high", "unknown"]);
 export const HumanInfoType = z.enum(["entrepreneur_statement", "documented_observation", "hypothesis", "unknown"]);
 export const Nature = z.enum(["exploring_idea", "designing_solution", "operating_business", "unknown"]);
 export const ProjectStatus = z.enum(["active", "paused", "archived"]);
-export const SessionKind = z.enum(["first_review", "second_review"]);
-export const NoteKind = z.enum(["observation", "question", "suggestion", "agreement"]);
+export const SessionKind = z.enum(["first_review", "second_review", "exploratory", "follow_up", "evaluation"]);
+export const NoteKind = z.enum(["observation", "question", "suggestion", "agreement", "commitment", "blocker", "decision"]);
 export const Decision = z.enum(["continue", "reformulate", "deepen", "pause", "discard"]);
 export const Outcome = z.enum(["positive", "negative", "mixed", "inconclusive"]);
 export const TaskStatus = z.enum(["todo", "doing", "done", "blocked"]);
@@ -206,3 +206,92 @@ export const OnboardingInput = z.discriminatedUnion("intent", [
     profile: z.object({ intent: z.literal("admin"), organization: str(160), program: str(600) }),
   }),
 ]);
+
+
+export const SessionScheduleInput = z.object({
+  kind: SessionKind,
+  scheduledAt: z.string().max(40).optional(),
+  relationId: id.optional(),
+});
+
+export const SessionNoteInput = z.object({
+  kind: NoteKind,
+  body: str(2000),
+  isPrivate: z.boolean().optional(),
+  relatedItemId: id.optional(),
+});
+
+export const SessionNotesBatchInput = z.array(SessionNoteInput).min(1).max(25);
+
+/* ── Recursos del Mentor ── */
+
+export const ResourceCategory = z.enum([
+  "framework",
+  "questionnaire",
+  "template",
+  "guide",
+  "experiment_pattern",
+]);
+
+export const MentorResourceInput = z.object({
+  title: str(200),
+  category: ResourceCategory,
+  description: str(1000),
+  content: str(10000),
+  tags: z.array(str(50)).max(10).default([]),
+  isPublic: z.boolean().default(true),
+});
+
+/* ── Cartera e Intervenciones ── */
+
+export const InterventionStatus = z.enum(["pending", "accepted", "dismissed", "snoozed"]);
+
+export const UpdateInterventionInput = z.object({
+  status: InterventionStatus,
+});
+
+/* ── Evaluación de Ciclo y Cierre ── */
+
+export const AutonomyRating = z.enum(["nascent", "developing", "autonomous"]);
+
+export const CycleDecision = z.enum(["renew", "close", "new_stage"]);
+
+export const GoalEvaluationItem = z.object({
+  goalId: id,
+  goalTitle: str(200),
+  baseline: str(2000),
+  targetResult: str(2000),
+  actualResult: str(2000),
+  status: GoalStatus,
+  evidenceNotes: str(2000).default(""),
+});
+
+export const CycleEvaluationInput = z.object({
+  relationId: id,
+  cycleNumber: z.number().int().min(1).default(1),
+  goalEvaluations: z.array(GoalEvaluationItem).min(1).max(20),
+  autonomyAssessment: z.object({
+    rating: AutonomyRating,
+    observations: str(2000),
+  }),
+  mentorFeedback: str(4000),
+  entrepreneurFeedback: str(4000).optional(),
+  decision: CycleDecision,
+  nextCycleFocus: str(2000).optional(),
+});
+
+
+export const SessionScheduleInput = z.object({
+  kind: SessionKind,
+  scheduledAt: z.string().max(40).optional(),
+  relationId: id.optional(),
+});
+
+export const SessionNoteInput = z.object({
+  kind: NoteKind,
+  body: str(2000),
+  isPrivate: z.boolean().optional(),
+  relatedItemId: id.optional(),
+});
+
+export const SessionNotesBatchInput = z.array(SessionNoteInput).min(1).max(25);

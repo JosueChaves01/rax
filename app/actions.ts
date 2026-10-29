@@ -31,7 +31,20 @@ import type { ItemChange } from "@/features/diagnosis/rules";
 import { createProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
 import { sendMessage } from "@/lib/services/conversation";
 import { addComment, addItem, changeItem, confirmSummary, editSummary } from "@/lib/services/diagnosis";
-import { addNote, addNotesBatch, completeFirstReview, completeSecondReview, requestReview, startSession, suggestFirstReview } from "@/lib/services/mentoring";
+import {
+  addNote,
+  addNotesBatch,
+  adoptPostSessionCommitments,
+  completeFirstReview,
+  completeSecondReview,
+  completeSession,
+  generatePostSessionSynthesis,
+  generatePreSessionBriefing,
+  requestReview,
+  scheduleSession,
+  startSession,
+  suggestFirstReview,
+} from "@/lib/services/mentoring";
 import {
   addEvidence,
   approveHypothesis,
@@ -78,6 +91,10 @@ import {
   type DelayDiagnosisInput,
   type MilestoneInput,
 } from "@/lib/services/roadmap";
+import { dismissIntervention } from "@/lib/services/portfolio";
+import { createResource } from "@/lib/services/resources";
+import { recordCycleEvaluation } from "@/lib/services/evaluation";
+import type { MentorIntervention } from "@/types/domain";
 import * as V from "@/lib/validation/inputs";
 
 export type ActionResult<T = undefined> = { ok: true; data?: T; notice?: string } | { ok: false; error: string; code?: string };
@@ -270,9 +287,59 @@ export const startSessionAction = async (projectId: string, sessionId: string) =
   run(projectId, async (d) => {
     await startSession(d, V.parse(V.Ids, sessionId));
   });
-export const addNoteAction = async (projectId: string, sessionId: string, kind: SessionNoteKind, body: string, relatedItemId?: string) =>
+export const scheduleSessionAction = async (
+  projectId: string,
+  input: { kind: MentorSessionKind; scheduledAt?: string; relationId?: string },
+) =>
   run(projectId, async (d) => {
-    await addNote(d, V.parse(V.Ids, sessionId), V.parse(V.NoteKind, kind), V.parse(V.Text(2000), body), relatedItemId ? V.parse(V.Ids, relatedItemId) : undefined);
+    return scheduleSession(d, V.parse(V.Ids, projectId), {
+      kind: V.parse(V.SessionKind, input.kind),
+      scheduledAt: input.scheduledAt,
+      relationId: input.relationId ? V.parse(V.Ids, input.relationId) : undefined,
+    });
+  });
+
+export const generatePreSessionBriefingAction = async (projectId: string, sessionId: string) =>
+  run(projectId, async (d) => {
+    return generatePreSessionBriefing(d, V.parse(V.Ids, sessionId));
+  });
+
+export const generatePostSessionSynthesisAction = async (projectId: string, sessionId: string) =>
+  run(projectId, async (d) => {
+    return generatePostSessionSynthesis(d, V.parse(V.Ids, sessionId));
+  });
+
+export const adoptPostSessionCommitmentsAction = async (
+  projectId: string,
+  sessionId: string,
+  selectedIndices?: number[],
+) =>
+  run(projectId, async (d) => {
+    return adoptPostSessionCommitments(d, V.parse(V.Ids, sessionId), selectedIndices);
+  });
+
+export const completeSessionAction = async (projectId: string, sessionId: string, summary?: string) =>
+  run(projectId, async (d) => {
+    return completeSession(d, V.parse(V.Ids, sessionId), summary);
+  });
+
+export const addNoteAction = async (
+  projectId: string,
+  sessionId: string,
+  kind: SessionNoteKind,
+  body: string,
+  relatedItemId?: string,
+  isPrivate?: boolean,
+) =>
+  run(projectId, async (d) => {
+    await addNote(
+      d,
+      V.parse(V.Ids, sessionId),
+      V.parse(V.NoteKind, kind),
+      V.parse(V.Text(2000), body),
+      relatedItemId ? V.parse(V.Ids, relatedItemId) : undefined,
+      isPrivate === true,
+    );
   });
 export const suggestFirstReviewAction = async (projectId: string, sessionId: string) =>
   run(projectId, async (d) => {
@@ -281,7 +348,7 @@ export const suggestFirstReviewAction = async (projectId: string, sessionId: str
 export const addNotesBatchAction = async (
   projectId: string,
   sessionId: string,
-  notes: Array<{ kind: SessionNoteKind; body: string; relatedItemId?: string | null }>,
+  notes: Array<{ kind: SessionNoteKind; body: string; relatedItemId?: string | null; isPrivate?: boolean }>,
 ) =>
   run(projectId, async (d) => {
     return addNotesBatch(
@@ -291,6 +358,7 @@ export const addNotesBatchAction = async (
         kind: V.parse(V.NoteKind, n.kind),
         body: V.parse(V.Text(2000), n.body),
         relatedItemId: n.relatedItemId ? V.parse(V.Ids, n.relatedItemId) : undefined,
+        isPrivate: n.isPrivate === true,
       })),
     );
   });
@@ -565,4 +633,30 @@ export const suggestGoalsAndAgreementAction = async (
       V.parse(V.Ids, projectId),
       V.parse(V.Ids, relationId),
     );
+  });
+
+/* ── Productividad del Mentor y Recursos ── */
+
+export const dismissInterventionAction = async (input: {
+  relationId: string;
+  category: MentorIntervention["category"];
+  interventionId?: string;
+}) =>
+  run(null, async (d) => {
+    await dismissIntervention(d, input);
+  });
+
+export const createResourceAction = async (input: unknown) =>
+  run(null, async (d) => {
+    return createResource(d, input);
+  });
+
+/* ── Evaluación de Ciclo y Cierre/Renovación ── */
+
+export const recordCycleEvaluationAction = async (
+  projectId: string,
+  input: unknown,
+) =>
+  run(projectId, async (d) => {
+    return recordCycleEvaluation(d, input);
   });
