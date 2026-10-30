@@ -1,54 +1,65 @@
-const sqlite3 = require('/usr/local/lib/node_modules/n8n/node_modules/sqlite3');
-const db = new sqlite3.Database('/home/node/.n8n/database.sqlite');
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync('/home/node/.n8n/database.sqlite');
 
-db.serialize(() => {
-  // Find old workflows
-  db.all("SELECT id, name, createdAt FROM workflow_entity WHERE createdAt LIKE '2026-10-29 21:42%'", (err, oldWorkflows) => {
-    if (err) {
-      console.error(err);
-      return;
-    }
-    console.log(`Found ${oldWorkflows.length} old workflows to remove.`);
-    const oldIds = oldWorkflows.map(w => w.id);
-    
-    if (oldIds.length === 0) {
-      console.log('No old workflows found.');
-      return;
-    }
+// Desactivar temporalmente foreign keys para poder limpiar los duplicados limpiamente
+db.exec('PRAGMA foreign_keys = OFF;');
 
-    const placeholders = oldIds.map(() => '?').join(',');
+const rows = db.prepare('SELECT id, name, createdAt FROM workflow_entity ORDER BY name, createdAt ASC').all();
+console.log('Workflows antes de limpiar:', rows.length);
 
-    // Delete from shared_workflow if exists
-    db.run(`DELETE FROM shared_workflow WHERE workflowId IN (${placeholders})`, oldIds, function(e1) {
-      if (e1) console.log('shared_workflow note:', e1.message);
-      else console.log(`Deleted ${this.changes} from shared_workflow`);
+const seen = new Set();
+const toDelete = [];
 
-      // Delete from workflow_tag if exists
-      db.run(`DELETE FROM workflow_tag WHERE workflowId IN (${placeholders})`, oldIds, function(e2) {
-        if (e2) console.log('workflow_tag note:', e2.message);
-        else console.log(`Deleted ${this.changes} from workflow_tag`);
+for (const row of rows) {
+  if (seen.has(row.name)) {
+    toDelete.push(row.id);
+  } else {
+    seen.add(row.name);
+  }
+}
 
-        // Delete from workflow_history if exists
-        db.run(`DELETE FROM workflow_history WHERE workflowId IN (${placeholders})`, oldIds, function(e3) {
-          if (e3) console.log('workflow_history note:', e3.message);
-          else console.log(`Deleted ${this.changes} from workflow_history`);
+console.log('Workflows duplicados a eliminar:', toDelete.length);
+console.log('Workflows únicos a conservar:', seen.size);
 
-          // Delete from workflow_entity
-          db.run(`DELETE FROM workflow_entity WHERE id IN (${placeholders})`, oldIds, function(e4) {
-            if (e4) console.error('Error deleting from workflow_entity:', e4);
-            else console.log(`Successfully deleted ${this.changes} old workflows from workflow_entity.`);
+const deleteTablesWithWorkflowId = [
+  'workflows_tags',
+  'shared_workflow',
+  'processed_data',
+  'insights_metadata',
+  'chat_hub_messages',
+  'workflow_dependency',
+  'workflow_published_version',
+  'chat_hub_sessions',
+  'workflow_builder_session',
+  'workflow_publish_history',
+  'ai_builder_temporary_workflow',
+  'evaluation_config',
+  'evaluation_collection',
+  'test_run',
+  'workflow_history',
+  'execution_entity',
+  'workflow_publication_trigger_status',
+  'workflow_review_request_workflow',
+  'poller_state',
+  'agent_workflow_dependency',
+  'workflow_publication_retry_state',
+  'migration_finding',
+  'migration_workflow_owner',
+  'workflow_suggestion',
+  'self_healing_result'
+];
 
-            // Verify remaining
-            db.all("SELECT id, name, createdAt FROM workflow_entity ORDER BY name", (e5, remaining) => {
-              if (e5) console.error(e5);
-              else {
-                console.log(`Remaining active workflows in n8n: ${remaining.length}`);
-                remaining.forEach(r => console.log(`- [${r.id}] ${r.name}`));
-              }
-            });
-          });
-        });
-      });
-    });
-  });
-});
+for (const id of toDelete) {
+  for (const table of deleteTablesWithWorkflowId) {
+    try {
+      db.prepare(`DELETE FROM ${table} WHERE workflowId = ?`).run(id);
+    } catch {}
+  }
+  db.prepare('DELETE FROM workflow_entity WHERE id = ?').run(id);
+}
+
+db.exec('PRAGMA foreign_keys = ON;');
+
+const remaining = db.prepare('SELECT id, name FROM workflow_entity ORDER BY name ASC').all();
+console.log('\nWorkflows únicos finales tras la limpieza (' + remaining.length + '):');
+remaining.forEach((r, idx) => console.log(`${idx + 1}. [${r.id}] ${r.name}`));

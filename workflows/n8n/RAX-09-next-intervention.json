@@ -58,7 +58,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"{{ $json.model }}\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.2,\n  \"max_tokens\": 1500\n}",
+        "jsonBody": "={{ JSON.stringify({\n  model: $json.model || 'nvidia/nemotron-3.5-super-vl:free',\n  messages: [\n    { role: 'system', content: $json.systemPrompt || '' },\n    { role: 'user', content: $json.userPrompt || '' }\n  ],\n  response_format: { type: 'json_object' },\n  temperature: 0.2,\n  max_tokens: 1500\n}) }}",
         "options": {
           "timeout": 45000
         }
