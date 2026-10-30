@@ -26,22 +26,40 @@ interface MessageView {
 }
 
 const QUICK_PROMPTS = [
-  "¿Cómo desglosamos este objetivo en tareas y experimentos?",
-  "Ayúdame a formular una hipótesis comprobable con métricas",
-  "Quiero preparar la agenda y temas para mi próxima sesión",
-  "Revisemos los bloqueos o dudas conceptuales principales",
+  "¿Qué preguntas me harías para diagnosticar mi punto de partida?",
+  "Sintetizar lo que sabemos en esta conversación como contexto para la etapa de Orientar",
+  "¿Cuáles son los supuestos y bloqueos principales que debo revisar con mi mentor?",
+  "Quiero ordenar mis dudas y objetivos antes de la primera sesión",
 ];
 
 export function ProjectConversationClient({
   projectId,
   projectName,
   stage = "entender",
+  phase = "conversation",
+  stageId = "entender",
+  stageLabel = "Entender",
+  stageQuestion = "¿Qué sé, qué supongo y qué me falta?",
+  diagnosisSummary,
+  summaryConfirmed = false,
+  diagnosisItemCount = 0,
+  hasMentor = false,
+  mentorNames = [],
   canWrite = true,
   isMentorView = false,
 }: {
   projectId: string;
   projectName: string;
   stage?: string;
+  phase?: string;
+  stageId?: string;
+  stageLabel?: string;
+  stageQuestion?: string;
+  diagnosisSummary?: string;
+  summaryConfirmed?: boolean;
+  diagnosisItemCount?: number;
+  hasMentor?: boolean;
+  mentorNames?: string[];
   canWrite?: boolean;
   isMentorView?: boolean;
 }) {
@@ -148,8 +166,14 @@ export function ProjectConversationClient({
         sessionContext: {
           location: "project_conversation",
           pageTitle: `Conversación del proyecto «${projectName}»`,
-          stage,
+          stage: stageId,
+          phase,
           isMentorView,
+          diagnosisSummary,
+          summaryConfirmed,
+          diagnosisItemCount,
+          hasMentor,
+          mentorNames,
         },
       });
 
@@ -292,20 +316,96 @@ export function ProjectConversationClient({
           </div>
         </header>
 
+        {/* ── BARRA DE ETAPA Y CONTEXTO PARA ORIENTAR ── */}
+        <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-slate-50 border-b border-blue-100/90 px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1 max-w-2xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white font-mono text-[10px] font-bold uppercase tracking-wider shadow-2xs">
+                  Etapa 1 · {stageLabel}
+                </span>
+                <span className="text-xs font-semibold text-slate-800 italic">
+                  «{stageQuestion}»
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white text-slate-600 border border-slate-200">
+                  Fase: {phase === "new" ? "Descubrimiento inicial" : phase === "summary_pending" ? "Resumen pendiente" : "Conversación diagnóstica"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                En esta etapa conversamos para identificar qué sabés, tus bloqueos y tus metas. Tus respuestas se convierten en hallazgos para tu diagnóstico vivo y preparan el contexto que revisarán tu mentor y vos en la <strong>Etapa 2 · Orientar</strong>.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Link
+                href={`/app/p/${projectId}/diagnostico`}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition shadow-2xs flex items-center gap-1.5"
+                title="Ver el Diagnóstico Vivo del proyecto"
+              >
+                <span>📋</span>
+                <span>{diagnosisItemCount} hallazgo{diagnosisItemCount === 1 ? "" : "s"}</span>
+              </Link>
+
+              {summaryConfirmed ? (
+                <Link
+                  href={`/app/p/${projectId}/orientar`}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition shadow-2xs flex items-center gap-1.5"
+                  title="Contexto confirmado. Ir a las sesiones de mentoría en Orientar"
+                >
+                  <span>✓</span>
+                  <span>Contexto listo · Ir a Orientar →</span>
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSendMessage(
+                      "Sintetizar lo que sabemos en esta conversación para consolidar el contexto de la etapa Entender y preparar la etapa Orientar.",
+                    )
+                  }
+                  disabled={isLoading || !canWrite}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Pedirle al agente que consolide el contexto de la conversación para la etapa de Orientar"
+                >
+                  <span>⚡</span>
+                  <span>Sintetizar para Orientar</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Lista de Mensajes del Hilo Activo */}
         <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4 max-h-[62vh]" aria-label="Mensajes del hilo">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center text-2xl">
+            <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center text-2xl shadow-2xs">
                 ✨
               </div>
-              <p className="text-sm font-bold text-slate-800">
-                Inicia una conversación con el Asistente de IA para «{projectName}»
-              </p>
-              <p className="text-xs text-slate-500 max-w-md">
-                Pregunta sobre tu plan de estudio, pide sugerencias metodológicas, desglose de tareas o
-                preparación para tu próxima sesión de mentoría.
-              </p>
+              <div className="space-y-1.5 max-w-md">
+                <p className="text-sm font-bold text-slate-800">
+                  Etapa 1 · Entender: Diagnóstico vivo para «{projectName}»
+                </p>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  El agente te irá haciendo preguntas reflexivas para entender tus metas, conocimientos y bloqueos.
+                  Con cada respuesta construiremos tu diagnóstico vivo, convirtiéndolo en el contexto estructurado
+                  para la <strong>Etapa 2 · Orientar</strong> junto a tu mentor.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap justify-center gap-2 pt-2 max-w-lg">
+                {QUICK_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    disabled={isLoading || !canWrite}
+                    onClick={() => handleSendMessage(prompt)}
+                    className="px-3 py-1.5 text-xs bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-700 shadow-2xs transition cursor-pointer"
+                  >
+                    💬 {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             messages.map((m) => {
@@ -479,6 +579,70 @@ export function ProjectConversationClient({
 
       {/* ── PANEL LATERAL: SINCRONIZACIÓN Y ACCESOS RÁPIDOS ── */}
       <aside aria-labelledby="assistant-context" className="space-y-4">
+        {/* Tarjeta de Ciclo Metodológico: De Entender a Orientar */}
+        <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-br from-indigo-50/60 via-blue-50/40 to-white p-5 shadow-xs space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🧭</span>
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Ciclo RAX: Entender → Orientar
+            </h4>
+          </div>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Tu conversación en esta etapa se convierte en contexto para tu mentor en la siguiente etapa:
+          </p>
+
+          <ol className="space-y-2 text-xs">
+            <li className="flex items-start gap-2 p-2 rounded-xl bg-white/90 border border-blue-100">
+              <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+                1
+              </span>
+              <div>
+                <p className="font-semibold text-slate-900">Etapa 1 · Entender (En curso)</p>
+                <p className="text-[11px] text-slate-500">
+                  El agente te hace preguntas clave sobre lo que sabés, tus bloqueos y metas.
+                </p>
+              </div>
+            </li>
+            <li className="flex items-start gap-2 p-2 rounded-xl bg-white/90 border border-slate-200/80">
+              <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+                2
+              </span>
+              <div>
+                <p className="font-semibold text-slate-900">Diagnóstico vivo y síntesis</p>
+                <p className="text-[11px] text-slate-500">
+                  Tus respuestas se extraen como hallazgos y consolidan el resumen de la etapa.
+                </p>
+              </div>
+            </li>
+            <li className="flex items-start gap-2 p-2 rounded-xl bg-white/90 border border-slate-200/80">
+              <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+                3
+              </span>
+              <div>
+                <p className="font-semibold text-slate-900">Etapa 2 · Orientar</p>
+                <p className="text-[11px] text-slate-500">
+                  Tu mentor revisa el resumen contigo, pactan acuerdos y priorizan el primer desafío.
+                </p>
+              </div>
+            </li>
+          </ol>
+
+          <div className="pt-1">
+            <button
+              type="button"
+              disabled={isLoading || !canWrite}
+              onClick={() =>
+                handleSendMessage(
+                  "Sintetizar lo que sabemos en esta conversación para consolidar el contexto de la etapa Entender y preparar la etapa Orientar.",
+                )
+              }
+              className="w-full py-2 px-3 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition text-center cursor-pointer disabled:opacity-50"
+            >
+              ⚡ Sintetizar contexto para Orientar
+            </button>
+          </div>
+        </div>
+
         {/* Tarjeta de integración con IA Assistant */}
         <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-blue-50 via-indigo-50/50 to-white p-5 shadow-xs space-y-3">
           <div className="flex items-center gap-2">

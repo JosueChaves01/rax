@@ -153,6 +153,75 @@ describe("Agente RAX: Soporte integral para mentores, tutores y estudiantes", ()
     expect(String(turnResult.proposals[0].description)).not.toContain("clientes potenciales");
   });
 
+  it("reconoce la etapa Entender y plantea preguntas activas para convertir respuestas en contexto de Orientar", async () => {
+    const reactProject: Project = {
+      id: "prj-react-2",
+      name: "Aprender React",
+      ownerId: "user-react",
+      description: "Aprender React desde cero con mentoría",
+      nature: "exploring_idea",
+      status: "active",
+      shareConversationWithMentor: true,
+      createdAt: "2026-10-30T00:00:00.000Z",
+      updatedAt: "2026-10-30T00:00:00.000Z",
+    };
+
+    // Caso: usuario pregunta qué preguntas se le harán para iniciar el diagnóstico
+    const turnResult = await executeClaudeAgentTurn({
+      project: reactProject,
+      userMessage: "¿Qué preguntas me vas a hacer para diagnosticar mi punto de partida?",
+      history: [],
+      knowledge: emptyKnowledge,
+      role: "entrepreneur",
+      sessionContext: {
+        location: "project_conversation",
+        pageTitle: "Conversación del Proyecto",
+        stage: "entender",
+        phase: "conversation",
+      },
+    });
+
+    expect(turnResult.reply).toContain("Etapa 1 · Entender");
+    expect(turnResult.reply).toContain("Orientar");
+    expect(turnResult.reply).toMatch(/experiencia|nivel|conocimientos/i);
+    expect(turnResult.proposals.length).toBeGreaterThan(0);
+    expect(turnResult.proposals[0].type).toBe("diagnosis_item");
+  });
+
+  it("convierte la información sobre bloqueos en contexto de diagnóstico para el mentor en Orientar", async () => {
+    const reactProject: Project = {
+      id: "prj-react-3",
+      name: "Aprender React",
+      ownerId: "user-react",
+      description: "Aprender React desde cero con mentoría",
+      nature: "exploring_idea",
+      status: "active",
+      shareConversationWithMentor: true,
+      createdAt: "2026-10-30T00:00:00.000Z",
+      updatedAt: "2026-10-30T00:00:00.000Z",
+    };
+
+    const turnResult = await executeClaudeAgentTurn({
+      project: reactProject,
+      userMessage: "Mi nivel es básico en javascript y tengo un bloqueo entendiendo componentes y el hook useEffect",
+      history: [],
+      knowledge: emptyKnowledge,
+      role: "entrepreneur",
+      sessionContext: {
+        location: "project_conversation",
+        pageTitle: "Conversación del Proyecto",
+        stage: "entender",
+        phase: "conversation",
+      },
+    });
+
+    expect(turnResult.reply).toContain("Diagnóstico");
+    expect(turnResult.reply).toContain("Etapa 2 · Orientar");
+    expect(turnResult.proposals.length).toBeGreaterThan(0);
+    expect(turnResult.proposals[0].type).toBe("diagnosis_item");
+    expect(turnResult.proposals[0].category).toBe("problem");
+  });
+
   it("RAX_WORKFLOW_TOOLS expone update_context_memory (RAX-03) y propose_goals (RAX-07)", () => {
     const toolNames = RAX_WORKFLOW_TOOLS.map((t) => t.name);
     expect(toolNames).toContain("update_context_memory");

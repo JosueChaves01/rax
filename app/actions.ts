@@ -1400,11 +1400,23 @@ export async function applyAiProposalAction(projectId: string, proposal: unknown
 
     if (item.type === "diagnosis_item") {
       const diag = await addItem(d, projectId, {
-        category: (item.category as DiagnosisCategory) || "problem",
+        category: (item.category as DiagnosisCategory) || "context",
         title: item.title,
         content: item.description || item.title,
         uncertainty: "medium",
       });
+      // Si es una propuesta de contexto / resumen y el diagnóstico no tiene resumen previo,
+      // actualizamos el resumen de diagnóstico para que pueda ser confirmado hacia la etapa de Orientar.
+      if (
+        (item.category === "context" || /s[ií]ntesis|resumen|contexto/i.test(item.title)) &&
+        item.description &&
+        item.description.length >= 10
+      ) {
+        const [dx] = await d.repo.diagnoses.list({ projectId });
+        if (dx && (!dx.summary || !dx.summaryConfirmedAt)) {
+          await editSummary(d, projectId, item.description.slice(0, 3000));
+        }
+      }
       return { ok: true as const, type: "diagnosis_item" as const, id: diag.id, title: diag.title };
     }
 

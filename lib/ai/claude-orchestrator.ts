@@ -10,7 +10,14 @@ export interface SessionContext {
   location?: "project_conversation" | "global_assistant" | "diagnosis" | "tasks" | "mentorship_session" | "agreements" | "evaluation";
   pageTitle?: string;
   stage?: string;
+  phase?: string;
   isMentorView?: boolean;
+  diagnosisSummary?: string;
+  summaryConfirmed?: boolean;
+  diagnosisItemCount?: number;
+  hasMentor?: boolean;
+  mentorNames?: string[];
+  dimensionsCovered?: string[];
 }
 
 export interface ClaudeTurnInput {
@@ -84,9 +91,13 @@ ${chunksXml}
     /aprend|estudi|curso|tutor|formaci[oó]n/i.test(project.description || projectExt.summary || "");
 
   const currentStage = sessionContext?.stage || projectExt.stage || "entender";
+  const currentPhase = sessionContext?.phase || "conversation";
   const currentLocation = sessionContext?.location === "project_conversation"
     ? `Conversación de trabajo del proyecto «${project.name}» (/app/p/.../conversacion)`
     : sessionContext?.pageTitle || "Plataforma RAX";
+  const diagnosisSummary = sessionContext?.diagnosisSummary;
+  const summaryConfirmed = Boolean(sessionContext?.summaryConfirmed);
+  const diagnosisItemCount = sessionContext?.diagnosisItemCount ?? 0;
 
   return `Eres el Agente Inteligente de RAX, diseñado bajo la arquitectura de Claude Projects.
 Operas como un orquestador de contexto persistente, herramientas y conocimiento compartido para el proyecto actual.
@@ -95,9 +106,12 @@ Operas como un orquestador de contexto persistente, herramientas y conocimiento 
 - Proyecto actual: "${project.name}" (ID: ${project.id})
 - Sector / Categoría: ${projectExt.sector || (isLearningProject ? "Educación y Formación" : "General")}
 - Arquetipo: ${projectExt.archetype || (isLearningProject ? "learning" : "general")}
-- Etapa del proyecto: ${currentStage} (fase actual de trabajo)
+- Etapa del proyecto: ${currentStage} (fase actual de trabajo: ${currentPhase})
+- Diagnóstico vivo actual: ${diagnosisItemCount} hallazgos registrados
+- Resumen de contexto: ${diagnosisSummary ? `"${diagnosisSummary.slice(0, 150)}..." (${summaryConfirmed ? "Confirmado" : "Pendiente de confirmación"})` : "Sin resumen todavía"}
 - Ubicación / Sesión actual en la plataforma: ${currentLocation}
 - Rol del usuario actual: ${role === "mentor" ? "Mentor / Tutor" : "Estudiante / Aprendiz / Emprendedor"}
+${sessionContext?.mentorNames?.length ? `- Mentor asignado: ${sessionContext.mentorNames.join(", ")}` : ""}
 ${project.description || projectExt.summary ? `- Resumen del proyecto: "${project.description || projectExt.summary}"` : ""}
 </current_session_and_location>
 
@@ -115,6 +129,42 @@ Reglas fundamentales:
    - En su lugar, actúa como un **tutor pedagógico con IA**: explica didácticamente los conceptos con ejemplos claros, utiliza preguntas socráticas para estimular su razonamiento, propone ejercicios de práctica formativa y ayúdale a formular preguntas estratégicas para su mentor o tutor humano.
 5. **Acompañamiento a Mentores y Tutores**:
    Cuando el usuario interactúe con el rol de mentor o tutor, ayúdale a diagnosticar vacíos conceptuales del estudiante, estructurar dinámicas de clase o sesión, diseñar ejercicios formativos y sintetizar compromisos de aprendizaje.
+
+<cycle_stage_and_orienting_context>
+El ciclo metodológico de RAX cuenta con 4 etapas ordenadas:
+1. «Entender»: ¿Qué sé, qué supongo y qué me falta? (Conversación diagnóstica y Diagnóstico vivo).
+2. «Orientar»: ¿Qué investigamos o aprendemos primero? (Primera revisión con mentor, Acuerdos de ciclo y Priorización del problema).
+3. «Probar»: ¿Cómo lo comprobamos en pequeño? (Hipótesis, tareas y autoevaluaciones).
+4. «Decidir»: ¿Qué hacemos con lo que pasó? (Resultados y evaluación).
+
+Estás interactuando en la etapa: "${currentStage}" (Fase: "${currentPhase}").
+
+SI LA ETAPA ES «ENTENDER» (Etapa 1):
+1. **Comprender la fase del ciclo y tu objetivo en este chat**:
+   - Tu rol en esta conversación NO es dar respuestas finales apresuradas ni saltar a validar comercialmente.
+   - Tu misión es **hacerle preguntas activas y reflexivas al usuario** para indagar en profundidad qué sabe, qué dificultades tiene, qué es un supuesto no confirmado y qué necesita resolver.
+   - Cada respuesta del usuario se procesa para **convertirse en el contexto estructurado de su Diagnóstico Vivo que alimentará la Etapa 2 («Orientar»)**.
+   - En la Etapa 2 («Orientar»), el mentor y el usuario realizarán su **Primera Revisión de Mentoría** y priorizarán el primer problema o desafío sobre la base de este contexto consolidado.
+
+2. **Formulación de preguntas según la naturaleza de la iniciativa**:
+   - En proyectos formativos o de estudio («${project.name}»):
+     * Pregunta sobre su objetivo concreto de dominio o aprendizaje.
+     * Pregunta qué conceptos o herramientas ya comprende y cuáles le resultan difíciles o confusas.
+     * Pregunta cuánto tiempo semanal puede dedicarle a la práctica autónoma.
+     * Pregunta qué dudas o temas prioritarios quiere aclarar con su mentor/tutor en la primera sesión.
+   - En proyectos de iniciativa/emprendimiento:
+     * Pregunta sobre el problema concreto, quiénes lo experimentan y qué evidencia real existe hoy.
+     * Pregunta qué supuestos críticos deben verificarse antes de invertir tiempo o dinero.
+     * Pregunta sobre recursos, restricciones y el objetivo inmediato que busca aclarar.
+   - Haz 1 o máximo 2 preguntas a la vez para mantener el diálogo fluido y conversacional.
+
+3. **Conversión de respuestas en contexto para la Etapa de Orientar**:
+   - Cada vez que el usuario te responda aportando detalles sobre su situación, problemas, supuestos o metas:
+     * Invoca **extract_diagnosis_items (RAX-04)** para crear elementos de diagnóstico (categorías: "problem", "context", "risk", "operational").
+     * Cuando se hayan cubierto los temas principales, o si el usuario pide sintetizar o pregunta qué sigue, invoca **update_context_memory (RAX-03)** para generar el resumen consolidado de la etapa Entender.
+   - Explícale con claridad cómo esta información se transfiere como contexto para la **Etapa 2 · Orientar**:
+     «A partir de lo que me contaste, estructuré estos hallazgos para tu diagnóstico. Al consolidar este resumen, avanzaremos a la **Etapa 2 · Orientar**, donde tu mentor revisará este marco contigo y priorizarán el foco de trabajo».
+</cycle_stage_and_orienting_context>
 
 <session_and_tool_guidelines>
 Estás interactuando en la sesión: ${currentLocation}.
@@ -328,39 +378,88 @@ function generateSimulatedClaudeTurn(input: ClaudeTurnInput): ClaudeTurnResult {
         ? "Construir"
         : currentStage.charAt(0).toUpperCase() + currentStage.slice(1);
 
-  // 1. Resumen de conversación, contexto de etapa o memoria contextual (Workflow RAX-03)
-  if (/resumen|s[ií]ntesis|contexto|memoria|qu[eé] sabemos|lo que sabemos/.test(query)) {
+  // 1. Resumen de conversación, contexto de etapa o memoria contextual para Orientar (Workflow RAX-03)
+  if (/resumen|s[ií]ntesis|contexto|memoria|qu[eé] sabemos|lo que sabemos|orientar/.test(query)) {
     if (isLearningContext) {
       proposals.push(
         makeProposal({
           type: "diagnosis_item",
-          title: `Contexto de la etapa «${stageName}» — Síntesis de conversación`,
-          description: `Síntesis acumulada de la conversación para el aprendizaje de «${input.project.name}»:\n- Objetivo formativo: Dominar los conceptos fundamentales y la estructura práctica del tema.\n- Enfoque pedagógico: Andamiaje conceptual progresivo y formulación de preguntas reflexivas para la tutoría.\n- Estado: Contexto consolidado para la etapa ${stageName}.`,
+          title: `Contexto consolidado de la etapa «${stageName}» para Orientar`,
+          description: `Síntesis acumulada de la conversación para el aprendizaje de «${input.project.name}»:\n- Objetivo formativo: Dominar los conceptos fundamentales y la estructura práctica del tema.\n- Diagnóstico de partida: Comprensión inicial con necesidad de afianzar la arquitectura y resolución autónoma de ejercicios.\n- Bloqueos identificados: Dudas conceptuales específicas a contrastar con el mentor/tutor.\n- Transición: Contexto listo para la Etapa 2 · Orientar (Primera Revisión de Mentoría y Acuerdos de Ciclo).`,
           category: "context",
           needsHumanApproval: true,
         }),
       );
-      reply = `He analizado la conversación de «${input.project.name}» y generado el resumen de contexto para la etapa «${stageName}» (Workflow RAX-03: Context Memory). Te propongo agregarlo al diagnóstico del proyecto para que tu mentor o tutor disponga de este marco conceptual consolidado.`;
+      reply = `He analizado la conversación de «${input.project.name}» y consolidado el resumen de contexto para la etapa «${stageName}» (Workflow RAX-03: Context Memory).\n\nAl aprobar esta propuesta en tu Diagnóstico Vivo, quedará formalizada como el marco de partida para la **Etapa 2 · Orientar**, donde tu mentor o tutor dispondrá de esta síntesis para orientar la Primera Revisión y priorizar los temas de estudio.`;
     } else {
       proposals.push(
         makeProposal({
           type: "diagnosis_item",
-          title: `Contexto de la etapa «${stageName}» — Síntesis de conversación`,
-          description: `Síntesis acumulada de la conversación para «${input.project.name}» en la etapa ${stageName}:\n- Contexto del problema y situación inicial identificados en la conversación.\n- Supuestos clave y observaciones compartidas.\n- Estado: Registrado para avance hacia la siguiente etapa.`,
+          title: `Contexto consolidado de la etapa «${stageName}» para Orientar`,
+          description: `Síntesis acumulada de la conversación para «${input.project.name}» en la etapa ${stageName}:\n- Contexto del problema y situación inicial identificados en la conversación.\n- Supuestos clave y observaciones compartidas.\n- Transición: Registrado como marco de referencia para la Etapa 2 · Orientar (Primera Revisión con mentor).`,
           category: "context",
           needsHumanApproval: true,
         }),
       );
-      reply = `He sintetizado los puntos clave de esta conversación para la etapa «${stageName}» (Workflow RAX-03: Context Memory). Te propongo guardar este resumen como contexto de la etapa en el diagnóstico del proyecto.`;
+      reply = `He sintetizado los puntos clave de esta conversación para la etapa «${stageName}» (Workflow RAX-03: Context Memory).\n\nAl aprobar esta propuesta, quedará registrada en tu Diagnóstico Vivo y se transferirá como contexto para la **Etapa 2 · Orientar**, permitiendo que tu mentor revise este marco inicial contigo y prioricen el problema principal.`;
+    }
+  } else if (/pregunt|etapa|fase|ciclo|empezar|arrancar|diagn[oó]stico|qu[eé] me preguntas|por d[oó]nde empezamos/i.test(query)) {
+    if (isLearningContext) {
+      proposals.push(
+        makeProposal({
+          type: "diagnosis_item",
+          title: "Objetivo y desafío formativo inicial",
+          description: `Diagnóstico inicial de aprendizaje para «${input.project.name}»:\n- Etapa: Entender\n- Foco: Identificar nivel actual, conceptos con mayor dificultad y disponibilidad horaria para transferir como contexto a la Etapa 2 (Orientar con mentor).`,
+          category: "context",
+          needsHumanApproval: true,
+        }),
+      );
+      reply = `Estamos en la **Etapa 1 · Entender** (pregunta guía: *«¿Qué sé, qué supongo y qué me falta?»*).
+
+En esta conversación, mi función es hacerte preguntas estratégicas para entender tu punto de partida, diagnosticar tus necesidades formativas e identificar bloqueos. Con tus respuestas iremos construyendo tu **Diagnóstico Vivo**, que luego se convertirá en el contexto consolidado para la **Etapa 2 · Orientar** (donde tu mentor/tutor y vos tendrán su Primera Revisión y acordarán el plan de trabajo).
+
+Para comenzar nuestro diagnóstico:
+1. **¿Qué experiencia o conocimientos previos tenés** en este tema (o tecnologías relacionadas), y qué has practicado hasta ahora?
+2. **¿Cuál es tu objetivo prioritario** que te gustaría dominar al final de este ciclo de aprendizaje?
+3. **¿Qué conceptos o aspectos sentís más difíciles o confusos** en este momento?`;
+    } else {
+      proposals.push(
+        makeProposal({
+          type: "diagnosis_item",
+          title: "Contexto inicial de exploración",
+          description: `Diagnóstico inicial para «${input.project.name}»:\n- Etapa: Entender\n- Foco: Clarificar el problema percibido, quiénes lo experimentan y qué evidencia real existe para preparar la Primera Revisión en Orientar.`,
+          category: "context",
+          needsHumanApproval: true,
+        }),
+      );
+      reply = `Estamos en la **Etapa 1 · Entender** (pregunta guía: *«¿Qué sé, qué supongo y qué me falta?»*).
+
+En este chat mi función es hacerte preguntas estratégicas para separar lo que sabés con certeza de lo que son suposiciones, y estructurar esa información como el contexto de tu **Diagnóstico Vivo** para la **Etapa 2 · Orientar** (donde tu mentor revisará este marco y priorizarán el primer problema).
+
+Para iniciar el diagnóstico:
+1. **¿Qué situación o experiencia concreta te motivó a crear «${input.project.name}»?**
+2. **¿Quiénes sufren este problema hoy y qué alternativa usan para resolverlo?**
+3. **¿Qué has observado o comprobado de primera mano, y qué creés que todavía es una suposición?**`;
     }
   } else if (isLearningContext) {
-    if (/(?:^|[^\w])(tarea|tareas|plan de acci[oó]n|acciones|pendientes?|to-?do list)(?:[^\w]|$)/i.test(query)) {
+    if (/(?:^|[^\w])(tarea|tareas|plan|plan de acci[oó]n|plan de estudio|acciones|pendientes?|to-?do list)(?:[^\w]|$)/i.test(query)) {
       proposals.push(
         makeProposal({ type: "task", title: "Repasar conceptos fundamentales y elaborar un mapa de ideas", description: "Enfocado en consolidar la comprensión teórica antes de avanzar a la práctica", actionType: "skill_learning", needsHumanApproval: true }),
         makeProposal({ type: "task", title: "Resolver 2 ejercicios prácticos de aplicación autónoma", description: "Identificar dudas puntuales y verificar comprensión", actionType: "skill_learning", needsHumanApproval: true }),
         makeProposal({ type: "task", title: "Preparar 3 preguntas específicas para la sesión con el mentor/tutor", description: "Llegar a la tutoría con los puntos de bloqueo claramente identificados", actionType: "research", needsHumanApproval: true }),
       );
       reply = `Como tu tutor y copiloto de aprendizaje con IA, he estructurado un plan de estudio y práctica (Workflow RAX-08) adaptado a tu proceso formativo. Te sugiero estas ${proposals.length} actividades para avanzar a tu propio ritmo con el apoyo de tu mentor o tutor.`;
+    } else if (/(?:^|[^\w])(mi nivel|me cuesta|tengo un bloqueo|mis bloqueos|mi dificultad|bloqueo|dificultad|cuesta entender|no entiendo|hooks|componentes?|javascript|react|horas semanales)(?:[^\w]|$)/i.test(query)) {
+      proposals.push(
+        makeProposal({
+          type: "diagnosis_item",
+          title: `Hallazgo formativo en «${input.project.name}»`,
+          description: `Observación registrada en la etapa Entender a partir de lo compartido por el estudiante/aprendiz:\n- Punto de partida y contexto expresado: "${input.userMessage.trim().slice(0, 300)}"\n- Uso: Contexto preparatorio para la Etapa 2 · Orientar.`,
+          category: "problem",
+          needsHumanApproval: true,
+        }),
+      );
+      reply = `Excelente. He extraído este punto clave y generado una propuesta para incorporarlo a tu **Diagnóstico Vivo** (Workflow RAX-04).\n\nAl aprobar esta propuesta, quedará formalizada como contexto para que en la **Etapa 2 · Orientar**, tu mentor conozca tus bloqueos reales y oriente la sesión directamente a resolverlos.\n\nPara continuar completando el marco de esta etapa:\n- **¿Con cuántas horas semanales contás** para estudiar y practicar autónomamente?\n- **¿Qué pregunta o duda específica** te gustaría que tu mentor/tutor aclare en la primera sesión?`;
     } else if (/hip[oó]tesis|experimento|validar|probar/.test(query)) {
       proposals.push(
         makeProposal({ type: "task", title: "Ejercicio de autoevaluación: explicar el concepto en tus palabras con un ejemplo", description: "Técnica Feynman para comprobar que no quedan lagunas conceptuales", actionType: "skill_learning", needsHumanApproval: true }),
