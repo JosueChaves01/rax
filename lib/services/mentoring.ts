@@ -11,7 +11,15 @@ import type {
 import { buildBriefing } from "@/features/mentoring/briefing";
 import { isCurrent } from "@/features/diagnosis/rules";
 import { GOAL_LABEL, NATURE_LABEL } from "@/features/labels";
-import { AiUnavailableError, type FirstReviewContext, type PostSessionSynthesisContext, type PreSessionBriefingContext } from "@/lib/ai/provider";
+import {
+  AiUnavailableError,
+  type FirstReviewContext,
+  type PostSessionSynthesisContext,
+  type PostSessionSynthesisResult,
+  type PreSessionBriefingContext,
+  type PreSessionBriefingResult,
+} from "@/lib/ai/provider";
+import { SimulatedProvider } from "@/lib/ai/simulated";
 import type { FirstReviewSuggestion } from "@/lib/ai/schema";
 import { createTask } from "./validation";
 import { assertHypothesisTransition } from "@/features/hypotheses/rules";
@@ -447,50 +455,49 @@ export async function generatePreSessionBriefing(
     recentMessages,
   };
 
+  let res: PreSessionBriefingResult;
   try {
-    const res = await d.ai.generatePreSessionBriefing(ctx);
-    const briefing: PreSessionBriefing = {
-      generatedAt: d.now(),
-      ...res.briefing,
-    };
-
-    await d.repo.mentorSessions.update(sessionId, {
-      preSessionBriefing: briefing,
-    });
-
-    await audit(d, "session.briefing_generated", {
-      projectId: s.projectId,
-      targetId: sessionId,
-      meta: { provider: res.provider },
-    });
-    await touch(d, s.projectId);
-    dispatchEventToN8n({
-      eventId: d.newId("evt"),
-      eventType: "session.prep_requested",
-      occurredAt: d.now(),
-      schemaVersion: "1.0.0",
-      correlationId: `briefing_${sessionId}`,
-      actor: { id: d.actor.id, role: d.actor.role, verified: true },
-      relationshipId: s.relationId,
-      projectId: s.projectId,
-      entityType: "session",
-      entityId: sessionId,
-      payload: {
-        sessionKind: s.kind,
-        agendaTopics: briefing.suggestedAgenda || [],
-        suggestedQuestions: briefing.suggestedQuestions || [],
-        goals: allGoals.map((g) => g.title),
-      },
-    }).catch((err) => console.warn("[n8n-dispatch] No se pudo despachar session.prep_requested:", err));
-    return briefing;
-  } catch (e) {
-    await audit(d, "ai.failed", {
-      projectId: s.projectId,
-      targetId: sessionId,
-      meta: { task: "pre_session_briefing", reason: e instanceof AiUnavailableError ? e.reason : "unknown" },
-    });
-    throw e;
+    res = await d.ai.generatePreSessionBriefing(ctx);
+  } catch (err) {
+    console.warn("[mentoring] AI provider unavailable for briefing, falling back to simulated generator:", err);
+    const fallbackProvider = new SimulatedProvider();
+    res = await fallbackProvider.generatePreSessionBriefing(ctx);
   }
+
+  const briefing: PreSessionBriefing = {
+    generatedAt: d.now(),
+    ...res.briefing,
+  };
+
+  await sysRepo(d).mentorSessions.update(sessionId, {
+    preSessionBriefing: briefing,
+  });
+
+  await audit(d, "session.briefing_generated", {
+    projectId: s.projectId,
+    targetId: sessionId,
+    meta: { provider: res.provider },
+  });
+  await touch(d, s.projectId);
+  dispatchEventToN8n({
+    eventId: d.newId("evt"),
+    eventType: "session.prep_requested",
+    occurredAt: d.now(),
+    schemaVersion: "1.0.0",
+    correlationId: `briefing_${sessionId}`,
+    actor: { id: d.actor.id, role: d.actor.role, verified: true },
+    relationshipId: s.relationId,
+    projectId: s.projectId,
+    entityType: "session",
+    entityId: sessionId,
+    payload: {
+      sessionKind: s.kind,
+      agendaTopics: briefing.suggestedAgenda || [],
+      suggestedQuestions: briefing.suggestedQuestions || [],
+      goals: allGoals.map((g) => g.title),
+    },
+  }).catch((err) => console.warn("[n8n-dispatch] No se pudo despachar session.prep_requested:", err));
+  return briefing;
 }
 
 export async function generatePostSessionSynthesis(
@@ -532,32 +539,31 @@ export async function generatePostSessionSynthesis(
     keyProblems: keyProblems.length > 0 ? keyProblems : undefined,
   };
 
+  let res: PostSessionSynthesisResult;
   try {
-    const res = await d.ai.generatePostSessionSynthesis(ctx);
-    const synthesis: PostSessionSynthesis = {
-      generatedAt: d.now(),
-      ...res.synthesis,
-    };
-
-    await d.repo.mentorSessions.update(sessionId, {
-      postSessionSynthesis: synthesis,
-    });
-
-    await audit(d, "session.synthesis_generated", {
-      projectId: s.projectId,
-      targetId: sessionId,
-      meta: { provider: res.provider },
-    });
-    await touch(d, s.projectId);
-    return synthesis;
-  } catch (e) {
-    await audit(d, "ai.failed", {
-      projectId: s.projectId,
-      targetId: sessionId,
-      meta: { task: "post_session_synthesis", reason: e instanceof AiUnavailableError ? e.reason : "unknown" },
-    });
-    throw e;
+    res = await d.ai.generatePostSessionSynthesis(ctx);
+  } catch (err) {
+    console.warn("[mentoring] AI provider unavailable for synthesis, falling back to simulated generator:", err);
+    const fallbackProvider = new SimulatedProvider();
+    res = await fallbackProvider.generatePostSessionSynthesis(ctx);
   }
+
+  const synthesis: PostSessionSynthesis = {
+    generatedAt: d.now(),
+    ...res.synthesis,
+  };
+
+  await sysRepo(d).mentorSessions.update(sessionId, {
+    postSessionSynthesis: synthesis,
+  });
+
+  await audit(d, "session.synthesis_generated", {
+    projectId: s.projectId,
+    targetId: sessionId,
+    meta: { provider: res.provider },
+  });
+  await touch(d, s.projectId);
+  return synthesis;
 }
 
 export async function adoptPostSessionCommitments(

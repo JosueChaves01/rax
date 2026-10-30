@@ -292,12 +292,14 @@ export interface AiProvider {
   generatePostSessionSynthesis(ctx: PostSessionSynthesisContext): Promise<PostSessionSynthesisResult>;
 }
 
-export class AiUnavailableError extends Error {
+import { DomainError } from "@/lib/errors";
+
+export class AiUnavailableError extends DomainError {
   constructor(
     readonly reason: "not_configured" | "rate_limited" | "provider_error" | "invalid_output" | "refused",
     message: string,
   ) {
-    super(message);
+    super("ai_unavailable", message);
     this.name = "AiUnavailableError";
   }
 }

@@ -304,7 +304,11 @@ function SessionCopilotBar({
         </div>
       </div>
       {aiNotice && <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">✓ {aiNotice}</p>}
-      {aiError && <Notice tone="error">{aiError}</Notice>}
+      {aiError && (
+        <div role="alert" className="rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/40 dark:border-rose-800 p-3 text-xs text-rose-800 dark:text-rose-200">
+          {aiError}
+        </div>
+      )}
     </div>
   );
 }
