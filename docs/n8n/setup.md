@@ -29,7 +29,11 @@ NEXT_PUBLIC_APP_URL=https://app.tu-dominio.com       # Para cabecera HTTP-Refere
 
 # Modelos OpenRouter
 OPENROUTER_MODEL=meta-llama/llama-3.3-70b-instruct:free
+# Needed by the Code nodes that create/verify HMAC signatures.
+NODE_FUNCTION_ALLOW_BUILTIN=crypto
 ```
+
+Si la instancia usa Task Runners, configura `NODE_FUNCTION_ALLOW_BUILTIN=crypto` también en el runner que ejecuta los Code nodes.
 
 ---
 

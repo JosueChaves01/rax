@@ -25,11 +25,11 @@ describe("acciones del chat persistente del agente", () => {
     projectId = project.id;
   });
 
-  it("persists user input before recording explicit unavailable RAX-04 result", async () => {
+  it("persists project conversation before recording the gated RAX-02 result", async () => {
     const result = await sendMainAgentMessageAction({ projectId, stage: "conversation", message: "¿Qué sigue?" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data).toMatchObject({ ok: false, capability: "RAX-04", status: "unavailable" });
+    expect(result.data).toMatchObject({ ok: false, capability: "RAX-02", status: "disabled" });
     const loaded = await loadMainAgentThreadAction(projectId);
     expect(loaded.ok).toBe(true);
     if (!loaded.ok || !loaded.data) return;
@@ -37,7 +37,7 @@ describe("acciones del chat persistente del agente", () => {
     expect(thread?.status).toBe("error");
     expect(messages.map((m) => m.author)).toEqual(["user", "assistant"]);
     expect(messages[0].content).toBe("¿Qué sigue?");
-    expect(messages[1]).toMatchObject({ status: "failed", errorCode: "agent_unavailable" });
+    expect(messages[1]).toMatchObject({ status: "failed", errorCode: "agent_disabled" });
   });
 
   it("routes the legacy interview action through agent persistence without adding interview rows", async () => {
@@ -45,7 +45,7 @@ describe("acciones del chat persistente del agente", () => {
     const result = await sendMessageAction(projectId, "Consulta desde conversación");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data?.aiError).toContain("no está disponible");
+    expect(result.data?.aiError).toContain("deshabilitado");
     expect(await deps.repo.messages.list({ projectId })).toHaveLength(before.length);
     expect(await deps.repo.agentMessages.list({ projectId })).toHaveLength(2);
   });

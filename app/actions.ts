@@ -767,16 +767,27 @@ export async function sendMainAgentMessageAction(input: unknown) {
     const previousMessages = await listAgentMessages(d, thread.id);
     const userMessage = await appendAgentUserMessage(d, thread.id, parsed.data.message);
 
-    const [diagnoses, items] = await Promise.all([
+    const [diagnoses, items, tasks, hypotheses, experiments, results, evidence, sessions, relations] = await Promise.all([
       d.repo.diagnoses.list({ projectId: project.id }),
       d.repo.diagnosisItems.list({ projectId: project.id }),
+      d.repo.tasks.list({ projectId: project.id }),
+      d.repo.hypotheses.list({ projectId: project.id }),
+      d.repo.experiments.list({ projectId: project.id }),
+      d.repo.experimentResults.list({ projectId: project.id }),
+      d.repo.evidence.list({ projectId: project.id }),
+      d.repo.mentorSessions.list({ projectId: project.id }),
+      d.repo.mentorshipRelations.list({ projectId: project.id }),
     ]);
+    const goals = (await Promise.all(relations.map((relation) => d.repo.mentorshipGoals.list({ relationId: relation.id })))).flat();
+    const clip = (value: string | undefined, length: number) => value?.slice(0, length);
+    const recentFirst = <T extends { updatedAt?: string; createdAt?: string }>(records: T[]) =>
+      [...records].sort((a, b) => (b.updatedAt ?? b.createdAt ?? "").localeCompare(a.updatedAt ?? a.createdAt ?? "")).slice(0, 30);
     const recentMessages = previousMessages
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .slice(-12)
       .map((m) => ({
         author: m.author === "assistant" ? "RAX" : d.actor.name,
-        content: m.content,
+        content: m.content.slice(0, 1200),
         createdAt: m.createdAt,
       }));
     const request = {
@@ -790,6 +801,7 @@ export async function sendMainAgentMessageAction(input: unknown) {
         flowId: parsed.data.flowId,
         section: parsed.data.section,
         taskId: parsed.data.taskId,
+        entityId: parsed.data.entityId,
         fieldPath: parsed.data.fieldPath,
         currentValue: parsed.data.currentValue,
         fieldSchema: parsed.data.fieldSchema,
@@ -800,8 +812,17 @@ export async function sendMainAgentMessageAction(input: unknown) {
         recentMessages,
         currentItems: items
           .filter((item) => item.reviewStatus !== "rejected")
-          .slice(0, 60)
-          .map(({ id, category, title, content, infoType, reviewStatus, uncertainty }) => ({ id, category, title, content, infoType, reviewStatus, uncertainty })),
+          .slice(0, 40)
+          .map(({ id, category, title, content, infoType, reviewStatus, uncertainty }) => ({ id, category, title: title.slice(0, 160), content: content.slice(0, 900), infoType, reviewStatus, uncertainty })),
+        relatedRecords: {
+          tasks: recentFirst(tasks).map(({ id, title, status, actionType, dueDate, experimentId, goalId, blockedReason }) => ({ id, title: title.slice(0, 200), status, actionType, dueDate, experimentId, goalId, blockedReason: clip(blockedReason, 400) })),
+          hypotheses: recentFirst(hypotheses).map(({ id, statement, segment, status, uncertainty }) => ({ id, statement: statement.slice(0, 700), segment: segment.slice(0, 200), status, uncertainty })),
+          experiments: recentFirst(experiments).map(({ id, hypothesisId, question, method, metric, successCriterion, rejectionCriterion, status }) => ({ id, hypothesisId, question: question.slice(0, 500), method: method.slice(0, 500), metric: metric.slice(0, 200), successCriterion: successCriterion.slice(0, 400), rejectionCriterion: rejectionCriterion.slice(0, 400), status })),
+          results: [...results].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30).map(({ id, experimentId, outcome, observed, metricValue, learnings, limitations }) => ({ id, experimentId, outcome, observed: observed.slice(0, 700), metricValue: metricValue.slice(0, 200), learnings: learnings.slice(0, 700), limitations: limitations.slice(0, 400) })),
+          evidence: [...evidence].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30).map(({ id, kind, title, description }) => ({ id, kind, title: title.slice(0, 200), description: description.slice(0, 600) })),
+          sessions: recentFirst(sessions).map(({ id, kind, status, scheduledAt }) => ({ id, kind, status, scheduledAt })),
+          goals: recentFirst(goals).map(({ id, title, description, baseline, targetResult, status, priority }) => ({ id, title: title.slice(0, 200), description: description.slice(0, 500), baseline: baseline.slice(0, 300), targetResult: targetResult.slice(0, 300), status, priority })),
+        },
         coveredDimensions: [],
         pendingDimensions: [],
         // No se incorpora ninguna nota de mentor al contexto del agente en esta versión.

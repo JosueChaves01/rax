@@ -39,6 +39,7 @@ import {
 } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
 import type { SuggestedTask } from "@/lib/ai/schema";
+import { AgentFieldAssist } from "@/shared/ui/agent-field-assist";
 
 const COLUMNS: TaskStatus[] = ["todo", "doing", "blocked", "done"];
 
@@ -449,6 +450,7 @@ export function TaskBoard({
                 maxLength={200}
                 required
               />
+              <AgentFieldAssist projectId={projectId} flowId="RAX-08" stage="prioritizing" section="Plan de acción" fieldPath="task.title" fieldSchema={{ type: "string", label: "Título de la acción", required: true, maxLength: 200 }} currentValue={title} onApply={setTitle} />
             </Field>
 
             <Field id="t-type" label="Tipo de acción">
