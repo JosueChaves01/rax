@@ -22,6 +22,8 @@ if [ -d "/workflows" ] && [ "$(ls -A /workflows 2>/dev/null)" ]; then
       const db = new DatabaseSync('/home/node/.n8n/database.sqlite');
       db.exec('PRAGMA foreign_keys = OFF;');
       db.prepare('DELETE FROM workflow_entity').run();
+      db.prepare('DELETE FROM webhook_entity').run();
+      db.prepare('DELETE FROM workflow_published_version').run();
       db.exec('PRAGMA foreign_keys = ON;');
     } catch {}
     " 2>/dev/null || true
@@ -33,6 +35,27 @@ if [ -d "/workflows" ] && [ "$(ls -A /workflows 2>/dev/null)" ]; then
         n8n publish:workflow --id="$wfid" >/dev/null 2>&1 || true
       fi
     done
+
+    # Registrar rutas de webhooks en la base de datos
+    node -e "
+    const { DatabaseSync } = require('node:sqlite');
+    try {
+      const db = new DatabaseSync('/home/node/.n8n/database.sqlite');
+      const workflows = db.prepare('SELECT id, nodes FROM workflow_entity').all();
+      const insertWebhook = db.prepare('INSERT OR REPLACE INTO webhook_entity (workflowId, webhookPath, method, node, webhookId, pathLength) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const wf of workflows) {
+        let nodes = [];
+        try { nodes = typeof wf.nodes === 'string' ? JSON.parse(wf.nodes) : wf.nodes; } catch {}
+        for (const n of nodes) {
+          if (n.type && n.type.includes('webhook')) {
+            const method = (n.parameters && n.parameters.httpMethod) || 'GET';
+            const path = (n.parameters && n.parameters.path) || '';
+            insertWebhook.run(wf.id, path, method, n.name, n.webhookId || null, path.length);
+          }
+        }
+      }
+    } catch (e) { console.error('Error registrando webhooks:', e.message); }
+    " 2>/dev/null || true
     echo "$HASH_CURRENT" > "$MARKER_FILE"
     echo "=> Flujos de RAX sincronizados y activados exitosamente (19 flujos únicos)."
   fi

@@ -45,7 +45,7 @@
       "id": "node-if-valid",
       "name": "Is Signature Valid?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 1,
       "position": [
         620,
         300
