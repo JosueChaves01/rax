@@ -41,7 +41,11 @@ export async function createAgentThread(d: ServiceDeps, projectId: string, title
 export async function listProjectThreads(d: ServiceDeps, projectId: string): Promise<AgentThread[]> {
   await guard(d, projectId, "project.read");
   ensureChatRole(d.actor.role);
-  const threads = await d.repo.agentThreads.list({ projectId, creatorId: d.actor.id });
+  let threads = await d.repo.agentThreads.list({ projectId, creatorId: d.actor.id });
+  if (threads.length === 0) {
+    const defaultThread = await getOrCreateAgentThread(d, projectId);
+    threads = [defaultThread];
+  }
   return threads.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
@@ -60,7 +64,7 @@ export async function getOrCreateAgentThread(d: ServiceDeps, projectId: string):
   const threads = await d.repo.agentThreads.list({ projectId, creatorId: d.actor.id });
   const sorted = threads.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   if (sorted[0]) return sorted[0];
-  return createAgentThread(d, projectId, "Nuevo chat");
+  return createAgentThread(d, projectId, "Chat principal");
 }
 
 /** Returns the current actor's thread without creating one, for history loading. */

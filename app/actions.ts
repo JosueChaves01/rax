@@ -714,6 +714,32 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
       createdAt: now,
     });
 
+    // Inicializar el primer hilo del IA Assistant sincronizado para este proyecto
+    const agr = input.agreement;
+    const initialThread = await sys.agentThreads.insert({
+      id: d.newId("agt"),
+      projectId,
+      creatorId: entrepreneurId,
+      title: "Exploración y Acuerdo Inicial",
+      isPinned: true,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await sys.agentMessages.insert({
+      id: d.newId("agtmsg"),
+      threadId: initialThread.id,
+      projectId,
+      author: "assistant",
+      authorId: "system",
+      content: `¡Hola! Bienvenido a tu espacio de trabajo para «${projectName}».\n\nHe registrado tu acuerdo de mentoría preliminar (${agr?.frequency || "quincenal"}, ${agr?.sessionDurationMinutes || 60} min). Tus objetivos y compromisos ya están formalizados.\n\n¿En qué podemos enfocarnos hoy? Podés hacerme preguntas sobre tu plan de estudio o validación, pedirme que desglosamos tareas o preparar la agenda para tu próxima sesión.`,
+      proposals: [],
+      artifacts: [],
+      citations: [],
+      status: "complete",
+      createdAt: now,
+    });
+
     // Asignar mentor al proyecto (con permisos de sistema para cumplir con RLS de asignación)
     const assignment: MentorAssignment = {
       id: d.newId("asg"),
@@ -751,7 +777,6 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
     });
 
     // Guardar acuerdo formal
-    const agr = input.agreement;
     const agreement: MentorshipAgreement = {
       id: d.newId("agr"),
       relationId: relation.id,

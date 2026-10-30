@@ -11,6 +11,8 @@ interface AppSidebarProps {
 
 export function AppSidebar({ role }: AppSidebarProps) {
   const pathname = usePathname();
+  const currentProjectId = pathname.match(/\/app\/p\/([^/]+)/)?.[1];
+  const chatHref = currentProjectId ? `/app/chat?project=${currentProjectId}` : "/app/chat";
 
   const navItems = [
     {
@@ -116,7 +118,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
     },
     {
       label: "IA Assistant",
-      href: "/app/chat",
+      href: chatHref,
       icon: (
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 2a8 8 0 0 0-8 8c0 3.37 2.07 6.25 5 7.42V20a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2.58c2.93-1.17 5-4.05 5-7.42a8 8 0 0 0-8-8z" />
@@ -207,18 +209,25 @@ export function AppSidebar({ role }: AppSidebarProps) {
 
       {/* Pie de sidebar */}
       <div className="p-3 border-t border-slate-800/80">
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-900/50 border border-slate-800">
-          <div className="w-8 h-8 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">
+        <Link
+          href={chatHref}
+          className="flex items-center gap-3 p-2 rounded-lg bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800 transition-colors group cursor-pointer block"
+          title={currentProjectId ? "Abrir IA Assistant con el proyecto actual" : "Abrir IA Assistant"}
+        >
+          <div className="w-8 h-8 rounded-full bg-blue-600/30 text-blue-400 group-hover:bg-blue-600/50 flex items-center justify-center font-bold text-xs shrink-0 transition-colors">
             RAX
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-white truncate">IA Assistant</p>
+            <p className="text-xs font-semibold text-white truncate flex items-center justify-between">
+              <span>IA Assistant</span>
+              <span className="text-[10px] text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
+            </p>
             <p className="text-[10px] text-emerald-400 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               En línea
             </p>
           </div>
-        </div>
+        </Link>
       </div>
     </aside>
   );

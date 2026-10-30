@@ -35,8 +35,21 @@ interface MessageView {
   cachedTokens?: number;
 }
 
-export default function ChatClient({ projects }: { projects: Array<{ id: string; name: string }> }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+export default function ChatClient({
+  projects,
+  initialProjectId,
+  initialThreadId,
+}: {
+  projects: Array<{ id: string; name: string }>;
+  initialProjectId?: string;
+  initialThreadId?: string;
+}) {
+  const [projectId, setProjectId] = useState(() => {
+    if (initialProjectId && projects.some((p) => p.id === initialProjectId)) {
+      return initialProjectId;
+    }
+    return projects[0]?.id ?? "";
+  });
   const [threads, setThreads] = useState<AgentThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageView[]>([]);
@@ -73,48 +86,55 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
     }
   }, []);
 
-  const loadThreadsForProject = useCallback(async (pId: string) => {
-    if (!pId) {
-      setThreads([]);
-      setActiveThreadId(null);
-      setMessages([]);
-      return;
-    }
-
-    const res = await listProjectThreadsAction(pId);
-    let currentThreads = res.ok && res.data ? res.data : [];
-
-    if (currentThreads.length === 0) {
-      const created = await createProjectThreadAction(pId, "Nuevo chat");
-      if (created.ok && created.data) {
-        currentThreads = [created.data];
+  const loadThreadsForProject = useCallback(
+    async (pId: string, preferredThreadId?: string) => {
+      if (!pId) {
+        setThreads([]);
+        setActiveThreadId(null);
+        setMessages([]);
+        return;
       }
-    }
 
-    setThreads(currentThreads);
-    const selected = currentThreads[0]?.id ?? null;
-    setActiveThreadId(selected);
+      const res = await listProjectThreadsAction(pId);
+      let currentThreads = res.ok && res.data ? res.data : [];
 
-    if (selected) {
-      const msgRes = await loadThreadMessagesAction(pId, selected);
-      if (msgRes.ok && msgRes.data) {
-        setMessages(
-          msgRes.data.messages.map((m) => ({
-            id: m.id,
-            sender: m.author === "user" ? "user" : "ai",
-            senderName: m.author === "user" ? "Tú" : "Claude Agent",
-            text: m.content,
-            time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            artifacts: m.artifacts,
-            citations: m.citations,
-            proposals: m.proposals,
-          })),
-        );
+      if (currentThreads.length === 0) {
+        const created = await createProjectThreadAction(pId, "Chat principal");
+        if (created.ok && created.data) {
+          currentThreads = [created.data];
+        }
       }
-    } else {
-      setMessages([]);
-    }
-  }, []);
+
+      setThreads(currentThreads);
+      const targetId = preferredThreadId || initialThreadId;
+      const selected =
+        targetId && currentThreads.some((t) => t.id === targetId)
+          ? targetId
+          : (currentThreads[0]?.id ?? null);
+      setActiveThreadId(selected);
+
+      if (selected) {
+        const msgRes = await loadThreadMessagesAction(pId, selected);
+        if (msgRes.ok && msgRes.data) {
+          setMessages(
+            msgRes.data.messages.map((m) => ({
+              id: m.id,
+              sender: m.author === "user" ? "user" : "ai",
+              senderName: m.author === "user" ? "Tú" : "RAX Copilot",
+              text: m.content,
+              time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              artifacts: m.artifacts,
+              citations: m.citations,
+              proposals: m.proposals,
+            })),
+          );
+        }
+      } else {
+        setMessages([]);
+      }
+    },
+    [initialThreadId],
+  );
 
   useEffect(() => {
     if (projectId) {
@@ -123,10 +143,21 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
     }
   }, [projectId, loadThreadsForProject, loadKnowledgeStats]);
 
+  const handleSelectProject = (newProjectId: string) => {
+    setProjectId(newProjectId);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/app/chat?project=${newProjectId}`);
+    }
+  };
+
   const handleSelectThread = async (threadId: string) => {
     setActiveThreadId(threadId);
     setActiveArtifact(null);
     if (!projectId) return;
+
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/app/chat?project=${projectId}&thread=${threadId}`);
+    }
 
     const res = await loadThreadMessagesAction(projectId, threadId);
     if (res.ok && res.data) {
@@ -134,7 +165,7 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
         res.data.messages.map((m) => ({
           id: m.id,
           sender: m.author === "user" ? "user" : "ai",
-          senderName: m.author === "user" ? "Tú" : "Claude Agent",
+          senderName: m.author === "user" ? "Tú" : "RAX Copilot",
           text: m.content,
           time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           artifacts: m.artifacts,
@@ -284,7 +315,7 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
       <ProjectSidebar
         projects={projects}
         activeProjectId={projectId}
-        onSelectProject={(newId) => setProjectId(newId)}
+        onSelectProject={handleSelectProject}
         threads={threads}
         activeThreadId={activeThreadId}
         onSelectThread={handleSelectThread}

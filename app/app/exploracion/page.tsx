@@ -125,7 +125,16 @@ export default function ExplorationPage() {
     setActionError(null);
     setAiSuccessMessage(null);
     try {
-      const promptToUse = customPrompt !== undefined ? customPrompt : aiPrompt;
+      // Priorizar prompt explícito, luego el del asistente de IA, y finalmente campos ya escritos en el formulario
+      const promptToUse =
+        customPrompt !== undefined
+          ? customPrompt
+          : aiPrompt.trim() ||
+            initiativeName.trim() ||
+            summary.trim() ||
+            description.trim() ||
+            "";
+
       const res = await generateMentorshipExplorationWithAiAction(promptToUse);
       if (!res.ok || !res.data) {
         setActionError(res.error || "No se pudo generar la propuesta con IA.");
@@ -165,7 +174,7 @@ export default function ExplorationPage() {
       setConfidentialityTerms(d.confidentialityTerms);
 
       setAiSuccessMessage(
-        `¡Workflow completo rellenado por el Asistente de IA para «${d.initiativeName}»! Podés navegar por los 4 pasos y confirmar la creación del proyecto.`,
+        `¡Workflow completo generado para «${d.initiativeName}»! Podés navegar por los 4 pasos y modificar cualquier campo antes de confirmar.`,
       );
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Error al invocar al Asistente de IA.");
@@ -260,7 +269,13 @@ export default function ExplorationPage() {
             type="text"
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
-            placeholder="Personalizar con una idea o temática (opcional, ej. 'App de logística B2B')..."
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAutoFillWithAi();
+              }
+            }}
+            placeholder="Personalizar con tu idea o temática (ej. 'Aprender React', 'App de logística', 'Finanzas PyME')..."
             className="w-full sm:flex-1 px-4 py-2.5 text-xs rounded-xl bg-slate-800/80 border border-slate-700 text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-400"
           />
           <button
@@ -285,24 +300,45 @@ export default function ExplorationPage() {
           <span className="text-slate-400 font-medium">Ejemplos rápidos:</span>
           <button
             type="button"
+            onClick={() => handleAutoFillWithAi("Aprender React y Programación")}
+            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors cursor-pointer"
+          >
+            🎯 Aprender React
+          </button>
+          <button
+            type="button"
             onClick={() => handleAutoFillWithAi("Salud Digital & Clínicas")}
-            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
+            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors cursor-pointer"
           >
             🩺 Salud Digital
           </button>
           <button
             type="button"
             onClick={() => handleAutoFillWithAi("Logística Urbana y Entregas")}
-            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
+            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors cursor-pointer"
           >
-            🚚 Logística & Delivery
+            🚚 Logística
           </button>
           <button
             type="button"
             onClick={() => handleAutoFillWithAi("SaaS B2B para Equipos Remotos")}
-            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
+            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors cursor-pointer"
           >
             💻 SaaS B2B
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAutoFillWithAi("E-commerce & Tienda de Moda")}
+            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors cursor-pointer"
+          >
+            🛍️ E-commerce
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAutoFillWithAi("FinTech y Gestión de Pagos")}
+            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors cursor-pointer"
+          >
+            💰 FinTech
           </button>
         </div>
 

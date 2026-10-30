@@ -153,7 +153,194 @@ const ARCHETYPES: Record<string, Archetype> = {
     confidentialityTerms: "Tratamiento respetuoso y confidencial del desempeño académico y materiales de trabajo.",
     authorizedChannels: ["virtual", "email", "whatsapp"],
   },
+  commerce: {
+    initiativeName: "MarketHub Retail",
+    sector: "Comercio Electrónico, Retail & Marcas",
+    nature: "operating_business",
+    summary: "Estrategia de comercio multicanal y fidelización de clientes para marcas de productos físicos y digitales.",
+    motivation: "scale",
+    description: "Buscamos optimizar el embudo de conversión, aumentar el valor medio de compra (AOV) y consolidar canales digitales directos al consumidor con márgenes sostenibles.",
+    compatibilityScore: 95,
+    compatibilityRationale: "Afinidad comercial: Mentor con experiencia directiva en e-commerce y optimización de adquisición de clientes (CAC/LTV) y retención multicanal.",
+    suggestedMentorName: "Mentor Especialista en E-Commerce & Retail",
+    validationGoals: [
+      "Optimizar tasa de conversión en checkout por encima del 2.5%",
+      "Diseñar campaña de retención que incremente la recompra a 30 días",
+      "Comprobar unit economics favorables tras costos logísticos y de pasarela",
+    ],
+    frequency: "biweekly",
+    sessionDurationMinutes: 60,
+    expectedDurationWeeks: 12,
+    cycleGoals: "Escalar ventas en canal digital y aumentar la rentabilidad por pedido completado.",
+    scope: "Embudo de conversión, estrategia de pricing, retención y optimización de campañas comerciales.",
+    mentorCommitments: "Revisar analítica del embudo de ventas quincenalmente y asesorar en optimizaciones de catálogo y checkout.",
+    entrepreneurCommitments: "Medir semanalmente tráfico, conversión y ticket medio, implementando mejoras continuas.",
+    confidentialityTerms: "Confidencialidad absoluta sobre ventas, proveedores, catálogo y estrategias comerciales de la marca.",
+    authorizedChannels: ["virtual", "email", "whatsapp"],
+  },
+  fintech: {
+    initiativeName: "FinPay Core",
+    sector: "FinTech & Servicios Financieros",
+    nature: "designing_solution",
+    summary: "Infraestructura de pagos y conciliación financiera automatizada para empresas medianas y comercios.",
+    motivation: "validate",
+    description: "Desarrollamos una solución para automatizar la conciliación de cobros y dispersiones. Necesitamos validar la aceptación de tarifas por transacción y los requisitos de cumplimiento de clientes corporativos.",
+    compatibilityScore: 96,
+    compatibilityRationale: "Alineación en cumplimiento y finanzas: Mentor con experiencia en banca, regulación financiera y escalabilidad de pasarelas de pago B2B.",
+    suggestedMentorName: "Mentor en FinTech & Regulación Financiera",
+    validationGoals: [
+      "Validar disposición a pagar comisión transaccional con 5 empresas piloto",
+      "Verificar reducción en tiempo de conciliación contable semanal",
+      "Auditar cumplimiento con estándares de seguridad y protección de datos",
+    ],
+    frequency: "biweekly",
+    sessionDurationMinutes: 60,
+    expectedDurationWeeks: 12,
+    cycleGoals: "Validación de propuesta de valor de pagos y cierre de 3 acuerdos piloto con empresas.",
+    scope: "Modelo de monetización, seguridad operativa, conciliación y diseño de acuerdos con aliados financieros.",
+    mentorCommitments: "Asesorar en estructuración de comisiones, cumplimiento normativo y contactos estratégicos del sector financiero.",
+    entrepreneurCommitments: "Documentar minuciosamente pruebas de integración, métricas de error y reportes de seguridad en cada ciclo.",
+    confidentialityTerms: "Confidencialidad de grado financiero sobre flujos transaccionales, integraciones bancarias y contratos.",
+    authorizedChannels: ["virtual", "email", "whatsapp"],
+  },
+  food: {
+    initiativeName: "GastroLab",
+    sector: "Alimentos, Gastronomía & FoodTech",
+    nature: "operating_business",
+    summary: "Concepto gastronómico y de delivery enfocado en calidad culinaria estandarizada y costos optimizados.",
+    motivation: "scale",
+    description: "Contamos con una carta inicial y clientes recurrentes. Buscamos estandarizar fichas técnicas de costeo, reducir mermas y expandir el alcance de ventas con márgenes rentables.",
+    compatibilityScore: 94,
+    compatibilityRationale: "Alineación culinaria y operativa: Mentor con trayectoria en dirección de restaurantes y costeo gastronómico riguroso.",
+    suggestedMentorName: "Mentor en Negocios Gastronómicos & Retail",
+    validationGoals: [
+      "Estandarizar costo de insumos con margen bruto superior al 65%",
+      "Implementar protocolo de reducción de mermas por debajo del 4%",
+      "Validar aceptación de menú con al menos 40 evaluaciones de comensales",
+    ],
+    frequency: "biweekly",
+    sessionDurationMinutes: 60,
+    expectedDurationWeeks: 8,
+    cycleGoals: "Estandarización de costos unitarios de menú y aumento del margen operativo mensual.",
+    scope: "Costeo de platos, ingeniería de menú, control de mermas y experiencia del cliente.",
+    mentorCommitments: "Auditar quincenalmente la matriz de costos y orientar en optimización de proveedores e ingredientes.",
+    entrepreneurCommitments: "Llevar registro diario de compras, porcionamiento y ventas, aplicando ajustes de costeo sugeridos.",
+    confidentialityTerms: "Confidencialidad estricta sobre recetas propietarias, costos de proveedores y contratos de locales.",
+    authorizedChannels: ["virtual", "email", "whatsapp"],
+  },
 };
+
+/** Limpia y normaliza el título de la iniciativa según lo que ingresó el usuario. */
+function formatInitiativeTitle(prompt: string): string {
+  const clean = prompt.trim();
+  if (!clean) return "Iniciativa de Mentoría";
+
+  // Quitar muletillas iniciales habituales
+  const stripped = clean
+    .replace(/^(quiero|deseo|me gustaría|me gustaria|busco|mi idea es|nuestra idea es|estoy creando|estamos creando|crear|hacer|desarrollar|un|una|el|la)\s+/i, "")
+    .trim();
+
+  const candidate = stripped.length > 2 ? stripped : clean;
+  // Capitalizar adecuadamente términos comunes de tecnología y negocio
+  const titled = candidate
+    .replace(/\breact\b/gi, "React")
+    .replace(/\bnextjs\b/gi, "Next.js")
+    .replace(/\bpython\b/gi, "Python")
+    .replace(/\bjavascript\b/gi, "JavaScript")
+    .replace(/\btypescript\b/gi, "TypeScript")
+    .replace(/\bsaas\b/gi, "SaaS")
+    .replace(/\bb2b\b/gi, "B2B")
+    .replace(/\bb2c\b/gi, "B2C")
+    .replace(/\bai\b/gi, "AI")
+    .replace(/\bia\b/gi, "IA");
+
+  const capitalized = titled.charAt(0).toUpperCase() + titled.slice(1);
+  return capitalized.length <= 40 ? capitalized : capitalized.slice(0, 37).trim() + "…";
+}
+
+/** Intenta invocar OpenRouter si la API key está disponible y responde rápido. */
+async function fetchFromOpenRouter(
+  prompt: string,
+  preferredMentorName?: string,
+): Promise<MentorshipExplorationAiResult | null> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey || apiKey.trim().length === 0) return null;
+
+  const model = process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-super-vl:free";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://rax-red.vercel.app",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: "system",
+            content: `Eres el Asistente de IA de RAX para estructurar proyectos de mentoría en 4 pasos.
+Devuelve EXCLUSIVAMENTE un objeto JSON válido (sin markdown ni explicaciones adicionales) con este esquema exacto:
+{
+  "initiativeName": string (máximo 40 caracteres, título limpio y formal),
+  "sector": string (ej. "Educación, Formación & Habilidades", "Salud Digital", "Software B2B", "FinTech", etc.),
+  "nature": "exploring_idea" | "designing_solution" | "operating_business",
+  "summary": string (propuesta de valor en 1 frase concisa),
+  "motivation": "scale" | "skills" | "validate" | "network" | "blocker" | "other",
+  "description": string (situación actual y desafíos principales, máx 400 caracteres),
+  "compatibilityScore": number (entre 92 y 99),
+  "compatibilityRationale": string (justificación de afinidad con el mentor),
+  "suggestedMentorName": string,
+  "validationGoals": string[] (exactamente 3 metas accionables),
+  "frequency": "weekly" | "biweekly" | "monthly",
+  "sessionDurationMinutes": 60,
+  "expectedDurationWeeks": 8 | 12 | 16,
+  "cycleGoals": string (objetivo central del ciclo),
+  "scope": string (alcance convenido),
+  "mentorCommitments": string,
+  "entrepreneurCommitments": string,
+  "confidentialityTerms": string,
+  "authorizedChannels": ["virtual", "email", "whatsapp"]
+}`,
+          },
+          {
+            role: "user",
+            content: `Genera la propuesta completa para la iniciativa o necesidad: "${prompt}". Mentor de referencia: ${preferredMentorName || "Mentor Asignado"}`,
+          },
+        ],
+        temperature: 0.2,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+    if (!res.ok) return null;
+
+    const json = await res.json();
+    const content = json?.choices?.[0]?.message?.content;
+    if (!content) return null;
+
+    const match = content.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+
+    const parsed = JSON.parse(match[0]);
+    if (parsed.initiativeName && parsed.sector && parsed.description && parsed.cycleGoals) {
+      return {
+        ...parsed,
+        suggestedMentorName: preferredMentorName || parsed.suggestedMentorName || "Mentor Asignado",
+        authorizedChannels: ["virtual", "email", "whatsapp"],
+      };
+    }
+    return null;
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+}
 
 export async function generateMentorshipExplorationData(
   prompt?: string,
@@ -162,20 +349,35 @@ export async function generateMentorshipExplorationData(
   const p = (prompt || "").toLowerCase();
   const cleanPrompt = (prompt || "").trim();
 
+  // Si hay un prompt con sustancia, intentar consultar al modelo en vivo si está disponible
+  if (cleanPrompt.length > 3) {
+    const aiResult = await fetchFromOpenRouter(cleanPrompt, preferredMentorName);
+    if (aiResult) return aiResult;
+  }
+
   let base: Archetype;
   if (cleanPrompt.length > 3) {
     let sector = "Tecnología e Innovación Digital";
     let archetypeBase = ARCHETYPES.general;
 
-    if (/aprend|estudi|educa|tutor|clase|universidad|colegio|academ|habilidad/.test(p)) {
+    if (/aprend|estudi|educa|tutor|clase|universidad|colegio|academ|habilidad|react|python|javascript|programac|idioma|ingl|capacit|frontend|backend|dev|fullstack/.test(p)) {
       sector = "Educación, Formación & Habilidades";
       archetypeBase = ARCHETYPES.learning;
-    } else if (p.includes("salud") || p.includes("medic") || p.includes("clinic") || p.includes("doctor") || p.includes("health")) {
+    } else if (p.includes("salud") || p.includes("medic") || p.includes("clinic") || p.includes("doctor") || p.includes("health") || p.includes("veterinar") || p.includes("mascota")) {
       sector = "Salud Digital & HealthTech";
       archetypeBase = ARCHETYPES.health;
-    } else if (p.includes("logistic") || p.includes("delivery") || p.includes("repart") || p.includes("transporte") || p.includes("paquet")) {
+    } else if (p.includes("logistic") || p.includes("delivery") || p.includes("repart") || p.includes("transporte") || p.includes("paquet") || p.includes("movilidad")) {
       sector = "Logística y Movilidad Urbana";
       archetypeBase = ARCHETYPES.logistics;
+    } else if (/comercio|tienda|retail|e-commerce|ecommerce|venta|ropa|moda|producto|catalogo|marca|marketplace|shop/.test(p)) {
+      sector = "Comercio Electrónico, Retail & Marcas";
+      archetypeBase = ARCHETYPES.commerce;
+    } else if (/finan|contab|pago|factur|credito|invers|banc|wallet|dinero|cobro|prestamo|fintech/.test(p)) {
+      sector = "FinTech & Servicios Financieros";
+      archetypeBase = ARCHETYPES.fintech;
+    } else if (/alimento|comida|restauran|cafe|gastronom|cocina|bebida|panader|reposter|food/.test(p)) {
+      sector = "Alimentos, Gastronomía & FoodTech";
+      archetypeBase = ARCHETYPES.food;
     }
 
     const isGenericKeyword = [
@@ -197,13 +399,15 @@ export async function generateMentorshipExplorationData(
       "educación",
       "educacion",
       "habilidades",
+      "comercio",
+      "ecommerce",
+      "fintech",
+      "gastronomia",
     ].includes(p);
 
     const initiativeName = isGenericKeyword
       ? archetypeBase.initiativeName
-      : cleanPrompt.length <= 40
-        ? cleanPrompt
-        : cleanPrompt.slice(0, 35) + " Core";
+      : formatInitiativeTitle(cleanPrompt);
 
     if (archetypeBase === ARCHETYPES.learning) {
       base = {

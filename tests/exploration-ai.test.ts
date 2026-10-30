@@ -48,6 +48,22 @@ describe("Workflow de Exploración y Creación de Proyecto Mentor-Cliente con As
     const health = await generateMentorshipExplorationData("Clínica y salud digital");
     expect(health.initiativeName).toBe("KlinicOS");
     expect(health.sector).toContain("HealthTech");
+
+    // 4. Caso ingesta formativa / aprendizaje (ej. Aprender React)
+    const learning = await generateMentorshipExplorationData("Aprender react");
+    expect(learning.initiativeName).toContain("React");
+    expect(learning.sector).toContain("Educación");
+    expect(learning.motivation).toBe("skills");
+    expect(learning.cycleGoals).toContain("Aprender react");
+
+    // 5. Caso ingesta e-commerce & retail
+    const commerce = await generateMentorshipExplorationData("Tienda de ropa y moda");
+    expect(commerce.sector).toContain("Comercio Electrónico");
+    expect(commerce.initiativeName).toBeTruthy();
+
+    // 6. Caso ingesta FinTech
+    const fintech = await generateMentorshipExplorationData("Pagos y facturación electrónica");
+    expect(fintech.sector).toContain("FinTech");
   });
 
   it("permite cargar el contexto de exploración y lista de mentores disponibles", async () => {

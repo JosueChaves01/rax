@@ -10,6 +10,8 @@ interface MobileBottomNavProps {
 
 export function MobileBottomNav({ onOpenMore }: MobileBottomNavProps) {
   const pathname = usePathname();
+  const currentProjectId = pathname.match(/\/app\/p\/([^/]+)/)?.[1];
+  const chatHref = currentProjectId ? `/app/chat?project=${currentProjectId}` : "/app/chat";
 
   const links = [
     {
@@ -24,6 +26,18 @@ export function MobileBottomNav({ onOpenMore }: MobileBottomNavProps) {
       ),
     },
     {
+      label: "IA Assistant",
+      href: chatHref,
+      icon: (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 2a8 8 0 0 0-8 8c0 3.37 2.07 6.25 5 7.42V20a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2.58c2.93-1.17 5-4.05 5-7.42a8 8 0 0 0-8-8z" />
+          <line x1="9.5" x2="9.5" y1="9" y2="9.01" />
+          <line x1="14.5" x2="14.5" y1="9" y2="9.01" />
+          <path d="M10 13c.5.5 1.5.5 2 0" />
+        </svg>
+      ),
+    },
+    {
       label: "Sesiones",
       href: "/app/sesiones",
       icon: (
@@ -32,16 +46,6 @@ export function MobileBottomNav({ onOpenMore }: MobileBottomNavProps) {
           <line x1="16" x2="16" y1="2" y2="6" />
           <line x1="8" x2="8" y1="2" y2="6" />
           <line x1="3" x2="21" y1="10" y2="10" />
-        </svg>
-      ),
-    },
-    {
-      label: "Documentos",
-      href: "/app/documentos",
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-          <polyline points="14 2 14 8 20 8" />
         </svg>
       ),
     },
