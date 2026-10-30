@@ -836,8 +836,12 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
     };
   } catch (e) {
     console.error("[rax] error creando proyecto desde exploración:", e);
-    if (isDomainError(e)) return { ok: false as const, error: e.message, code: e.code };
-    return { ok: false as const, error: "No se pudo crear el proyecto. Intentá nuevamente." };
+    if (isDomainError(e)) {
+      console.error("[rax] domain error detail:", e.code, e.message);
+      return { ok: false as const, error: e.message, code: e.code };
+    }
+    const msg = e instanceof Error ? e.message : "Error al procesar la creación.";
+    return { ok: false as const, error: `No se pudo crear el proyecto: ${msg}` };
   }
 };
 
