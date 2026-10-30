@@ -388,10 +388,14 @@ export class SimulatedProvider implements AiProvider {
 
     const completed = ctx.recentCompletedTasks.length
       ? ctx.recentCompletedTasks.map((t) => `• ${t.title} (${t.actionType ?? "tarea"})`).join("\n")
+      : ctx.diagnosisProblems?.length
+      ? `Diagnóstico inicial estructurado (Etapa 1 · Entender):\n${ctx.diagnosisProblems.map((p) => `• [Problema] ${p.title}${p.isPrioritized ? " (PRIORIZADO)" : ""}`).join("\n")}`
       : "Sin tareas completadas recientemente.";
 
     const blocked = ctx.blockedOrDelayedTasks.length
       ? ctx.blockedOrDelayedTasks.map((t) => `• ${t.title}: ${t.delayCause ? `Causa: ${t.delayCause}${t.delayDetail ? ` (${t.delayDetail})` : ""}` : t.blockedReason ?? "demora informada"}`).join("\n")
+      : ctx.diagnosisHypotheses?.length
+      ? `Supuestos e hipótesis detectados:\n${ctx.diagnosisHypotheses.map((h) => `• ${h.title}`).join("\n")}`
       : "Sin bloqueos ni demoras reportadas.";
 
     const exps = ctx.experimentsInProgress.length
@@ -402,6 +406,10 @@ export class SimulatedProvider implements AiProvider {
 
     const prevNotes = ctx.previousSessionNotes.length
       ? ctx.previousSessionNotes.map((n) => `• [${n.kind}] ${n.body}`).join("\n")
+      : ctx.diagnosisUnknowns?.length
+      ? `Incógnitas críticas del diagnóstico a dilucidar:\n${ctx.diagnosisUnknowns.map((u) => `• ${u.title}: ${u.content}`).join("\n")}`
+      : ctx.recentMessages?.length
+      ? `Último intercambio en el chat:\n${ctx.recentMessages.slice(-3).map((m) => `• ${m.author}: «${m.content.slice(0, 100)}»`).join("\n")}`
       : "Primera sesión o sin notas registradas de la reunión anterior.";
 
     const pendingTopicsSummary = `Temas arrastrados de la última sesión:\n${prevNotes}`;

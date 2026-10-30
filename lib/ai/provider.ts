@@ -240,6 +240,12 @@ export interface PreSessionBriefingContext {
     status: string;
     priority: string;
   }>;
+  // Contexto de Diagnóstico Vivo (Etapa 1 · Entender)
+  diagnosisSummary?: string;
+  diagnosisProblems?: Array<{ id: string; title: string; content: string; uncertainty?: number; isPrioritized?: boolean }>;
+  diagnosisHypotheses?: Array<{ id: string; title: string; content: string }>;
+  diagnosisEvidence?: Array<{ id: string; title: string; content: string }>;
+  diagnosisUnknowns?: Array<{ id: string; title: string; content: string }>;
   // Capa 2: Progreso y Ejecución reciente
   recentCompletedTasks: Array<{ title: string; actionType?: string }>;
   blockedOrDelayedTasks: Array<{ title: string; blockedReason?: string; delayCause?: string; delayDetail?: string }>;
@@ -257,10 +263,13 @@ export interface PreSessionBriefingResult {
 
 export interface PostSessionSynthesisContext {
   projectName: string;
+  projectSummary?: string;
   sessionKind: string;
   sessionNotes: Array<{ kind: string; body: string; isPrivate?: boolean }>;
   briefingAgenda?: string[];
   goals: Array<{ id: string; title: string }>;
+  keyProblems?: Array<{ id: string; title: string }>;
+  recentDiscussions?: Array<{ author: string; content: string }>;
 }
 
 export interface PostSessionSynthesisResult {

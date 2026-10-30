@@ -147,6 +147,7 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
               notes={w.notes.filter((n) => n.sessionId === s.id)}
               people={w.people as Record<string, { id: string; name: string; role: string }>}
               isSessionMentor={s.mentorId === actor.id}
+              isOwner={w.project.ownerId === actor.id}
               items={w.items.filter((i) => i.reviewStatus !== "rejected").map((i) => ({ id: i.id, title: i.title }))}
               hypotheses={w.hypotheses}
               experiments={w.experiments}

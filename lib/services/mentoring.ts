@@ -321,17 +321,21 @@ export async function generatePreSessionBriefing(
   sessionId: string,
 ): Promise<PreSessionBriefing> {
   const s = await loadSession(d, sessionId);
-  await guard(d, s.projectId, "mentor.note");
-  if (s.mentorId !== d.actor.id) throw forbidden("Esta sesión está asignada a otra persona.");
+  const { project, rel } = await guard(d, s.projectId, "project.read");
+  const isAssigned = s.mentorId === d.actor.id || rel.isAssignedMentor;
+  const isOwner = rel.isOwner || rel.isCollaborator;
+  if (!isAssigned && !isOwner && d.actor.role !== "admin") {
+    throw forbidden("Esta sesión está asignada a otra persona.");
+  }
 
-  const [project, diagnoses, allSessions, allNotes, allTasks, allExps, allRelations] = await Promise.all([
-    d.repo.projects.get(s.projectId),
+  const [diagnoses, allSessions, allNotes, allTasks, allExps, allRelations, diagnosisItems] = await Promise.all([
     d.repo.diagnoses.list({ projectId: s.projectId }),
     d.repo.mentorSessions.list({ projectId: s.projectId }),
     d.repo.sessionNotes.list({ projectId: s.projectId }),
     d.repo.tasks.list({ projectId: s.projectId }),
     d.repo.experiments.list({ projectId: s.projectId }),
     d.repo.mentorshipRelations.list({ projectId: s.projectId }),
+    d.repo.diagnosisItems.list({ projectId: s.projectId }),
   ]);
 
   if (!project) throw notFound("Proyecto no encontrado.");
@@ -373,6 +377,21 @@ export async function generatePreSessionBriefing(
     .filter((e) => e.status === "running" || e.status === "results_pending")
     .map((e) => ({ question: e.question, status: e.status, metric: e.metric }));
 
+  // Extraer contexto del diagnóstico de Etapa 1
+  const validItems = diagnosisItems.filter((i) => i.reviewStatus !== "rejected");
+  const diagnosisProblems = validItems
+    .filter((i) => i.category === "problem")
+    .map((i) => ({ id: i.id, title: i.title, content: i.content, isPrioritized: !!i.priority }));
+  const diagnosisHypotheses = validItems
+    .filter((i) => i.infoType === "hypothesis")
+    .map((i) => ({ id: i.id, title: i.title, content: i.content }));
+  const diagnosisEvidence = validItems
+    .filter((i) => i.infoType === "verifiable_evidence" || i.infoType === "documented_observation")
+    .map((i) => ({ id: i.id, title: i.title, content: i.content }));
+  const diagnosisUnknowns = validItems
+    .filter((i) => i.infoType === "unknown" || i.category === "open_question")
+    .map((i) => ({ id: i.id, title: i.title, content: i.content }));
+
   // Capa 3: Temas pendientes y notas de sesiones previas
   const previousSessions = allSessions
     .filter((sess) => sess.id !== sessionId)
@@ -383,9 +402,24 @@ export async function generatePreSessionBriefing(
     : [];
 
   let recentMessages: Array<{ author: string; content: string }> | undefined;
-  if (project.shareConversationWithMentor) {
-    const msgs = await d.repo.messages.list({ projectId: s.projectId });
-    recentMessages = msgs.slice(-10).map((m) => ({ author: m.author, content: m.content }));
+  if (project.shareConversationWithMentor || isOwner) {
+    const [legacyMsgs, threads] = await Promise.all([
+      d.repo.messages.list({ projectId: s.projectId }).catch(() => []),
+      d.repo.agentThreads.list({ projectId: s.projectId }).catch(() => []),
+    ]);
+    const agentMsgsList: Array<{ author: string; content: string }> = [];
+    if (threads.length > 0) {
+      const sortedThreads = threads.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+      const activeThread = sortedThreads[0];
+      const msgs = await d.repo.agentMessages.list({ threadId: activeThread.id }).catch(() => []);
+      for (const m of msgs.slice(-10)) {
+        agentMsgsList.push({ author: m.author, content: m.content });
+      }
+    }
+    const combined = [...legacyMsgs.map((m) => ({ author: m.author, content: m.content })), ...agentMsgsList];
+    if (combined.length > 0) {
+      recentMessages = combined.slice(-15);
+    }
   }
 
   const ctx: PreSessionBriefingContext = {
@@ -405,6 +439,10 @@ export async function generatePreSessionBriefing(
     recentCompletedTasks,
     blockedOrDelayedTasks,
     experimentsInProgress,
+    diagnosisProblems: diagnosisProblems.length > 0 ? diagnosisProblems : undefined,
+    diagnosisHypotheses: diagnosisHypotheses.length > 0 ? diagnosisHypotheses : undefined,
+    diagnosisEvidence: diagnosisEvidence.length > 0 ? diagnosisEvidence : undefined,
+    diagnosisUnknowns: diagnosisUnknowns.length > 0 ? diagnosisUnknowns : undefined,
     previousSessionNotes,
     recentMessages,
   };
@@ -460,26 +498,38 @@ export async function generatePostSessionSynthesis(
   sessionId: string,
 ): Promise<PostSessionSynthesis> {
   const s = await loadSession(d, sessionId);
-  await guard(d, s.projectId, "mentor.note");
-  if (s.mentorId !== d.actor.id) throw forbidden("Esta sesión está asignada a otra persona.");
+  const { project, rel } = await guard(d, s.projectId, "project.read");
+  const isAssigned = s.mentorId === d.actor.id || rel.isAssignedMentor;
+  const isOwner = rel.isOwner || rel.isCollaborator;
+  if (!isAssigned && !isOwner && d.actor.role !== "admin") {
+    throw forbidden("Esta sesión está asignada a otra persona.");
+  }
 
-  const [project, sessionNotes, allRelations] = await Promise.all([
-    d.repo.projects.get(s.projectId),
+  const [sessionNotes, allRelations, diagnoses, diagnosisItems] = await Promise.all([
     d.repo.sessionNotes.list({ sessionId }),
     d.repo.mentorshipRelations.list({ projectId: s.projectId }),
+    d.repo.diagnoses.list({ projectId: s.projectId }),
+    d.repo.diagnosisItems.list({ projectId: s.projectId }),
   ]);
 
   if (!project) throw notFound("Proyecto no encontrado.");
+  const dx = diagnoses[0];
   const activeRelation = allRelations.find((r) => r.stage !== "closed") ?? allRelations[0];
   const allGoals = activeRelation ? await d.repo.mentorshipGoals.list({ relationId: activeRelation.id }) : [];
+  const validItems = diagnosisItems.filter((i) => i.reviewStatus !== "rejected");
+  const keyProblems = validItems
+    .filter((i) => i.category === "problem")
+    .map((i) => ({ id: i.id, title: i.title }));
 
   const ctx: PostSessionSynthesisContext = {
     projectName: project.name,
+    projectSummary: dx?.summary ?? project.description,
     sessionKind: s.kind,
     // El resumen se persiste en la sesión, visible para el emprendedor; notas privadas no entran al proveedor.
     sessionNotes: sessionNotes.filter((n) => !n.isPrivate).map((n) => ({ kind: n.kind, body: n.body, isPrivate: false })),
     briefingAgenda: s.preSessionBriefing?.suggestedAgenda,
     goals: allGoals.map((g) => ({ id: g.id, title: g.title })),
+    keyProblems: keyProblems.length > 0 ? keyProblems : undefined,
   };
 
   try {

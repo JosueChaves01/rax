@@ -327,12 +327,18 @@ export const scheduleSessionAction = async (
 
 export const generatePreSessionBriefingAction = async (projectId: string, sessionId: string) =>
   run(projectId, async (d) => {
-    return generatePreSessionBriefing(d, V.parse(V.Ids, sessionId));
+    const res = await generatePreSessionBriefing(d, V.parse(V.Ids, sessionId));
+    revalidatePath(`/app/p/${projectId}/orientar`);
+    revalidatePath(`/app/p/${projectId}/mentoria`);
+    return res;
   });
 
 export const generatePostSessionSynthesisAction = async (projectId: string, sessionId: string) =>
   run(projectId, async (d) => {
-    return generatePostSessionSynthesis(d, V.parse(V.Ids, sessionId));
+    const res = await generatePostSessionSynthesis(d, V.parse(V.Ids, sessionId));
+    revalidatePath(`/app/p/${projectId}/orientar`);
+    revalidatePath(`/app/p/${projectId}/mentoria`);
+    return res;
   });
 
 export const adoptPostSessionCommitmentsAction = async (

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type {
   Experiment,
   ExperimentResult,
@@ -17,7 +18,6 @@ import type {
 } from "@/types/domain";
 import {
   addNoteAction,
-  addNotesBatchAction,
   adoptPostSessionCommitmentsAction,
   completeFirstReviewAction,
   completeSecondReviewAction,
@@ -27,7 +27,6 @@ import {
   requestReviewAction,
   scheduleSessionAction,
   setSharingAction,
-  suggestFirstReviewAction,
 } from "@/app/actions";
 import {
   ACTION_TYPE_LABEL,
@@ -35,7 +34,6 @@ import {
   HYPOTHESIS_STATUS_LABEL,
   NOTE_KIND_LABEL,
   OUTCOME_LABEL,
-  SESSION_KIND_LABEL,
 } from "@/features/labels";
 import { Button, Card, Field, Notice, Tag, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
@@ -214,12 +212,110 @@ export function ReviewRequests({
   );
 }
 
+function SessionCopilotBar({
+  projectId,
+  sessionId,
+  disabled,
+  onBriefingGenerated,
+  onSynthesisGenerated,
+}: {
+  projectId: string;
+  sessionId: string;
+  disabled?: boolean;
+  onBriefingGenerated: (briefing: PreSessionBriefing) => void;
+  onSynthesisGenerated: (synthesis: PostSessionSynthesis) => void;
+}) {
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleGenerateBriefing = async () => {
+    setIsAiLoading(true);
+    setAiError(null);
+    setAiNotice(null);
+    try {
+      const res = await generatePreSessionBriefingAction(projectId, sessionId);
+      if (res.ok) {
+        if (res.data) {
+          setAiNotice("Briefing estructurado en 4 capas generado y actualizado con el contexto actual.");
+          onBriefingGenerated(res.data);
+        }
+      } else {
+        setAiError(res.error || "No se pudo generar el briefing.");
+      }
+    } catch {
+      setAiError("No se pudo conectar con el asistente de IA para el briefing.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleGenerateSynthesis = async () => {
+    setIsAiLoading(true);
+    setAiError(null);
+    setAiNotice(null);
+    try {
+      const res = await generatePostSessionSynthesisAction(projectId, sessionId);
+      if (res.ok) {
+        if (res.data) {
+          setAiNotice("Síntesis y compromisos generados a partir de las notas y contexto de la sesión.");
+          onSynthesisGenerated(res.data);
+        }
+      } else {
+        setAiError(res.error || "No se pudo generar la síntesis.");
+      }
+    } catch {
+      setAiError("No se pudo conectar con el asistente de IA para la síntesis.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-cyan-500/30 bg-cyan-50/60 dark:bg-cyan-950/20 p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400 flex items-center gap-1.5">
+            <span>✨</span> Copiloto metodológico de sesiones
+          </p>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            Prepará la reunión con 4 capas de memoria o redactá la síntesis ejecutiva con compromisos en borrador en base al diagnóstico actual.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            type="button"
+            disabled={isAiLoading || disabled}
+            onClick={handleGenerateBriefing}
+          >
+            {isAiLoading ? "Procesando..." : "✨ Briefing 4 capas"}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            type="button"
+            disabled={isAiLoading || disabled}
+            onClick={handleGenerateSynthesis}
+          >
+            {isAiLoading ? "Procesando..." : "✨ Síntesis pos-sesión"}
+          </Button>
+        </div>
+      </div>
+      {aiNotice && <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">✓ {aiNotice}</p>}
+      {aiError && <Notice tone="error">{aiError}</Notice>}
+    </div>
+  );
+}
+
 export function SessionCard(props: {
   projectId: string;
   session: MentorSession;
   notes: SessionNote[];
   people: People;
   isSessionMentor: boolean;
+  isOwner?: boolean;
   items: Array<{ id: string; title: string }>;
   hypotheses: Hypothesis[];
   experiments: Experiment[];
@@ -227,14 +323,24 @@ export function SessionCard(props: {
   goals?: MentorshipGoal[];
   roadmapMilestones?: RoadmapMilestone[];
 }) {
+  const router = useRouter();
   const { session: s } = props;
   const [title, hi] = KIND_TITLE[s.kind] ?? ["Sesión de mentoría", "acompañamiento"];
   const [statusLabel, statusColor] = STATUS_TAG[s.status];
   const b = s.briefing;
-  const preBrief = s.preSessionBriefing;
-  const postSyn = s.postSessionSynthesis;
+  const [preBrief, setPreBrief] = useState<PreSessionBriefing | undefined>(s.preSessionBriefing);
+  const [postSyn, setPostSyn] = useState<PostSessionSynthesis | undefined>(s.postSessionSynthesis);
   const canAct = props.isSessionMentor && s.status !== "completed";
+  const canUseCopilot = (props.isSessionMentor || props.isOwner) && s.status !== "completed";
   const itemTitle = (id?: string) => props.items.find((i) => i.id === id)?.title;
+
+  useEffect(() => {
+    if (s.preSessionBriefing) setPreBrief(s.preSessionBriefing);
+  }, [s.preSessionBriefing]);
+
+  useEffect(() => {
+    if (s.postSessionSynthesis) setPostSyn(s.postSessionSynthesis);
+  }, [s.postSessionSynthesis]);
 
   const { run, pending } = useAction();
   const [onlySharedNotes, setOnlySharedNotes] = useState(false);
@@ -249,9 +355,9 @@ export function SessionCard(props: {
   };
 
   return (
-    <Card as="li" className="p-5 space-y-5">
+    <Card as="li" className="p-5 space-y-5 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 shadow-2xs">
       {/* Cabecera de la tarjeta de sesión */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-zinc-800 pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="display text-2xl">
             {title} <span className="text-highlight">{hi}</span>
@@ -263,69 +369,88 @@ export function SessionCard(props: {
             </span>
           )}
         </div>
-        <span className="text-xs text-faint">
+        <span className="text-xs text-slate-500 dark:text-slate-400">
           {props.people[s.mentorId]?.name ?? "Mentor"} · creada {formatDate(s.createdAt)}
         </span>
       </div>
 
       {/* ───────────────────────────────────────────────────────────── */}
+      {/* COPILOTO METODOLÓGICO DE SESIONES                             */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {canUseCopilot && (
+        <SessionCopilotBar
+          projectId={props.projectId}
+          sessionId={s.id}
+          disabled={pending}
+          onBriefingGenerated={(briefing) => {
+            setPreBrief(briefing);
+            router.refresh();
+          }}
+          onSynthesisGenerated={(synthesis) => {
+            setPostSyn(synthesis);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. BRIEFING PRE-SESIÓN (4 CAPAS DE MEMORIA)                   */}
       {/* ───────────────────────────────────────────────────────────── */}
       {preBrief && (
-        <details className="rounded-xl border border-cyan/30 bg-cyan/5 p-4" open={canAct}>
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-cyan flex items-center justify-between">
+        <details className="rounded-xl border border-cyan-500/30 bg-cyan-50/40 dark:bg-cyan-950/20 p-4" open={true}>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400 flex items-center justify-between">
             <span>✨ Briefing Pre-Sesión (4 Capas de Memoria) · {formatDate(preBrief.generatedAt)}</span>
-            <span className="text-[0.6875rem] text-faint normal-case">Preparación en &lt; 3 minutos</span>
+            <span className="text-[0.6875rem] text-slate-500 dark:text-slate-400 normal-case font-normal">Preparación en &lt; 3 minutos</span>
           </summary>
-          <div className="mt-3 space-y-4 text-sm text-ink pt-2 border-t border-cyan/20">
+          <div className="mt-3 space-y-3.5 text-sm pt-3 border-t border-cyan-200 dark:border-cyan-800">
             {/* Capa 1: Acuerdos y Objetivos vigentes */}
-            <div className="rounded-lg bg-bg p-3 border border-line">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-faint">
+            <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
                 Capa 1: Acuerdos y Objetivos vigentes
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-xs text-ink">
+              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 dark:text-slate-100 leading-relaxed">
                 {preBrief.activeAgreementsAndGoalsSummary}
               </p>
             </div>
 
             {/* Capa 2: Progreso y Ejecución reciente */}
-            <div className="rounded-lg bg-bg p-3 border border-line">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-faint">
-                Capa 2: Progreso reciente, bloqueos e hipótesis diagnósticas
+            <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
+                Capa 2: Progreso reciente, problemas diagnósticos y bloqueos
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-xs text-ink">
+              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 dark:text-slate-100 leading-relaxed">
                 {preBrief.recentProgressSummary}
               </p>
             </div>
 
             {/* Capa 3: Temas pendientes y conversaciones recientes */}
-            <div className="rounded-lg bg-bg p-3 border border-line">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-faint">
-                Capa 3: Temas pendientes de sesiones y chat previo
+            <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
+                Capa 3: Temas pendientes de sesiones previas y chat del asistente
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-xs text-ink">
+              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 dark:text-slate-100 leading-relaxed">
                 {preBrief.pendingTopicsSummary}
               </p>
             </div>
 
             {/* Capa 4: Propuesta de agenda y preguntas estratégicas */}
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg bg-bg p-3 border border-line">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-faint">
+              <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
                   Capa 4: Propuesta de Agenda
                 </p>
-                <ul className="mt-2 list-disc space-y-1 pl-4 text-xs">
+                <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-800 dark:text-slate-100">
                   {preBrief.suggestedAgenda.map((item, idx) => (
                     <li key={idx}>{item}</li>
                   ))}
                 </ul>
               </div>
 
-              <div className="rounded-lg bg-bg p-3 border border-line">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-faint">
+              <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
                   Capa 4: Preguntas estratégicas sugeridas
                 </p>
-                <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-muted">
+                <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-600 dark:text-slate-300">
                   {preBrief.suggestedQuestions.map((q, idx) => (
                     <li key={idx}>«{q}»</li>
                   ))}
@@ -338,8 +463,8 @@ export function SessionCard(props: {
 
       {/* Briefing determinista clásico si no hay preBriefing generado */}
       {!preBrief && b && (
-        <details className="rounded-xl border border-line bg-bg p-4" open={canAct}>
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+        <details className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-4" open={canAct}>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-slate-400">
             Resumen estructurado para el mentor · {formatDate(b.generatedAt)}
           </summary>
           <dl className="mt-3 grid gap-4 text-sm md:grid-cols-2">
@@ -366,7 +491,7 @@ export function SessionCard(props: {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="eyebrow">Notas y acuerdos de la sesión ({displayedNotes.length})</p>
             {props.isSessionMentor && props.notes.some((n) => n.isPrivate) && (
-              <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={onlySharedNotes}
@@ -385,10 +510,10 @@ export function SessionCard(props: {
                 className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
                   n.isPrivate
                     ? "border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20"
-                    : "border-line bg-bg"
+                    : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 shadow-2xs"
                 }`}
               >
-                <div className="flex flex-wrap items-center gap-2 text-[0.6875rem] text-faint">
+                <div className="flex flex-wrap items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
                   <Tag
                     color={
                       n.kind === "agreement"
@@ -412,7 +537,7 @@ export function SessionCard(props: {
                   <span>{props.people[n.authorId]?.name} · {formatDate(n.createdAt)}</span>
                   {n.relatedItemId && <span>· sobre «{itemTitle(n.relatedItemId) ?? "elemento"}»</span>}
                 </div>
-                <p className="mt-1.5 text-ink whitespace-pre-wrap">{n.body}</p>
+                <p className="mt-1.5 text-slate-800 dark:text-slate-100 whitespace-pre-wrap">{n.body}</p>
               </li>
             ))}
           </ul>
@@ -423,15 +548,15 @@ export function SessionCard(props: {
       {/* 3. SÍNTESIS POS-SESIÓN Y ADOPCIÓN DE COMPROMISOS              */}
       {/* ───────────────────────────────────────────────────────────── */}
       {postSyn && (
-        <div className="rounded-xl border border-ok/30 bg-ok/5 p-4 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ok/20 pb-2">
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-950/20 p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 dark:border-emerald-800 pb-2">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-ok">
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
                 Síntesis Pos-Sesión · {formatDate(postSyn.generatedAt)}
               </p>
-              <h4 className="font-semibold text-ink">Resumen ejecutivo y compromisos formalizados</h4>
+              <h4 className="font-semibold text-slate-900 dark:text-white">Resumen ejecutivo y compromisos formalizados</h4>
             </div>
-            {canAct && postSyn.entrepreneurCommitments.length > 0 && (
+            {(props.isSessionMentor || props.isOwner) && postSyn.entrepreneurCommitments.length > 0 && (
               <Button
                 size="sm"
                 variant="primary"
@@ -443,14 +568,14 @@ export function SessionCard(props: {
             )}
           </div>
 
-          <p className="text-sm text-ink whitespace-pre-wrap">{postSyn.summary}</p>
+          <p className="text-sm text-slate-800 dark:text-slate-100 whitespace-pre-wrap leading-relaxed">{postSyn.summary}</p>
 
           {postSyn.agreedDecisions.length > 0 && (
-            <div className="rounded-lg bg-bg p-3 border border-line">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-faint">
+            <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
                 Decisiones y Acuerdos
               </p>
-              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs">
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs text-slate-800 dark:text-slate-100">
                 {postSyn.agreedDecisions.map((d, idx) => (
                   <li key={idx}>{d}</li>
                 ))}
@@ -460,11 +585,11 @@ export function SessionCard(props: {
 
           <div className="grid gap-3 sm:grid-cols-2">
             {postSyn.entrepreneurCommitments.length > 0 && (
-              <div className="rounded-lg bg-bg p-3 border border-line">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-faint">
+              <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
                   Compromisos del Emprendedor ({postSyn.entrepreneurCommitments.length})
                 </p>
-                <ul className="mt-2 space-y-1.5 text-xs">
+                <ul className="mt-2 space-y-1.5 text-xs text-slate-800 dark:text-slate-100">
                   {postSyn.entrepreneurCommitments.map((c, idx) => (
                     <li key={idx} className="flex items-start gap-1.5">
                       <Tag color="var(--color-accent)">
@@ -478,11 +603,11 @@ export function SessionCard(props: {
             )}
 
             {postSyn.mentorCommitments.length > 0 && (
-              <div className="rounded-lg bg-bg p-3 border border-line">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-faint">
+              <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
                   Compromisos del Mentor ({postSyn.mentorCommitments.length})
                 </p>
-                <ul className="mt-2 space-y-1 text-xs text-muted">
+                <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
                   {postSyn.mentorCommitments.map((mc, idx) => (
                     <li key={idx}>• {mc.title}</li>
                   ))}
@@ -492,8 +617,8 @@ export function SessionCard(props: {
           </div>
 
           {postSyn.nextSteps && (
-            <p className="text-xs text-muted">
-              <strong>Próximos pasos:</strong> {postSyn.nextSteps}
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              <strong className="text-slate-800 dark:text-slate-200">Próximos pasos:</strong> {postSyn.nextSteps}
               {postSyn.suggestedNextSessionInDays && (
                 <span> · Encuentro sugerido en {postSyn.suggestedNextSessionInDays} días.</span>
               )}
@@ -515,8 +640,8 @@ export function SessionCard(props: {
       )}
 
       {!props.isSessionMentor && s.status !== "completed" && (
-        <p className="text-sm text-muted">
-          Mientras la sesión está abierta, podés registrar avances en la hoja de ruta. Las notas y acuerdos son coordinados conjuntamente con tu mentor.
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Mientras la sesión está abierta, podés registrar avances en la hoja de ruta y apoyarte en el copiloto metodológico para preparar las reuniones.
         </p>
       )}
 
@@ -603,86 +728,10 @@ function MentorTools({
   const decidable = hypotheses.filter((h) => !["draft", "pending_approval", "discarded", "reformulated"].includes(h.status));
   const [hyp, setHyp] = useState(decidable[0]?.id ?? "");
 
-  // Asistentes de IA
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiNotice, setAiNotice] = useState<string | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
-
   const fid = (x: string) => `${s.id}-${x}`;
-
-  const handleGenerateBriefing = async () => {
-    setIsAiLoading(true);
-    setAiError(null);
-    setAiNotice(null);
-    try {
-      const res = await generatePreSessionBriefingAction(projectId, s.id);
-      if (res.ok) {
-        setAiNotice("Briefing estructurado en 4 capas generado y disponible en la sesión.");
-      } else {
-        setAiError(res.error);
-      }
-    } catch {
-      setAiError("No se pudo conectar con el asistente de IA para el briefing.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  const handleGenerateSynthesis = async () => {
-    setIsAiLoading(true);
-    setAiError(null);
-    setAiNotice(null);
-    try {
-      const res = await generatePostSessionSynthesisAction(projectId, s.id);
-      if (res.ok) {
-        setAiNotice("Síntesis y compromisos generados a partir de las notas de la sesión.");
-      } else {
-        setAiError(res.error);
-      }
-    } catch {
-      setAiError("No se pudo conectar con el asistente de IA para la síntesis.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
 
   return (
     <div className="space-y-6 border-t border-line pt-5">
-      {/* Barra de asistentes de IA para el mentor */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan/30 bg-cyan/5 p-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-cyan flex items-center gap-1.5">
-            <span>✨</span> Copiloto metodológico de sesiones
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            Prepará la reunión con 4 capas de memoria o redactá la síntesis ejecutiva con compromisos en borrador.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            type="button"
-            disabled={isAiLoading || pending}
-            onClick={handleGenerateBriefing}
-          >
-            {isAiLoading ? "Procesando..." : "✨ Briefing 4 capas"}
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            type="button"
-            disabled={isAiLoading || pending}
-            onClick={handleGenerateSynthesis}
-          >
-            {isAiLoading ? "Procesando..." : "✨ Síntesis pos-sesión"}
-          </Button>
-        </div>
-      </div>
-
-      {aiNotice && <p className="text-xs text-[var(--color-ok)] font-medium">{aiNotice}</p>}
-      {aiError && <Notice tone="error">{aiError}</Notice>}
-
       {/* Formulario de toma de notas en vivo con privacidad dual */}
       <form
         className="space-y-4 rounded-xl border border-line bg-panel p-4"
