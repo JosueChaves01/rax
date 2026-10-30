@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { canUseCapability, invokeMainAgent, MainAgentChatInputSchema, RAX_CAPABILITIES, selectRaxCapability } from "@/lib/n8n/main-agent";
 
 describe("RAX common main agent contract", () => {
@@ -70,5 +70,49 @@ describe("RAX common main agent contract", () => {
       {} as never,
     );
     expect(result).toMatchObject({ ok: false, capability: "RAX-02", status: "disabled" });
+  });
+
+  it("cleans leaked internal json fragments from model reply", async () => {
+    vi.stubEnv("RAX_N8N_MAIN_AGENT_ENABLED", "true");
+    vi.stubEnv("N8N_WEBHOOK_BASE_URL", "https://n8n.test");
+    vi.stubEnv("RAX_N8N_SHARED_SECRET", "secret");
+
+    const leakyReply = 'Hola emprendedor. ¿Qué deseas hacer?},"askedDimension":"projectScope","proposals":[],"uncertainties":["duda 1"]}';
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        correlationId: "corr-clean-1",
+        reply: leakyReply,
+        proposals: [],
+        uncertainties: ["duda 1"],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await invokeMainAgent(
+      { role: "entrepreneur", projectId: "p-clean", stage: "general", message: "Hola" },
+      {
+        correlationId: "corr-clean-1",
+        projectId: "p-clean",
+        actor: { role: "entrepreneur", id: "u-1" },
+        messageId: "m-1",
+        message: "Hola",
+        workContext: { stage: "general" },
+        context: {
+          projectName: "P",
+          recentMessages: [],
+          currentItems: [],
+          coveredDimensions: [],
+          pendingDimensions: [],
+          mentorNotes: [],
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      reply: "Hola emprendedor. ¿Qué deseas hacer?",
+    });
   });
 });

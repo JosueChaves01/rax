@@ -126,7 +126,18 @@ export async function invokeMainAgent(turn: MainAgentTurn, request: ChatSyncRequ
   }
   const result = await invokeSyncChatN8n(parsed.data);
   if (!result.ok || !result.response) return { ok: false, capability: "RAX-02", status: "unavailable", message: result.error ?? "El agente no devolvió respuesta." };
-  return { ok: true, capability: "RAX-02", reply: result.response.reply, proposals: result.response.proposals, correlationId: result.response.correlationId };
+  
+  // Limpiar cualquier residuo de JSON o metadatos internos que el modelo haya podido filtrar en reply
+  let cleanReply = result.response.reply;
+  const jsonArtifactPattern = /\}?,?\s*"(?:askedDimension|proposals|uncertainties)"\s*:/;
+  const artifactMatch = cleanReply.match(jsonArtifactPattern);
+  if (artifactMatch && artifactMatch.index !== undefined) {
+    cleanReply = cleanReply.slice(0, artifactMatch.index).trim();
+  }
+  // Eliminar posibles llaves o comillas desbalanceadas al final del texto limpio
+  cleanReply = cleanReply.replace(/["\s,}]+$/, "").trim();
+
+  return { ok: true, capability: "RAX-02", reply: cleanReply, proposals: result.response.proposals, correlationId: result.response.correlationId };
 }
 
 export function canUseCapability(role: Role, capabilityId: RaxCapabilityId, allowedActions: readonly Action[]): boolean {
