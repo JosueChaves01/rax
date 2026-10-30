@@ -44,7 +44,7 @@ export function EvaluationView({
 
   const progressPercent = goalsCount > 0
     ? Math.round((achievedGoalsCount / goalsCount) * 100)
-    : 68;
+    : 0;
 
   const handleSave = () => {
     if (!relationId || !projectId) {
@@ -146,7 +146,7 @@ export function EvaluationView({
                 Objetivos alcanzados
               </span>
               <span className="text-sm font-bold font-mono text-blue-600">
-                {achievedGoalsCount} / {goalsCount || 5}
+                {achievedGoalsCount} / {goalsCount}
               </span>
             </div>
 
@@ -155,7 +155,7 @@ export function EvaluationView({
                 Hitos completados
               </span>
               <span className="text-sm font-bold font-mono text-emerald-600">
-                {achievedMilestonesCount} / {milestonesCount || 6}
+                {achievedMilestonesCount} / {milestonesCount}
               </span>
             </div>
 

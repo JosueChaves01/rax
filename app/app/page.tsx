@@ -32,9 +32,28 @@ export default async function ProjectsPage() {
 
   if (isMentor) {
     const portfolio = await getMentorPortfolio(d);
+    const mentorSessions = await d.repo.mentorSessions.list({ mentorId: d.actor.id }).catch(() => []);
+    const upcomingSessions = mentorSessions
+      .filter((s) => s.status !== "completed")
+      .map((s) => {
+        const proj = portfolio.projects.find((p) => p.projectId === s.projectId);
+        return {
+          id: s.id,
+          timeBadge: s.scheduledAt ? formatDate(s.scheduledAt) : "Programada",
+          mentee: proj?.entrepreneurName || proj?.projectName || "Emprendedor",
+          topic: `Sesión de ${s.kind || "mentoría"}`,
+          isToday: Boolean(s.scheduledAt && new Date(s.scheduledAt).toDateString() === new Date().toDateString()),
+          href: "/app/sesiones",
+        };
+      });
+
     return (
       <div className="space-y-10">
-        <MentorDashboard mentorName={d.actor.name} portfolio={portfolio} />
+        <MentorDashboard
+          mentorName={d.actor.name}
+          portfolio={portfolio}
+          upcomingSessions={upcomingSessions}
+        />
 
         {/* Sección adicional: Proyectos asignados directamente */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
@@ -81,10 +100,16 @@ export default async function ProjectsPage() {
     );
   }
 
-  // Si es Emprendedor (Panel 2 del Mock)
-  const mentorName = workspaces[0]?.mentorshipRelation?.mentorId
-    ? "Carlos Méndez"
-    : "Carlos Méndez (Asignado)";
+  // Emprendedor
+  let assignedMentorName: string | undefined;
+  const mentorId =
+    workspaces[0]?.mentorshipRelation?.mentorId || workspaces[0]?.mentors?.[0];
+  if (mentorId) {
+    const mentorProfile = await d.repo.profiles.get(mentorId).catch(() => null);
+    if (mentorProfile) {
+      assignedMentorName = mentorProfile.name;
+    }
+  }
 
   const primaryProjectId = workspaces[0]?.project?.id;
   const recentAudits = primaryProjectId
@@ -97,7 +122,7 @@ export default async function ProjectsPage() {
     <div className="space-y-10">
       <EntrepreneurDashboard
         entrepreneurName={d.actor.name}
-        mentorName={mentorName}
+        mentorName={assignedMentorName}
         workspaces={workspaces}
         recentAudits={recentAudits}
       />

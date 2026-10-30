@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getDeps } from "@/lib/runtime";
 import { getMentorPortfolio } from "@/lib/services/portfolio";
+import { listMyProjects } from "@/lib/services/projects";
 import { SuggestionsView, type SuggestionItem } from "@/shared/ui/suggestions-view";
 
 export const metadata = { title: "Sugerencias de IA · RAX" };
@@ -9,97 +10,80 @@ export default async function SuggestionsPage() {
   const d = await getDeps();
   if (!d) redirect("/entrar");
 
-  const defaultSuggestions: SuggestionItem[] = [
-    {
-      id: "learning",
-      title: "Recomendar material de aprendizaje",
-      subtitle: "Para fortalecer la habilidad de comunicación comercial",
-      targetRole: "all",
-      recommendation:
-        "Te recomiendo asignar el método PREP, ya que ayudará a estructurar respuestas claras y contundentes ante clientes y prospectos indecisos.",
-      whyPoints: [
-        "Tuviste una tasa de conversión comercial reciente del 40%.",
-        "Se detectó fricción en la comunicación del diferencial de valor.",
-        "Está alineado directamente con tu objetivo de captar nuevos clientes.",
-      ],
-      ctaLabel: "Asignar material PREP",
-      ctaHref: "/app/aprendizaje",
-    },
-    {
-      id: "session-prep",
-      title: "Preparar próxima sesión",
-      subtitle: "Basado en la última sesión y tareas pendientes",
-      targetRole: "mentor",
-      recommendation:
-        "Generar agenda tentativa de 60 minutos enfocada en destrabar el cuello de botella en captación comercial.",
-      whyPoints: [
-        "Hay 2 compromisos de la reunión pasada que siguen sin validar.",
-        "Faltan 4 días para el próximo encuentro pactado.",
-        "El emprendedor cargó una nueva duda en el chat contextual.",
-      ],
-      ctaLabel: "Ver y preparar agenda",
-      ctaHref: "/app/sesiones",
-    },
-    {
-      id: "progress-report",
-      title: "Generar informe de progreso",
-      subtitle: "Con datos consolidados de objetivos y tareas completadas",
-      targetRole: "all",
-      recommendation:
-        "Sintetizar el avance del 68% de la etapa para compartir con socios e inversionistas en un reporte ejecutivo trazable.",
-      whyPoints: [
-        "Se han cumplido 3 de los 5 objetivos principales.",
-        "Se acumulan 4 evidencias validadas con clientes.",
-        "Permite comparar con la línea base inicial de diagnóstico.",
-      ],
-      ctaLabel: "Generar informe",
-      ctaHref: "/app/reportes",
-    },
-    {
-      id: "detect-blockers",
-      title: "Detectar posibles bloqueos",
-      subtitle: "Se identificaron 2 tareas con retraso en el cronograma",
-      targetRole: "entrepreneur",
-      recommendation:
-        "Revisar dependencias operativas que impiden el envío de la propuesta comercial.",
-      whyPoints: [
-        "La tarea superó la fecha límite establecida por 48 horas.",
-        "El mentor ofreció una plantilla de soporte no abierta aún.",
-        "Desbloquearla habilita la validación del siguiente hito.",
-      ],
-      ctaLabel: "Resolver bloqueos",
-      ctaHref: "/app/tareas",
-    },
-  ];
-
-  let dynamicSuggestions: SuggestionItem[] = [];
+  const dynamicSuggestions: SuggestionItem[] = [];
 
   if (d.actor.role === "mentor") {
     try {
       const portfolio = await getMentorPortfolio(d);
-      dynamicSuggestions = portfolio.interventions.slice(0, 4).map((i) => ({
-        id: i.id,
-        title: i.title,
-        subtitle: `Proyecto: ${i.projectName} · Urgencia: ${i.urgency}`,
-        targetRole: "mentor" as const,
-        recommendation: i.explanation.suggestedAction || i.explanation.whatHappened,
-        whyPoints: [
-          i.explanation.whatHappened,
-          i.explanation.whyItMatters,
-          i.explanation.supportingData || "Basado en la actividad reciente del proyecto.",
-        ].filter(Boolean),
-        ctaLabel: "Atender intervención",
-        ctaHref: `/app/p/${i.projectId}`,
-      }));
+      for (const i of portfolio.interventions.slice(0, 6)) {
+        dynamicSuggestions.push({
+          id: i.id,
+          title: i.title,
+          subtitle: `Proyecto: ${i.projectName} · Urgencia: ${i.urgency}`,
+          targetRole: "mentor" as const,
+          recommendation: i.explanation.suggestedAction || i.explanation.whatHappened,
+          whyPoints: [
+            i.explanation.whatHappened,
+            i.explanation.whyItMatters,
+            i.explanation.supportingData,
+          ].filter(Boolean),
+          ctaLabel: "Atender intervención",
+          ctaHref: `/app/p/${i.projectId}`,
+        });
+      }
     } catch {
-      dynamicSuggestions = [];
+      // Ignorar error transitorio
+    }
+  } else {
+    // Para emprendedor: sugerencias derivadas de sus tareas y estado del proyecto real
+    try {
+      const projects = await listMyProjects(d);
+      for (const p of projects) {
+        const tasks = await d.repo.tasks.list({ projectId: p.id });
+        const now = Date.now();
+        const pendingTasks = tasks.filter((t) => t.status !== "done");
+        const overdueTasks = pendingTasks.filter(
+          (t) => t.dueDate && new Date(t.dueDate).getTime() < now
+        );
+
+        if (overdueTasks.length > 0) {
+          dynamicSuggestions.push({
+            id: `sug-overdue-${p.id}`,
+            title: `Destrabar tareas pendientes en ${p.name}`,
+            subtitle: `${overdueTasks.length} tarea(s) con fecha cumplida o próxima`,
+            targetRole: "entrepreneur" as const,
+            recommendation: `Revisa la hoja de tareas de ${p.name} para actualizar el estado de los compromisos o reportar bloqueos a tu mentor.`,
+            whyPoints: [
+              `Hay ${overdueTasks.length} tarea(s) que requieren validación.`,
+              "Mantener las tareas al día permite calcular con precisión el avance del ciclo.",
+            ],
+            ctaLabel: "Ver tareas",
+            ctaHref: "/app/tareas",
+          });
+        }
+
+        const hypotheses = await d.repo.hypotheses.list({ projectId: p.id });
+        const unvalidated = hypotheses.filter((h) => h.status === "draft" || h.status === "testing");
+        if (unvalidated.length > 0) {
+          dynamicSuggestions.push({
+            id: `sug-hypo-${p.id}`,
+            title: `Diseñar experimentos de validación (${p.name})`,
+            subtitle: `${unvalidated.length} hipótesis activas`,
+            targetRole: "entrepreneur" as const,
+            recommendation: "Configura experimentos con métricas claras para contrastar tus supuestos clave frente al mercado.",
+            whyPoints: [
+              `Existen ${unvalidated.length} hipótesis en proceso de validación.`,
+              "Contar con evidencia empírica acelera las decisiones del siguiente ciclo.",
+            ],
+            ctaLabel: "Ir a validación",
+            ctaHref: `/app/p/${p.id}/validacion`,
+          });
+        }
+      }
+    } catch {
+      // Continuar con lista disponible
     }
   }
 
-  const finalSuggestions =
-    dynamicSuggestions.length > 0
-      ? [...dynamicSuggestions, ...defaultSuggestions]
-      : defaultSuggestions;
-
-  return <SuggestionsView initialSuggestions={finalSuggestions} />;
+  return <SuggestionsView initialSuggestions={dynamicSuggestions} />;
 }

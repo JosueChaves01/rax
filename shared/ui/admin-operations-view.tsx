@@ -13,7 +13,27 @@ interface N8nHealthState {
   error?: string;
 }
 
-export function AdminOperationsView() {
+export interface OperationRun {
+  workflow: string;
+  status: "completed" | "running" | "failed";
+  statusLabel: string;
+  latency?: string;
+  date: string;
+}
+
+interface AdminOperationsViewProps {
+  initialRuns?: OperationRun[];
+  totalExecutions?: number;
+  estimatedCost?: string;
+  successRate?: string;
+}
+
+export function AdminOperationsView({
+  initialRuns = [],
+  totalExecutions = 0,
+  estimatedCost = "$0.00",
+  successRate = "100%",
+}: AdminOperationsViewProps) {
   const [subTab, setSubTab] = useState<OpSubTab>("general");
   const [health, setHealth] = useState<N8nHealthState>({
     checked: false,
@@ -49,36 +69,7 @@ export function AdminOperationsView() {
     checkHealth();
   }, []);
 
-  const recentRuns = [
-    {
-      workflow: "RAX-02 Mentor Chat",
-      status: "completed",
-      statusLabel: "Completado",
-      latency: "1.2s",
-      date: "Hoy 11:20",
-    },
-    {
-      workflow: "RAX-01 Ingesta de Eventos",
-      status: "completed",
-      statusLabel: "Completado",
-      latency: "2.8s",
-      date: "Hoy 09:50",
-    },
-    {
-      workflow: "RAX-08 Propuestas de Tareas",
-      status: "completed",
-      statusLabel: "Completado",
-      latency: "3.1s",
-      date: "Hoy 09:12",
-    },
-    {
-      workflow: "RAX-10 Accountability & Reminders",
-      status: "completed",
-      statusLabel: "Completado",
-      latency: "1.8s",
-      date: "Hoy 08:30",
-    },
-  ];
+  const recentRuns = initialRuns;
 
   return (
     <div className="space-y-6">
@@ -189,46 +180,54 @@ export function AdminOperationsView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {recentRuns.map((run, i) => (
-                <tr key={i} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-semibold text-slate-900">
-                    {run.workflow}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={cx(
-                        "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                        run.status === "completed"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : run.status === "running"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-rose-100 text-rose-800"
-                      )}
-                    >
-                      {run.statusLabel}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-slate-600">
-                    {run.latency}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 font-mono">
-                    {run.date}
+              {recentRuns.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-slate-400 font-medium">
+                    Sin ejecuciones registradas en las últimas 24 horas.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                recentRuns.map((run, i) => (
+                  <tr key={i} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-semibold text-slate-900">
+                      {run.workflow}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cx(
+                          "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                          run.status === "completed"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : run.status === "running"
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-rose-100 text-rose-800"
+                        )}
+                      >
+                        {run.statusLabel}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-slate-600">
+                      {run.latency || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 font-mono">
+                      {run.date}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* 4. Barra de Métricas Inferiores (Panel 10 del Mock) */}
+      {/* 4. Barra de Métricas Inferiores */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs text-center">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Latencia promedio
           </p>
           <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
-            {health.latencyMs ? `${(health.latencyMs / 1000).toFixed(2)}s` : "1.8s"}
+            {health.latencyMs ? `${(health.latencyMs / 1000).toFixed(2)}s` : "—"}
           </p>
         </div>
 
@@ -237,7 +236,7 @@ export function AdminOperationsView() {
             Total ejecuciones
           </p>
           <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
-            12,340
+            {totalExecutions.toLocaleString()}
           </p>
         </div>
 
@@ -246,7 +245,7 @@ export function AdminOperationsView() {
             Costo estimado
           </p>
           <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
-            $50.32
+            {estimatedCost}
           </p>
         </div>
 
@@ -255,7 +254,7 @@ export function AdminOperationsView() {
             Tasa de éxito
           </p>
           <p className="text-2xl font-bold font-mono text-emerald-600 mt-1">
-            98%
+            {successRate}
           </p>
         </div>
       </div>

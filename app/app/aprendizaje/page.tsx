@@ -8,14 +8,8 @@ type TabKind = "asignados" | "en-progreso" | "completados";
 
 export default function LearningPage() {
   const [tab, setTab] = useState<TabKind>("asignados");
-  const [exerciseText, setExerciseText] = useState(
-    "Comprendo la comparación. Nuestro precio refleja que eliminamos 15 horas mensuales de trabajo manual que las herramientas gratuitas no resuelven. Por ejemplo, nuestro cliente Beta ahorró $800 en su primer mes evitando retrabajos. Por eso nuestra inversión se paga sola desde la segunda semana."
-  );
-  const [evaluation, setEvaluation] = useState({
-    score: "9/10",
-    feedback:
-      "Cumpliste adecuadamente con las cuatro etapas del método PREP. La cuantificación del ahorro económico ($800) fortalece considerablemente el Punto final frente a respuestas genéricas.",
-  });
+  const [exerciseText, setExerciseText] = useState("");
+  const [evaluation, setEvaluation] = useState<{ score: string; feedback: string } | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender: "ai" | "user"; text: string; provider?: string }>>([
     {
@@ -130,10 +124,10 @@ export default function LearningPage() {
           <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-100 text-blue-700">
-                En progreso
+                {evaluation ? "Evaluado" : "En progreso"}
               </span>
               <span className="text-xs text-slate-400 font-mono">
-                Vence: 20 Jun 2025
+                Práctica activa
               </span>
             </div>
 
@@ -146,14 +140,17 @@ export default function LearningPage() {
               </p>
             </div>
 
-            {/* Barra de progreso 75% */}
+            {/* Barra de progreso */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-semibold text-slate-600">
                 <span>Progreso del módulo</span>
-                <span className="font-mono text-blue-600">75%</span>
+                <span className="font-mono text-blue-600">{evaluation ? "100%" : "0%"}</span>
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600 rounded-full w-3/4 transition-all duration-500" />
+                <div
+                  className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                  style={{ width: evaluation ? "100%" : "0%" }}
+                />
               </div>
             </div>
 
@@ -175,11 +172,11 @@ export default function LearningPage() {
                 </h3>
                 <button
                   type="button"
-                  disabled={isEvaluating}
+                  disabled={isEvaluating || !exerciseText.trim()}
                   onClick={handleEvaluate}
                   className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  {isEvaluating ? "Evaluando con n8n…" : "✨ Evaluar mi respuesta con n8n (RAX-99)"}
+                  {isEvaluating ? "Evaluando con n8n…" : "✨ Evaluar mi respuesta con n8n"}
                 </button>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
@@ -189,26 +186,34 @@ export default function LearningPage() {
                 rows={3}
                 value={exerciseText}
                 onChange={(e) => setExerciseText(e.target.value)}
+                placeholder="Escribe aquí tu respuesta aplicando el método PREP (Punto, Razón, Ejemplo, Punto)..."
                 className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-white leading-relaxed focus:outline-none focus:border-blue-600"
               />
             </div>
 
-            {/* Estado Evaluación de IA (Conectado con RAX-99) */}
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🤖</span>
-                <span className="font-semibold text-emerald-900">
-                  Evaluación de IA (Workflow RAX-99): {evaluation.score}
-                </span>
+            {/* Estado Evaluación de IA */}
+            {evaluation ? (
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🤖</span>
+                  <span className="font-semibold text-emerald-900">
+                    Evaluación de IA: {evaluation.score}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAiModal(true)}
+                  className="font-bold text-emerald-700 hover:underline cursor-pointer"
+                >
+                  Ver detalle
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAiModal(true)}
-                className="font-bold text-emerald-700 hover:underline cursor-pointer"
-              >
-                Ver detalle
-              </button>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
+                <span className="text-base">🤖</span>
+                <span>Redacta tu respuesta arriba y pulsa «Evaluar mi respuesta con n8n» para obtener feedback.</span>
+              </div>
+            )}
           </div>
 
           {/* Botón Continuar */}
@@ -316,7 +321,7 @@ export default function LearningPage() {
       </div>
 
       {/* Modal detalle de evaluación */}
-      {showAiModal && (
+      {showAiModal && evaluation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4">
             <div className="flex items-center justify-between">

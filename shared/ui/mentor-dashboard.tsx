@@ -3,66 +3,59 @@
 import Link from "next/link";
 import type { MentorPortfolio } from "@/lib/services/portfolio";
 
+export interface MentorUpcomingSession {
+  id?: string;
+  timeBadge: string;
+  mentee: string;
+  topic: string;
+  isToday: boolean;
+  href: string;
+}
+
 interface MentorDashboardProps {
   mentorName: string;
   portfolio: MentorPortfolio;
+  upcomingSessions?: MentorUpcomingSession[];
 }
 
-export function MentorDashboard({ mentorName, portfolio }: MentorDashboardProps) {
+export function MentorDashboard({
+  mentorName,
+  portfolio,
+  upcomingSessions = [],
+}: MentorDashboardProps) {
   const firstName = mentorName.split(" ")[0] || "Mentor";
 
-  // Estadísticas basadas en la cartera real o defaults del mock
-  const activeCount = portfolio.stats.totalActiveProjects || 5;
-  const sessionsCount = portfolio.stats.upcomingSessionsCount || 3;
-  const pendingCount = portfolio.stats.projectsNeedingAttention || 8;
-  const avgProgress = 92;
+  // Estadísticas basadas en la cartera real
+  const activeCount = portfolio.stats.totalActiveProjects;
+  const sessionsCount = portfolio.stats.upcomingSessionsCount;
+  const pendingCount = portfolio.stats.projectsNeedingAttention;
 
-  // Emprendedores de la cartera
-  const defaultMentees = [
-    { name: "Ana Torres", sector: "Growth", stage: "En proceso", progress: 68, id: "p-ana" },
-    { name: "Carlos Méndez", sector: "SaaS", stage: "En proceso", progress: 52, id: "p-carlos" },
-    { name: "Lucía Fernández", sector: "E-commerce", stage: "En seguimiento", progress: 37, id: "p-lucia" },
-    { name: "Diego Rojas", sector: "Servicios", stage: "En proceso", progress: 71, id: "p-diego" },
-  ];
+  const mentees = portfolio.projects.map((p) => {
+    const total = p.totalTasksCount || 0;
+    const completed = p.completedTasksCount || 0;
+    const progress = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+    return {
+      id: p.projectId,
+      name: p.entrepreneurName || p.projectName,
+      sector: p.projectName,
+      stage:
+        p.stage === "exploration"
+          ? "Exploración"
+          : p.stage === "diagnosis"
+            ? "Diagnóstico"
+            : "En proceso",
+      progress,
+    };
+  });
 
-  const mentees = portfolio.projects.length > 0
-    ? portfolio.projects.map((p) => ({
-        id: p.projectId,
-        name: p.entrepreneurName || p.projectName,
-        sector: p.projectName,
-        stage: p.stage === "exploration" ? "Exploración" : p.stage === "diagnosis" ? "Diagnóstico" : "En proceso",
-        progress: Math.min(100, Math.round(((p.completedTasksCount || 1) / Math.max(1, p.totalTasksCount || 3)) * 100)),
-      }))
-    : defaultMentees;
-
-  // Próximas sesiones
-  const upcomingSessions = [
-    {
-      timeBadge: "Hoy · 11:00 - 12:00",
-      mentee: "Ana Torres",
-      topic: "Estrategia de crecimiento",
-      isToday: true,
-      href: "/app/sesiones",
-    },
-    {
-      timeBadge: "Mañana · 16:00 - 17:00",
-      mentee: "Diego Rojas",
-      topic: "Modelo de negocio",
-      isToday: false,
-      href: "/app/sesiones",
-    },
-    {
-      timeBadge: "14 Jun · 10:00 - 11:00",
-      mentee: "Valentina Cruz",
-      topic: "Pitch y ventas",
-      isToday: false,
-      href: "/app/sesiones",
-    },
-  ];
+  const avgProgress =
+    mentees.length > 0
+      ? Math.round(mentees.reduce((acc, m) => acc + m.progress, 0) / mentees.length)
+      : 0;
 
   return (
     <div className="space-y-6">
-      {/* 1. Encabezado de Bienvenida (Panel 1 del Mock) */}
+      {/* 1. Encabezado de Bienvenida */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
@@ -146,38 +139,44 @@ export function MentorDashboard({ mentorName, portfolio }: MentorDashboardProps)
               </Link>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {upcomingSessions.map((session, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3"
-                >
-                  <div className="min-w-0">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold mb-1 ${
-                        session.isToday
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-slate-200/70 text-slate-600"
-                      }`}
-                    >
-                      {session.timeBadge}
-                    </span>
-                    <p className="text-xs font-bold text-slate-900 truncate">
-                      {session.mentee}
-                    </p>
-                    <p className="text-[11px] text-slate-500 truncate">
-                      {session.topic}
-                    </p>
-                  </div>
-                  <Link
-                    href={session.href}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shrink-0 shadow-2xs"
+            {upcomingSessions.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {upcomingSessions.map((session, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3"
                   >
-                    Enlace
-                  </Link>
-                </div>
-              ))}
-            </div>
+                    <div className="min-w-0">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold mb-1 ${
+                          session.isToday
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-slate-200/70 text-slate-600"
+                        }`}
+                      >
+                        {session.timeBadge}
+                      </span>
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        {session.mentee}
+                      </p>
+                      <p className="text-[11px] text-slate-500 truncate">
+                        {session.topic}
+                      </p>
+                    </div>
+                    <Link
+                      href={session.href}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shrink-0 shadow-2xs"
+                    >
+                      Enlace
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-8 text-center text-slate-400 text-xs py-8">
+                No tienes sesiones programadas próximamente.
+              </div>
+            )}
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 text-center">
@@ -205,41 +204,47 @@ export function MentorDashboard({ mentorName, portfolio }: MentorDashboardProps)
               </Link>
             </div>
 
-            <div className="mt-4 space-y-4">
-              {mentees.map((mentee) => (
-                <div
-                  key={mentee.id}
-                  className="p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                        {mentee.name.slice(0, 2)}
+            {mentees.length > 0 ? (
+              <div className="mt-4 space-y-4">
+                {mentees.map((mentee) => (
+                  <div
+                    key={mentee.id}
+                    className="p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                          {mentee.name.slice(0, 2)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900 truncate">
+                            {mentee.name}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            {mentee.sector} · <span className="text-slate-400">{mentee.stage}</span>
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-900 truncate">
-                          {mentee.name}
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          {mentee.sector} · <span className="text-slate-400">{mentee.stage}</span>
-                        </p>
-                      </div>
+                      <span className="text-xs font-bold font-mono text-slate-700">
+                        {mentee.progress}%
+                      </span>
                     </div>
-                    <span className="text-xs font-bold font-mono text-slate-700">
-                      {mentee.progress}%
-                    </span>
-                  </div>
 
-                  {/* Barra de progreso */}
-                  <div className="mt-2 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-600 rounded-full transition-all duration-500"
-                      style={{ width: `${mentee.progress}%` }}
-                    />
+                    {/* Barra de progreso */}
+                    <div className="mt-2 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                        style={{ width: `${mentee.progress}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-8 text-center text-slate-400 text-xs py-8">
+                No tienes emprendedores asignados en tu cartera aún.
+              </div>
+            )}
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 text-center">
@@ -255,4 +260,3 @@ export function MentorDashboard({ mentorName, portfolio }: MentorDashboardProps)
     </div>
   );
 }
-

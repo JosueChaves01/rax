@@ -98,7 +98,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </div>
 
       {tab === "operaciones" && (
-        <AdminOperationsView />
+        <AdminOperationsView
+          totalExecutions={o.audit.length}
+          estimatedCost="$0.00"
+          successRate={
+            o.audit.length > 0
+              ? `${Math.round(
+                  (o.audit.filter((a) => !a.action.includes("denied")).length / o.audit.length) * 100
+                )}%`
+              : "100%"
+          }
+          initialRuns={o.audit.slice(0, 10).map((a) => ({
+            workflow: AUDIT_LABEL[a.action] || a.action,
+            status: a.action.includes("denied") ? "failed" : "completed",
+            statusLabel: a.action.includes("denied") ? "Denegado" : "Completado",
+            date: formatDate(a.createdAt),
+          }))}
+        />
       )}
 
       {tab === "solicitudes" && (

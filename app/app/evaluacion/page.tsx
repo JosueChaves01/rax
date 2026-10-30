@@ -13,27 +13,23 @@ export default async function CycleEvaluationPage() {
   const primaryProject = projects[0];
 
   let relationId = "";
-  let goalsCount = 5;
-  let achievedGoalsCount = 3;
-  let milestonesCount = 6;
-  let achievedMilestonesCount = 4;
+  let goalsCount = 0;
+  let achievedGoalsCount = 0;
+  let milestonesCount = 0;
+  let achievedMilestonesCount = 0;
 
   if (primaryProject) {
     const [relation] = await d.repo.mentorshipRelations.list({ projectId: primaryProject.id });
     if (relation) {
       relationId = relation.id;
       const goals = await d.repo.mentorshipGoals.list({ relationId: relation.id });
-      if (goals.length > 0) {
-        goalsCount = goals.length;
-        achievedGoalsCount = goals.filter((g) => g.status === "achieved").length;
-      }
+      goalsCount = goals.length;
+      achievedGoalsCount = goals.filter((g) => g.status === "achieved").length;
     }
 
     const milestones = await d.repo.roadmapMilestones.list({ projectId: primaryProject.id });
-    if (milestones.length > 0) {
-      milestonesCount = milestones.length;
-      achievedMilestonesCount = milestones.filter((m) => m.status === "achieved").length;
-    }
+    milestonesCount = milestones.length;
+    achievedMilestonesCount = milestones.filter((m) => m.status === "achieved").length;
   }
 
   return (

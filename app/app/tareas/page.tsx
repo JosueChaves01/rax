@@ -16,60 +16,6 @@ export default async function TasksPage() {
   let tasks: Task[] = [];
   if (primaryProject) {
     tasks = await d.repo.tasks.list({ projectId: primaryProject.id });
-    if (tasks.length === 0) {
-      // Seed inicial de compromisos reales para el proyecto
-      const now = d.now();
-      const inTwoDays = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
-      const inFiveDays = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
-      const completedYesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-      const initial: Task[] = [
-        {
-          id: d.newId("task"),
-          projectId: primaryProject.id,
-          title: "Completar ejercicio PREP de objeciones comerciales",
-          status: "doing",
-          assigneeId: d.actor.id,
-          dueDate: inTwoDays,
-          createdAt: now,
-          updatedAt: now,
-        },
-        {
-          id: d.newId("task"),
-          projectId: primaryProject.id,
-          title: "Validar propuesta de valor con primeros clientes",
-          status: "todo",
-          assigneeId: d.actor.id,
-          dueDate: inFiveDays,
-          createdAt: now,
-          updatedAt: now,
-        },
-        {
-          id: d.newId("task"),
-          projectId: primaryProject.id,
-          title: "Revisar plan de acción quincenal con mentor",
-          status: "todo",
-          assigneeId: d.actor.id,
-          dueDate: inTwoDays,
-          createdAt: now,
-          updatedAt: now,
-        },
-        {
-          id: d.newId("task"),
-          projectId: primaryProject.id,
-          title: "Enviar propuesta comercial ajustada",
-          status: "done",
-          assigneeId: d.actor.id,
-          dueDate: completedYesterday,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ];
-      for (const t of initial) {
-        await d.repo.tasks.insert(t);
-      }
-      tasks = initial;
-    }
   }
 
   return (

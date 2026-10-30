@@ -59,10 +59,9 @@ const STEPS = [
 ];
 
 export default function ExplorationPage() {
-  const [currentStep, setCurrentStep] = useState(2); // Mock 3 muestra el paso 2: Expectativas
-  const [selectedMotivation, setSelectedMotivation] = useState("scale");
+  const [currentStep, setCurrentStep] = useState(1);
+  const [selectedMotivation, setSelectedMotivation] = useState("");
   const [description, setDescription] = useState("");
-  const compatibilityScore = 94;
   const [relationAccepted, setRelationAccepted] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -251,31 +250,31 @@ export default function ExplorationPage() {
 
           <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 flex flex-col sm:flex-row items-center gap-6">
             <div className="w-20 h-20 rounded-full bg-blue-600 text-white flex flex-col items-center justify-center font-bold text-xl shrink-0 shadow-sm">
-              <span>{compatibilityScore}%</span>
-              <span className="text-[9px] font-normal uppercase tracking-wider">Afinidad</span>
+              <span>IA</span>
+              <span className="text-[9px] font-normal uppercase tracking-wider">Matching</span>
             </div>
 
             <div className="space-y-2 text-center sm:text-left min-w-0">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                 <h2 className="text-base font-bold text-slate-900">
-                  Mentor sugerido: Carlos Méndez
+                  Calce según tu perfil y necesidades
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                  Alta coincidencia
+                  Disponible
                 </span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Carlos tiene más de 8 años de experiencia escalando startups B2B SaaS y optimización de propuestas de valor, coincidiendo en un 94% con tus necesidades.
+                Tus respuestas serán evaluadas para emparejarte con el mentor más calificado según tu sector, requerimientos de tracción y disponibilidad de agenda.
               </p>
               <div className="pt-2 flex flex-wrap gap-2 text-[11px] text-slate-600">
                 <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200">
-                  ✓ Rubro SaaS
+                  ✓ Validación de objetivos
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200">
-                  ✓ Validación de clientes
+                  ✓ Acuerdos de confidencialidad
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200">
-                  ✓ Disponibilidad inmediata
+                  ✓ Sesiones guiadas con IA
                 </span>
               </div>
             </div>
@@ -283,11 +282,11 @@ export default function ExplorationPage() {
 
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
             <span className="text-xs text-slate-700">
-              ¿Aceptas iniciar la relación de mentoría con Carlos Méndez?
+              ¿Deseas enviar tu perfil para confirmación de la relación de mentoría?
             </span>
             <button
               type="button"
-              disabled={isPending}
+              disabled={isPending || relationAccepted}
               onClick={handleAcceptMentor}
               className={cx(
                 "px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50",
@@ -296,7 +295,7 @@ export default function ExplorationPage() {
                   : "bg-blue-600 text-white hover:bg-blue-700"
               )}
             >
-              {relationAccepted ? "✓ Relación aceptada (n8n)" : "Aceptar mentor"}
+              {relationAccepted ? "✓ Relación solicitada exitosamente" : "Confirmar y solicitar mentor"}
             </button>
           </div>
         </div>
@@ -317,14 +316,14 @@ export default function ExplorationPage() {
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-slate-900">Frecuencia de sesiones</p>
-                <p className="text-[11px] text-slate-500">Encuentros virtuales de 60 minutos</p>
+                <p className="text-[11px] text-slate-500">Encuentros virtuales coordinados por ambas partes</p>
               </div>
               <span className="text-xs font-semibold text-blue-600">Quincenal</span>
             </div>
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-slate-900">Objetivo del ciclo</p>
-                <p className="text-[11px] text-slate-500">Validar propuesta de valor con método PREP</p>
+                <p className="text-[11px] text-slate-500">Validación de hipótesis y seguimiento de acuerdos</p>
               </div>
               <span className="text-xs font-semibold text-emerald-600">Definido</span>
             </div>
@@ -332,7 +331,7 @@ export default function ExplorationPage() {
 
           <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-center">
             <p className="text-xs text-blue-900 font-semibold">
-              ¡Listo! Tu exploración y acuerdo han sido registrados.
+              ¡Listo! Tu exploración ha sido registrada exitosamente.
             </p>
             <Link
               href="/app"

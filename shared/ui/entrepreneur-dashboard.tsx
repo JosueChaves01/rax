@@ -14,99 +14,85 @@ interface EntrepreneurDashboardProps {
 
 export function EntrepreneurDashboard({
   entrepreneurName,
-  mentorName = "Carlos Méndez",
+  mentorName,
   workspaces,
   recentAudits = [],
 }: EntrepreneurDashboardProps) {
   const firstName = entrepreneurName.split(" ")[0] || "Emprendedor/a";
   const primaryWorkspace = workspaces[0];
 
-  const goalsCount = primaryWorkspace?.mentorshipGoals?.filter((g) => g.status !== "discarded").length || 3;
-  const pendingTasksCount = primaryWorkspace?.tasks?.filter((t) => t.status !== "done").length || 5;
+  const goalsCount = primaryWorkspace?.mentorshipGoals?.filter((g) => g.status !== "discarded").length ?? 0;
+  const pendingTasksCount = primaryWorkspace?.tasks?.filter((t) => t.status !== "done").length ?? 0;
   const totalTasks = primaryWorkspace?.tasks?.length || 0;
   const doneTasks = primaryWorkspace?.tasks?.filter((t) => t.status === "done").length || 0;
-  const progressPercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 62;
+  const progressPercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
-  // Pasos del proceso de mentoría (Panel 2 del Mock)
+  // Pasos del proceso basados en la fase real del proyecto
+  const phase = primaryWorkspace?.phase;
+  const phaseOrder: Record<string, number> = {
+    exploration: 1,
+    diagnosis: 2,
+    action_plan: 3,
+    execution: 4,
+    evaluation: 5,
+  };
+  const currentStepNum = phase ? (phaseOrder[phase] ?? 1) : 1;
+
   const processSteps = [
-    { num: 1, title: "Exploración", done: true },
-    { num: 2, title: "Diagnóstico", done: true },
-    { num: 3, title: "Objetivos", done: true },
-    { num: 4, title: "Plan de acción", done: true },
-    { num: 5, title: "Ejecución", isCurrent: true },
+    { num: 1, title: "Exploración", done: currentStepNum > 1, isCurrent: currentStepNum === 1 },
+    { num: 2, title: "Diagnóstico", done: currentStepNum > 2, isCurrent: currentStepNum === 2 },
+    { num: 3, title: "Objetivos", done: currentStepNum > 3, isCurrent: currentStepNum === 3 },
+    { num: 4, title: "Plan de acción", done: currentStepNum > 4, isCurrent: currentStepNum === 4 },
+    { num: 5, title: "Ejecución", done: currentStepNum > 5, isCurrent: currentStepNum === 5 },
   ];
 
-  const defaultActivities = [
-    {
-      title: `${mentorName} te asignó un nuevo material`,
-      time: "Hoy 10:24",
-      icon: "📚",
-      href: "/app/aprendizaje",
-    },
-    {
-      title: "Completaste el ejercicio Start",
-      time: "Ayer 16:32",
-      icon: "✅",
-      href: "/app/aprendizaje",
-    },
-    {
-      title: "Nueva recomendación de recursos por IA",
-      time: "Ayer 11:20",
-      icon: "💡",
-      href: "/app/sugerencias",
-    },
-    {
-      title: "Sesión de mentoría programada para el 14 de junio",
-      time: "Hace 2 días",
-      icon: "📅",
-      href: "/app/sesiones",
-    },
-  ];
+  const nextTask = primaryWorkspace?.tasks?.find((t) => t.status !== "done");
 
-  const recentActivities =
-    recentAudits.length > 0
-      ? recentAudits.slice(0, 5).map((a) => {
-          let title = `Acción registrada: ${a.action}`;
-          let icon = "📝";
-          let href = "/app";
+  const recentActivities = recentAudits.slice(0, 5).map((a) => {
+    let title = `Acción registrada: ${a.action}`;
+    let icon = "📝";
+    let href = "/app";
 
-          if (a.action.includes("task")) {
-            title = "Actualización en hoja de tareas";
-            icon = "✅";
-            href = "/app/tareas";
-          } else if (a.action.includes("session")) {
-            title = "Encuentro de mentoría coordinado";
-            icon = "📅";
-            href = "/app/sesiones";
-          } else if (a.action.includes("ai") || a.action.includes("proposal")) {
-            title = "Propuesta o recomendación de IA recibida";
-            icon = "💡";
-            href = "/app/sugerencias";
-          } else if (a.action.includes("resource")) {
-            title = "Material de biblioteca actualizado";
-            icon = "📚";
-            href = "/app/documentos";
-          }
+    if (a.action.includes("task")) {
+      title = "Actualización en hoja de tareas";
+      icon = "✅";
+      href = "/app/tareas";
+    } else if (a.action.includes("session")) {
+      title = "Encuentro de mentoría coordinado";
+      icon = "📅";
+      href = "/app/sesiones";
+    } else if (a.action.includes("ai") || a.action.includes("proposal")) {
+      title = "Propuesta o recomendación de IA recibida";
+      icon = "💡";
+      href = "/app/sugerencias";
+    } else if (a.action.includes("resource")) {
+      title = "Material de biblioteca actualizado";
+      icon = "📚";
+      href = "/app/documentos";
+    }
 
-          return {
-            title,
-            time: formatDate(a.createdAt),
-            icon,
-            href,
-          };
-        })
-      : defaultActivities;
+    return {
+      title,
+      time: formatDate(a.createdAt),
+      icon,
+      href,
+    };
+  });
 
   return (
     <div className="space-y-6">
-      {/* 1. Encabezado de Bienvenida (Panel 2 del Mock) */}
+      {/* 1. Encabezado de Bienvenida */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
             Hola, {firstName}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Tu mentor asignado es <span className="font-semibold text-blue-600">{mentorName}</span>
+            {mentorName ? (
+              <>Tu mentor asignado es <span className="font-semibold text-blue-600">{mentorName}</span></>
+            ) : (
+              <>Aún no tienes un mentor asignado · <Link href="/app/exploracion" className="text-blue-600 font-semibold hover:underline">Iniciar exploración</Link></>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -114,7 +100,7 @@ export function EntrepreneurDashboard({
             href="/app/chat"
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
           >
-            <span>💬 Conversar con RAX / Mentor</span>
+            <span>💬 Conversar con RAX</span>
           </Link>
         </div>
       </div>
@@ -155,14 +141,14 @@ export function EntrepreneurDashboard({
         </div>
       </div>
 
-      {/* 3. Stepper de Proceso de Mentoría (Panel 2 del Mock) */}
+      {/* 3. Stepper de Proceso de Mentoría */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
             Tu proceso de mentoría
           </h2>
           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-            En curso
+            {currentStepNum > 4 ? "Completado" : "En curso"}
           </span>
         </div>
 
@@ -213,32 +199,52 @@ export function EntrepreneurDashboard({
                 <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
                 Tu próximo paso
               </span>
-              <span className="text-xs text-slate-400 font-medium">Vence: 20 Jun 2025</span>
+              {nextTask?.dueDate && (
+                <span className="text-xs text-slate-400 font-medium">
+                  Vence: {formatDate(nextTask.dueDate)}
+                </span>
+              )}
             </div>
 
-            <div className="mt-5 p-5 rounded-2xl bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border border-blue-100">
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-200/60 text-blue-800">
-                Módulo asignado
-              </span>
-              <h3 className="text-lg font-bold text-slate-900 mt-2">
-                Completar ejercicio: Propuesta de valor (PREP)
-              </h3>
-              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                Estructura la respuesta de valor ante objeciones de clientes usando el principio de Punto, Razón, Ejemplo y Punto.
-              </p>
-
-              <div className="mt-4 pt-4 border-t border-blue-200/50 flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-500">
-                  Evaluación de IA disponible
+            {nextTask ? (
+              <div className="mt-5 p-5 rounded-2xl bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border border-blue-100">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-200/60 text-blue-800">
+                  Tarea asignada
                 </span>
+                <h3 className="text-lg font-bold text-slate-900 mt-2">
+                  {nextTask.title}
+                </h3>
+                {nextTask.blockedReason && (
+                  <p className="text-xs text-rose-600 mt-2 leading-relaxed">
+                    ⚠️ Bloqueo reportado: {nextTask.blockedReason}
+                  </p>
+                )}
+
+                <div className="mt-4 pt-4 border-t border-blue-200/50 flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500">
+                    Estado: {nextTask.status === "doing" ? "En curso" : "Pendiente"}
+                  </span>
+                  <Link
+                    href="/app/tareas"
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                  >
+                    Ver tarea →
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 p-6 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+                <p className="text-xs text-slate-500">
+                  No tienes tareas pendientes en este momento.
+                </p>
                 <Link
-                  href="/app/aprendizaje"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                  href="/app/tareas"
+                  className="mt-3 inline-block px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
                 >
-                  Ver ejercicio →
+                  Ir a tareas
                 </Link>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 text-center">
@@ -261,28 +267,34 @@ export function EntrepreneurDashboard({
               <span className="text-xs text-slate-400 font-mono">Últimas 48 h</span>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {recentActivities.map((act, idx) => (
-                <Link
-                  key={idx}
-                  href={act.href}
-                  className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors flex items-start gap-3 group block"
-                >
-                  <span className="text-lg shrink-0 mt-0.5">{act.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                      {act.title}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
-                      {act.time}
-                    </p>
-                  </div>
-                  <span className="text-slate-300 group-hover:text-slate-600 text-xs transition-colors">
-                    →
-                  </span>
-                </Link>
-              ))}
-            </div>
+            {recentActivities.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {recentActivities.map((act, idx) => (
+                  <Link
+                    key={idx}
+                    href={act.href}
+                    className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors flex items-start gap-3 group block"
+                  >
+                    <span className="text-lg shrink-0 mt-0.5">{act.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                        {act.title}
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
+                        {act.time}
+                      </p>
+                    </div>
+                    <span className="text-slate-300 group-hover:text-slate-600 text-xs transition-colors">
+                      →
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-8 text-center text-slate-400 text-xs py-8">
+                Sin actividad reciente registrada en las últimas 48 horas.
+              </div>
+            )}
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 text-center">
@@ -298,4 +310,3 @@ export function EntrepreneurDashboard({
     </div>
   );
 }
-
