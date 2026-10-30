@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { cx } from "@/shared/ui/primitives";
 import { loadMainAgentThreadAction, sendMainAgentMessageAction } from "@/app/actions";
+import { ChatInput } from "./chat-input";
+import { FormattedText } from "./formatted-text";
 
 interface Message {
   id: string;
@@ -18,9 +20,13 @@ interface Message {
 export default function ChatClient({ projects }: { projects: Array<{ id: string; name: string }> }) {
   const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
   const [messages, setMessages] = useState<Message[]>([]);
-
-  const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll hacia el último mensaje
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isLoading]);
 
   useEffect(() => {
     if (!projectId) { setMessages([]); return; }
@@ -84,20 +90,12 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
   };
 
   const handleChipClick = (chip: string) => {
-      sendMessageToAgent(chip);
-  };
-
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-    const text = input;
-    setInput("");
-    sendMessageToAgent(text);
+    sendMessageToAgent(chip);
   };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-slate-200/80 shadow-xs flex flex-col h-[650px] overflow-hidden">
-      {/* Conversación privada del agente para este usuario y proyecto. */}
+    <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-slate-200/80 shadow-xs flex flex-col h-[calc(100vh-140px)] min-h-[640px] max-h-[850px] overflow-hidden">
+      {/* 1. Header: Conversación privada del agente para este usuario y proyecto. */}
       <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs uppercase">
@@ -159,13 +157,13 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
 
             <div
               className={cx(
-                "max-w-[85%] sm:max-w-[75%] p-4 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap",
+                "max-w-[85%] sm:max-w-[75%] p-4 rounded-2xl text-xs leading-relaxed",
                 m.sender === "user"
                   ? "bg-blue-600 text-white rounded-br-xs shadow-xs"
                   : "bg-slate-100 text-slate-900 border border-slate-200/60 rounded-bl-xs"
               )}
             >
-              {m.text}
+              <FormattedText content={m.text} isUser={m.sender === "user"} />
             </div>
 
             {/* Acciones rápidas propuestas por el agente. */}
@@ -190,7 +188,7 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
         {isLoading && (
           <div className="flex flex-col items-start space-y-1">
             <span className="text-[10px] text-slate-500 font-mono px-1">
-            RAX • consultando el servicio de chat…
+              RAX • consultando el servicio de chat…
             </span>
             <div className="bg-slate-100 text-slate-500 border border-slate-200/60 rounded-2xl p-4 text-xs flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
@@ -198,37 +196,17 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
             </div>
           </div>
         )}
+
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* 3. Barra de Entrada de Chat */}
-      <form onSubmit={handleSend} className="p-3.5 border-t border-slate-200 bg-white flex items-center gap-2">
-        <button
-          type="button"
-          title="Adjuntar archivos todavía no está disponible"
-          aria-label="Adjuntar archivos todavía no está disponible"
-          disabled
-          className="p-2 text-slate-400 rounded-xl cursor-not-allowed"
-        >
-          📎
-        </button>
-
-        <input
-          type="text"
-          value={input}
-          disabled={isLoading}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Escribe tu consulta o pide una sugerencia de IA..."
-          className="flex-1 px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 disabled:opacity-50"
-        />
-
-        <button
-          type="submit"
-          disabled={isLoading || !input.trim() || !projectId}
-          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-        >
-          {isLoading ? "Enviando…" : "Enviar"}
-        </button>
-      </form>
+      {/* 3. Barra de Entrada Enriquecida para Chat */}
+      <ChatInput
+        onSend={sendMessageToAgent}
+        isLoading={isLoading}
+        disabled={!projectId}
+        placeholder="Escribe tu consulta o pega tu texto largo aquí... (Soporta Markdown: **negrita**, listas y código)"
+      />
     </div>
   );
 }

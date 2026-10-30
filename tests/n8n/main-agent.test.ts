@@ -95,7 +95,7 @@ describe("RAX common main agent contract", () => {
       {
         correlationId: "corr-clean-1",
         projectId: "p-clean",
-        actor: { role: "entrepreneur", id: "u-1" },
+        actor: { role: "entrepreneur", id: "u-1", verified: true },
         messageId: "m-1",
         message: "Hola",
         workContext: { stage: "general" },
