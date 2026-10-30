@@ -13,7 +13,10 @@ export interface DispatchResult {
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export function getN8nBaseUrl(): string | null {
-  return process.env.N8N_WEBHOOK_BASE_URL || null;
+  const url = process.env.N8N_WEBHOOK_BASE_URL || null;
+  if (!url) return null;
+  // Corrección automática de typo común (baberhub -> barberhub)
+  return url.replace("baberhub.website", "barberhub.website");
 }
 
 /**

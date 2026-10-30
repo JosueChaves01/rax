@@ -1,25 +1,27 @@
 import { NextResponse } from "next/server";
+import { getN8nBaseUrl } from "@/lib/n8n/dispatcher";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const baseUrl = process.env.N8N_WEBHOOK_BASE_URL || "";
+  const rawBaseUrl = process.env.N8N_WEBHOOK_BASE_URL || "";
+  const resolvedBaseUrl = getN8nBaseUrl() || "";
   const sharedSecret = process.env.RAX_N8N_SHARED_SECRET || "";
   const mainAgentEnabled = process.env.RAX_N8N_MAIN_AGENT_ENABLED === "true";
   const eventsEnabled = process.env.RAX_N8N_EVENTS_ENABLED === "true";
 
-  let parsedHost = null;
+  let rawHost = null;
+  let resolvedHost = null;
   try {
-    if (baseUrl) {
-      parsedHost = new URL(baseUrl).host;
-    }
+    if (rawBaseUrl) rawHost = new URL(rawBaseUrl).host;
+    if (resolvedBaseUrl) resolvedHost = new URL(resolvedBaseUrl).host;
   } catch {
-    parsedHost = "invalid-url";
+    rawHost = "invalid-url";
   }
 
   let tunnelConnectivity: { ok: boolean; status?: number; data?: unknown; error?: string } = { ok: false };
-  if (baseUrl) {
-    const healthUrl = baseUrl.endsWith("/") ? `${baseUrl}webhook/rax-health` : `${baseUrl}/webhook/rax-health`;
+  if (resolvedBaseUrl) {
+    const healthUrl = resolvedBaseUrl.endsWith("/") ? `${resolvedBaseUrl}webhook/rax-health` : `${resolvedBaseUrl}/webhook/rax-health`;
     try {
       const res = await fetch(healthUrl, {
         method: "GET",
@@ -44,8 +46,9 @@ export async function GET() {
   return NextResponse.json({
     timestamp: new Date().toISOString(),
     environment: {
-      hasBaseUrl: Boolean(baseUrl),
-      webhookHost: parsedHost,
+      hasBaseUrl: Boolean(rawBaseUrl),
+      rawWebhookHost: rawHost,
+      resolvedWebhookHost: resolvedHost,
       hasSharedSecret: Boolean(sharedSecret),
       secretLength: sharedSecret.length,
       mainAgentEnabled,
