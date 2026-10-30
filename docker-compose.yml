@@ -46,7 +46,7 @@ services:
         required: false
       - path: .env
         required: false
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate run --protocol http2 --token ${CLOUDFLARED_TUNNEL_TOKEN}
     depends_on:
       - n8n
     networks:
