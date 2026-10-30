@@ -121,6 +121,8 @@ export interface Project {
   description: string;
   nature: InitiativeNature;
   status: ProjectStatus;
+  /** Instrucciones de sistema persistentes específicas del proyecto (estilo Claude Projects). */
+  customInstructions?: string;
   /** Control del emprendedor: el mentor ve la conversación completa solo si se comparte explícitamente. */
   shareConversationWithMentor: boolean;
   createdAt: ISODate;
@@ -169,11 +171,67 @@ export interface AgentThread {
   id: Id;
   projectId: Id;
   creatorId: Id;
+  title: string;
+  isPinned?: boolean;
   status: AgentThreadStatus;
   lastErrorCode?: string;
   lastErrorMessage?: string;
   createdAt: ISODate;
   updatedAt: ISODate;
+}
+
+export type ArtifactType =
+  | "application/vnd.ant.react"
+  | "text/html"
+  | "image/svg+xml"
+  | "application/vnd.ant.mermaid"
+  | "application/vnd.ant.code"
+  | "application/vnd.ant.markdown";
+
+export interface AgentArtifact {
+  id: string;
+  identifier: string;
+  title: string;
+  type: ArtifactType;
+  language?: string;
+  content: string;
+}
+
+export interface KnowledgeCitation {
+  documentId: string;
+  filename: string;
+  title?: string;
+  chunkIndex?: number;
+  snippet: string;
+}
+
+export type ProjectDocumentFileType = "markdown" | "text" | "csv" | "code" | "pdf" | "json";
+export type ProjectDocumentSource = "upload" | "chat_extracted" | "note";
+
+export interface ProjectKnowledgeDocument {
+  id: Id;
+  projectId: Id;
+  title: string;
+  filename: string;
+  content: string;
+  fileType: ProjectDocumentFileType;
+  tokenCount: number;
+  source: ProjectDocumentSource;
+  sourceMessageId?: Id;
+  createdBy: Id;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export interface ProjectDocumentChunk {
+  id: Id;
+  projectId: Id;
+  documentId: Id;
+  chunkIndex: number;
+  content: string;
+  tokenCount: number;
+  embeddingJson?: string;
+  createdAt: ISODate;
 }
 
 export type AgentMessageAuthor = "user" | "assistant";
@@ -186,6 +244,8 @@ export interface AgentMessage {
   authorId: Id;
   content: string;
   proposals: Array<Record<string, unknown>>;
+  artifacts?: AgentArtifact[];
+  citations?: KnowledgeCitation[];
   status: AgentMessageStatus;
   errorCode?: string;
   errorMessage?: string;

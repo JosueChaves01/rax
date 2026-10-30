@@ -75,5 +75,7 @@ export function createMemoryRepository(): Repository {
     })(),
     mentorInterventions: new MemoryTable(),
     cycleEvaluations: new MemoryTable(),
+    projectDocuments: new MemoryTable(),
+    projectDocumentChunks: new MemoryTable(),
   };
 }

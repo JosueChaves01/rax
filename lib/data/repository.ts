@@ -26,6 +26,8 @@ import type {
   MentorResource,
   MentorIntervention,
   CycleEvaluation,
+  ProjectKnowledgeDocument,
+  ProjectDocumentChunk,
 } from "@/types/domain";
 
 /**
@@ -75,4 +77,6 @@ export interface Repository {
   mentorResources: Table<MentorResource>;
   mentorInterventions: Table<MentorIntervention>;
   cycleEvaluations: Table<CycleEvaluation>;
+  projectDocuments: Table<ProjectKnowledgeDocument>;
+  projectDocumentChunks: Table<ProjectDocumentChunk>;
 }

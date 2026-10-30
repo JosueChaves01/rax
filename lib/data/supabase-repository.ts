@@ -25,6 +25,8 @@ import type {
   MentorResource,
   MentorIntervention,
   CycleEvaluation,
+  ProjectKnowledgeDocument,
+  ProjectDocumentChunk,
 } from "@/types/domain";
 import { conflict, notFound } from "@/lib/errors";
 import type { Db, Row } from "./db";
@@ -155,6 +157,7 @@ const project: Spec<Project> = {
     description: ["description", same],
     nature: ["nature", same],
     status: ["status", same],
+    customInstructions: ["custom_instructions", nul],
     shareConversationWithMentor: ["share_conversation_with_mentor", same],
     createdAt: ["created_at", tsReq],
     updatedAt: ["updated_at", tsReq],
@@ -650,6 +653,7 @@ const agentThreadSpec: Spec<AgentThread> = {
   table: "agent_threads",
   fields: {
     id: ["id", same], projectId: ["project_id", same], creatorId: ["creator_id", same],
+    title: ["title", same], isPinned: ["is_pinned", same],
     status: ["status", same], lastErrorCode: ["last_error_code", nul], lastErrorMessage: ["last_error_message", nul],
     createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
   },
@@ -659,8 +663,28 @@ const agentMessageSpec: Spec<AgentMessage> = {
   table: "agent_messages",
   fields: {
     id: ["id", same], threadId: ["thread_id", same], projectId: ["project_id", same], author: ["author", same],
-    authorId: ["author_id", same], content: ["content", same], proposals: ["proposals", arr], status: ["status", same],
+    authorId: ["author_id", same], content: ["content", same], proposals: ["proposals", arr],
+    artifacts: ["artifacts", arr], citations: ["citations", arr], status: ["status", same],
     errorCode: ["error_code", nul], errorMessage: ["error_message", nul], createdAt: ["created_at", tsReq],
+  },
+};
+
+const projectDocumentSpec: Spec<ProjectKnowledgeDocument> = {
+  table: "project_documents",
+  fields: {
+    id: ["id", same], projectId: ["project_id", same], title: ["title", same], filename: ["filename", same],
+    content: ["content", same], fileType: ["file_type", same], tokenCount: ["token_count", same],
+    source: ["source", same], sourceMessageId: ["source_message_id", nul], createdBy: ["created_by", same],
+    createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
+  },
+};
+
+const projectDocumentChunkSpec: Spec<ProjectDocumentChunk> = {
+  table: "project_document_chunks",
+  fields: {
+    id: ["id", same], projectId: ["project_id", same], documentId: ["document_id", same],
+    chunkIndex: ["chunk_index", same], content: ["content", same], tokenCount: ["token_count", same],
+    embeddingJson: ["embedding_json", nul], createdAt: ["created_at", tsReq],
   },
 };
 
@@ -706,5 +730,7 @@ export function createPgRepository(db: Db): Repository {
     mentorResources: new PgTable(db, mentorResourceSpec),
     mentorInterventions: new PgTable(db, mentorInterventionSpec),
     cycleEvaluations: new PgTable(db, cycleEvaluationSpec),
+    projectDocuments: new PgTable(db, projectDocumentSpec),
+    projectDocumentChunks: new PgTable(db, projectDocumentChunkSpec),
   };
 }

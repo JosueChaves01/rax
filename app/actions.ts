@@ -11,6 +11,7 @@ import type {
   InitiativeNature,
   MentorDecision,
   MentorSessionKind,
+  ProjectDocumentFileType,
   ProjectStatus,
   ResultOutcome,
   SessionNoteKind,
@@ -93,7 +94,27 @@ import {
 import { dismissIntervention } from "@/lib/services/portfolio";
 import { createResource } from "@/lib/services/resources";
 import { recordCycleEvaluation } from "@/lib/services/evaluation";
-import { appendAgentAssistantMessage, appendAgentUserMessage, getAgentThread, getOrCreateAgentThread, listAgentMessages } from "@/lib/services/agent-chat";
+import {
+  appendAgentAssistantMessage,
+  appendAgentUserMessage,
+  authorizedThread,
+  createAgentThread,
+  getAgentThread,
+  getOrCreateAgentThread,
+  listAgentMessages,
+  listProjectThreads,
+  renameAgentThread,
+} from "@/lib/services/agent-chat";
+import {
+  addProjectDocument,
+  deleteProjectDocument,
+  getProjectKnowledgeStats,
+  listProjectDocuments,
+  promoteDecisionToKnowledge,
+  updateProjectInstructions,
+} from "@/lib/services/project-knowledge";
+import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
+import { executeClaudeAgentTurn } from "@/lib/ai/claude-orchestrator";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 import { canUseCapability, invokeMainAgent, MainAgentChatInputSchema, selectRaxCapability } from "@/lib/n8n/main-agent";
 import type { MentorIntervention } from "@/types/domain";
@@ -883,5 +904,137 @@ export async function loadMainAgentThreadAction(projectId: string) {
     const thread = await getAgentThread(d, projectId);
     if (!thread) return { thread: null, messages: [] };
     return { thread, messages: await listAgentMessages(d, thread.id) };
+  });
+}
+
+/* ── Claude Projects: Hilos Múltiples, Conocimiento y Artefactos ── */
+
+export async function listProjectThreadsAction(projectId: string) {
+  return run(projectId, async (d) => {
+    return listProjectThreads(d, projectId);
+  });
+}
+
+export async function createProjectThreadAction(projectId: string, title?: string) {
+  return run(projectId, async (d) => {
+    return createAgentThread(d, projectId, title);
+  });
+}
+
+export async function renameProjectThreadAction(projectId: string, threadId: string, title: string) {
+  return run(projectId, async (d) => {
+    return renameAgentThread(d, threadId, title);
+  });
+}
+
+export async function loadThreadMessagesAction(projectId: string, threadId: string) {
+  return run(projectId, async (d) => {
+    const thread = await authorizedThread(d, threadId);
+    const messages = await listAgentMessages(d, thread.id);
+    return { thread, messages };
+  });
+}
+
+export async function updateProjectInstructionsAction(projectId: string, instructions: string) {
+  return run(projectId, async (d) => {
+    return updateProjectInstructions(d, projectId, instructions);
+  });
+}
+
+export async function listProjectDocumentsAction(projectId: string) {
+  return run(projectId, async (d) => {
+    return listProjectDocuments(d, projectId);
+  });
+}
+
+export async function getProjectKnowledgeStatsAction(projectId: string) {
+  return run(projectId, async (d) => {
+    return getProjectKnowledgeStats(d, projectId);
+  });
+}
+
+export async function addProjectDocumentAction(
+  projectId: string,
+  input: {
+    title: string;
+    filename: string;
+    content: string;
+    fileType?: ProjectDocumentFileType;
+  },
+) {
+  return run(projectId, async (d) => {
+    return addProjectDocument(d, projectId, input);
+  });
+}
+
+export async function deleteProjectDocumentAction(projectId: string, documentId: string) {
+  return run(projectId, async (d) => {
+    return deleteProjectDocument(d, projectId, documentId);
+  });
+}
+
+export async function promoteDecisionToKnowledgeAction(
+  projectId: string,
+  input: {
+    title: string;
+    filename?: string;
+    content: string;
+    messageId?: string;
+  },
+) {
+  return run(projectId, async (d) => {
+    return promoteDecisionToKnowledge(d, projectId, input);
+  });
+}
+
+export async function sendClaudeAgentMessageAction(input: {
+  projectId: string;
+  threadId?: string;
+  message: string;
+}) {
+  return run(input.projectId, async (d) => {
+    const { project } = await guard(d, input.projectId, "agent.chat");
+
+    const thread = input.threadId
+      ? await authorizedThread(d, input.threadId)
+      : await getOrCreateAgentThread(d, project.id);
+
+    const previousMessages = await listAgentMessages(d, thread.id);
+    const userMessage = await appendAgentUserMessage(d, thread.id, input.message);
+
+    // Recuperación de conocimiento híbrido (In-Context vs RAG automático)
+    const knowledge = await getProjectKnowledgeContext(d.repo, project.id, input.message);
+
+    // Historial del hilo aislado actual
+    const history = previousMessages.map((m) => ({
+      author: m.author,
+      content: m.content,
+    }));
+
+    // Ejecución orquestada del agente
+    const result = await executeClaudeAgentTurn({
+      project,
+      userMessage: input.message,
+      history,
+      knowledge,
+      role: d.actor.role,
+    });
+
+    const assistantMessage = await appendAgentAssistantMessage(d, thread.id, {
+      content: result.reply,
+      artifacts: result.artifacts,
+      citations: result.citations,
+      proposals: result.proposals,
+    });
+
+    return {
+      threadId: thread.id,
+      userMessage,
+      assistantMessage,
+      reply: assistantMessage.content,
+      artifacts: result.artifacts,
+      citations: result.citations,
+      mode: result.mode,
+    };
   });
 }

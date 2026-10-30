@@ -17,7 +17,7 @@ describe("contrato de persistencia del chat de agente", () => {
     const repo = createPgRepository(db);
     const createdAt = "2026-10-29T12:00:00.000Z";
     const thread = await repo.agentThreads.insert({
-      id: "thread-1", projectId: "project-1", creatorId: "actor-1", status: "error",
+      id: "thread-1", projectId: "project-1", creatorId: "actor-1", title: "Chat inicial", status: "error",
       lastErrorCode: "timeout", lastErrorMessage: "Provider timed out", createdAt, updatedAt: createdAt,
     });
     expect(tables.get("agent_threads")?.[0]).toMatchObject({ project_id: "project-1", creator_id: "actor-1", last_error_code: "timeout" });
