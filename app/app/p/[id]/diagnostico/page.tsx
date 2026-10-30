@@ -23,30 +23,24 @@ export default async function DiagnosisPage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="space-y-6">
-      {/* Encabezado limpio y moderno */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
-        <div>
-          <span className="font-mono text-xs uppercase tracking-wider text-blue-700 font-bold block mb-1">
-            Etapa 1 · Entender
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
-            Diagnóstico <span className="text-blue-600">vivo.</span>
-          </h1>
-          <p className="text-xs text-slate-500 mt-1.5 max-w-2xl leading-relaxed">
-            Se construye y refina a partir de la conversación con el Asistente de IA. Reúne afirmaciones, hechos, incógnitas y problemas para transferirlos como contexto a la <strong>Etapa 2 · Orientar</strong>.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5">
+      {/* Encabezado */}
+      <div>
+        <p className="eyebrow">Etapa 1 · Entender</p>
+        <h2 className="display mt-2 text-4xl">
+          Diagnóstico <span className="text-highlight">vivo.</span>
+        </h2>
+        <p className="mt-2 text-sm text-muted max-w-2xl leading-relaxed">
+          Se construye y refina a partir de la conversación con el Asistente de IA. Reúne afirmaciones, hechos, incógnitas y problemas para transferirlos como contexto a la <strong>Etapa 2 · Orientar</strong>.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-2.5">
           <span className={`px-3 py-1 rounded-full text-xs font-semibold border shadow-2xs ${statusConfig.bg}`}>
             ● {statusConfig.label}
           </span>
           <Link
             href={`/app/p/${id}/conversacion`}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition shadow-2xs flex items-center gap-1.5"
+            className="inline-block text-xs font-semibold uppercase tracking-[0.12em] text-accent hover:text-accent-strong"
           >
-            <span>💬</span>
-            <span>Ir a la conversación</span>
+            💬 Ir a la conversación →
           </Link>
         </div>
       </div>

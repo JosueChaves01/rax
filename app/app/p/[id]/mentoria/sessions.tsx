@@ -507,11 +507,10 @@ export function SessionCard(props: {
             {displayedNotes.map((n) => (
               <li
                 key={n.id}
-                className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
-                  n.isPrivate
+                className={`rounded-xl border px-4 py-3 text-sm transition-colors ${n.isPrivate
                     ? "border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20"
                     : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 shadow-2xs"
-                }`}
+                  }`}
               >
                 <div className="flex flex-wrap items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
                   <Tag
@@ -519,12 +518,12 @@ export function SessionCard(props: {
                       n.kind === "agreement"
                         ? "var(--color-ok)"
                         : n.kind === "commitment"
-                        ? "var(--color-accent)"
-                        : n.kind === "blocker"
-                        ? "var(--color-danger)"
-                        : n.kind === "decision"
-                        ? "var(--color-highlight)"
-                        : "var(--color-cyan)"
+                          ? "var(--color-accent)"
+                          : n.kind === "blocker"
+                            ? "var(--color-danger)"
+                            : n.kind === "decision"
+                              ? "var(--color-highlight)"
+                              : "var(--color-cyan)"
                     }
                   >
                     {NOTE_KIND_LABEL[n.kind]}
@@ -832,8 +831,8 @@ function MentorTools({
           {s.kind === "first_review"
             ? "Cerrar primera revisión con un acuerdo"
             : s.kind === "second_review"
-            ? "Registrar decisión formal de la segunda revisión"
-            : "Finalizar sesión de acompañamiento"}
+              ? "Registrar decisión formal de la segunda revisión"
+              : "Finalizar sesión de acompañamiento"}
         </p>
 
         {s.kind === "second_review" && (
@@ -877,8 +876,8 @@ function MentorTools({
             s.kind === "first_review"
               ? "Acuerdo explícito: qué investigar y prioridades iniciales"
               : s.kind === "second_review"
-              ? "Justificación formal de la decisión"
-              : "Acuerdos finales o resumen de cierre (opcional)"
+                ? "Justificación formal de la decisión"
+                : "Acuerdos finales o resumen de cierre (opcional)"
           }
         >
           <textarea
@@ -902,8 +901,8 @@ function MentorTools({
             {s.kind === "first_review"
               ? "Completar primera revisión"
               : s.kind === "second_review"
-              ? "Registrar decisión"
-              : "Finalizar y archivar sesión"}
+                ? "Registrar decisión"
+                : "Finalizar y archivar sesión"}
           </Button>
         </div>
       </form>

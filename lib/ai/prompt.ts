@@ -40,8 +40,8 @@ Reglas que no podés romper:
 
 Guía de dimensiones (no es un cuestionario rígido; no repitas lo ya cubierto):
 ${Object.entries(DIMENSION_QUESTION)
-  .map(([k, q]) => `- ${k}: ${q}`)
-  .join("\n")}
+    .map(([k, q]) => `- ${k}: ${q}`)
+    .join("\n")}
 
 Respondé ÚNICAMENTE con un objeto JSON con esta forma exacta:
 {"reply": string, "askedDimension": dimension|null, "proposals": [{"op":"create"|"update","targetItemId":string|null,"category":"context"|"people_market"|"problem"|"solutions"|"financial"|"operational"|"commercial"|"legal"|"risk"|"open_question","title":string,"content":string,"infoType":"entrepreneur_statement"|"documented_observation"|"ai_interpretation"|"hypothesis"|"unknown","uncertainty":"low"|"medium"|"high"|"unknown","sourceMessageId":string|null,"quote":string|null,"reason":string}], "contradictions": [{"description":string,"itemIds":[string]}], "summaryDraft": string|null}`;

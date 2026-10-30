@@ -139,12 +139,12 @@ export async function suggestFirstReview(d: ServiceDeps, sessionId: string): Pro
     projectSummary: dx?.summary ?? project.description,
     founderContext: founderOnboarding
       ? {
-          stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
-          sector: founderOnboarding.sector,
-          goals: founderOnboarding.goals.map((g) => GOAL_LABEL[g] ?? g),
-          mentorExpectation: founderOnboarding.mentorExpectation,
-          weeklyHours: founderOnboarding.weeklyHours,
-        }
+        stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
+        sector: founderOnboarding.sector,
+        goals: founderOnboarding.goals.map((g) => GOAL_LABEL[g] ?? g),
+        mentorExpectation: founderOnboarding.mentorExpectation,
+        weeklyHours: founderOnboarding.weeklyHours,
+      }
       : undefined,
     briefing: {
       whatTheyBuild: briefing.whatTheyBuild,

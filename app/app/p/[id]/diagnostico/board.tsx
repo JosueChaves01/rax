@@ -55,15 +55,15 @@ export function DiagnosisBoard(props: {
               className={cx(
                 "rounded-full border px-3 py-1.5 text-xs font-medium transition cursor-pointer flex items-center gap-1.5",
                 filter === f
-                  ? "border-blue-600 bg-blue-600 text-white font-semibold shadow-xs"
-                  : "border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50",
+                  ? "border-accent bg-accent text-white font-semibold shadow-xs"
+                  : "border-line bg-panel text-muted hover:text-ink hover:border-line-strong",
               )}
             >
               <span>{label}</span>
               <span
                 className={cx(
-                  "font-mono text-[10px] px-1.5 py-0.2 rounded-full",
-                  filter === f ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-600",
+                  "font-mono text-[10px] px-1.5 py-0.5 rounded-full",
+                  filter === f ? "bg-accent-strong text-white" : "bg-surface text-muted",
                 )}
               >
                 {counts[f]}
@@ -89,11 +89,11 @@ export function DiagnosisBoard(props: {
       ) : (
         visible.map(({ c, items }) => (
           <section key={c} aria-labelledby={`cat-${c}`} className="space-y-3">
-            <div className="flex items-center gap-2 border-b border-slate-200 pb-2 pt-2">
-              <h3 id={`cat-${c}`} className="text-xs font-bold uppercase tracking-wider text-slate-800 font-mono">
+            <div className="flex items-center gap-2 border-b border-line pb-2 pt-2">
+              <h3 id={`cat-${c}`} className="eyebrow">
                 {CATEGORY_LABEL[c]}
               </h3>
-              <span className="font-mono text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+              <span className="font-mono text-[10px] font-semibold px-2 py-0.5 rounded-full bg-surface text-muted border border-line">
                 {items.length}
               </span>
             </div>
@@ -121,19 +121,19 @@ export function DiagnosisBoard(props: {
 function Legend() {
   const types: InfoType[] = ["entrepreneur_statement", "documented_observation", "verifiable_evidence", "ai_interpretation", "hypothesis", "human_correction", "unknown", "agreed_decision"];
   return (
-    <details className="rounded-xl border border-slate-200 bg-white p-3.5 text-xs text-slate-600 shadow-2xs group">
-      <summary className="cursor-pointer select-none font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-2">
+    <details className="rounded-2xl border border-line bg-panel p-3.5 text-xs text-muted shadow-2xs group">
+      <summary className="cursor-pointer select-none font-semibold text-ink hover:text-ink flex items-center gap-2">
         <span>ℹ️</span>
         <span>Cómo leer las tarjetas y tipos de información</span>
       </summary>
-      <div className="mt-3 flex flex-wrap gap-1.5 pb-2 border-t border-slate-100 pt-3">
+      <div className="mt-3 flex flex-wrap gap-1.5 pb-2 border-t border-line pt-3">
         {types.map((t) => (
           <Tag key={t} color={INFO_COLOR[t]} dashed={t === "unknown"}>
             {INFO_TYPE_LABEL[t]}
           </Tag>
         ))}
       </div>
-      <p className="pb-1 text-slate-500 text-[11px] leading-relaxed">
+      <p className="pb-1 text-faint text-[11px] leading-relaxed">
         <strong>Borde amarillo:</strong> propuesta pendiente de confirmar. <strong>Borde verde:</strong> respaldado por evidencia. <strong>Borde punteado:</strong> dato desconocido, que también es
         información válida. Que alguien haya afirmado algo no significa que esté verificado.
       </p>
@@ -151,15 +151,15 @@ function AddItemForm({ projectId, onDone }: { projectId: string; onDone: () => v
   const allowed: InfoType[] = ["entrepreneur_statement", "documented_observation", "hypothesis", "unknown"];
   return (
     <form
-      className="grid gap-3.5 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:grid-cols-2"
+      className="grid gap-3.5 rounded-2xl border border-line bg-panel p-5 shadow-xs sm:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
         run(() => addItemAction(projectId, { category, title, content, infoType, uncertainty }), onDone);
       }}
     >
-      <div className="sm:col-span-2 border-b border-slate-100 pb-2">
-        <h4 className="text-sm font-bold text-slate-900">Agregar elemento al diagnóstico</h4>
-        <p className="text-xs text-slate-500">Registra manualmente una afirmación, hecho o incógnita.</p>
+      <div className="sm:col-span-2 border-b border-line pb-2">
+        <h4 className="text-sm font-bold">Agregar elemento al diagnóstico</h4>
+        <p className="text-xs text-muted">Registra manualmente una afirmación, hecho o incógnita.</p>
       </div>
       <Field id="ai-cat" label="Sección">
         <select id="ai-cat" className={inputClass} value={category} onChange={(e) => setCategory(e.target.value as DiagnosisCategory)}>
@@ -225,9 +225,9 @@ export function SummaryPanel({
 
   if (!summary) {
     return (
-      <section className="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-5 shadow-2xs">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">Resumen inicial de la etapa</p>
-        <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+      <section className="rounded-2xl border border-dashed border-line bg-panel p-5">
+        <p className="eyebrow">Resumen inicial de la etapa</p>
+        <p className="mt-2 text-sm text-muted leading-relaxed">
           Todavía no hay contexto suficiente para un primer resumen. Se sintetiza a partir de las respuestas en la conversación de la etapa Entender.
         </p>
       </section>
@@ -246,7 +246,7 @@ export function SummaryPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-base">{confirmedAt ? "✓" : "📝"}</span>
-          <h2 id="summary-title" className="text-xs font-bold uppercase tracking-wider text-slate-700 font-mono">
+          <h2 id="summary-title" className="eyebrow">
             Resumen inicial de diagnóstico
           </h2>
         </div>
@@ -285,11 +285,11 @@ export function SummaryPanel({
         <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 font-normal">{summary}</p>
       )}
       {!confirmedAt && canConfirm && !editing && (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-white p-4 shadow-2xs">
-          <p className="text-sm font-semibold text-slate-900">
-            ¿Esto representa lo que querés hacer <span className="text-amber-700 font-bold">o hay algo que corregir?</span>
+        <div className="mt-4 rounded-xl border border-line bg-panel p-4 shadow-2xs">
+          <p className="text-sm font-semibold">
+            ¿Esto representa lo que querés hacer <span className="text-highlight font-bold">o hay algo que corregir?</span>
           </p>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             Al confirmar este resumen, se transferirá como contexto para tu mentor en la <strong>Etapa 2 · Orientar</strong>.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
