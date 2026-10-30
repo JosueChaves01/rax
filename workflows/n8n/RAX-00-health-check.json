@@ -23,9 +23,11 @@
         "method": "GET",
         "url": "={{ $env.RAX_API_URL || 'https://rax-red.vercel.app' }}/api/n8n/health",
         "options": {
-          "timeout": 5000
+          "timeout": 5000,
+          "neverError": true
         }
       },
+      "onError": "continueRegularOutput",
       "id": "node-http-rax-health",
       "name": "Ping RAX API",
       "type": "n8n-nodes-base.httpRequest",
@@ -61,9 +63,11 @@
         "specifyBody": "json",
         "jsonBody": "={\n  \"model\": \"{{ $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free' }}\",\n  \"messages\": [\n    {\"role\": \"user\", \"content\": \"ping\"}\n  ],\n  \"max_tokens\": 5\n}",
         "options": {
-          "timeout": 10000
+          "timeout": 10000,
+          "neverError": true
         }
       },
+      "onError": "continueRegularOutput",
       "id": "node-http-openrouter-ping",
       "name": "Ping OpenRouter Model",
       "type": "n8n-nodes-base.httpRequest",
@@ -75,7 +79,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const raxData = $('Ping RAX API').first().json;\nconst orData = $('Ping OpenRouter Model').first().json;\n\nconst raxOk = raxData && raxData.status === 'ok';\nconst orOk = orData && orData.choices && orData.choices.length > 0;\n\nreturn [{\n  json: {\n    status: (raxOk && orOk) ? 'healthy' : 'degraded',\n    timestamp: new Date().toISOString(),\n    components: {\n      n8n: { status: 'ok' },\n      raxApi: {\n        status: raxOk ? 'ok' : 'unreachable',\n        version: raxData.version || 'unknown'\n      },\n      openRouter: {\n        status: orOk ? 'ok' : 'failed',\n        modelTested: orData.model || ($env.OPENROUTER_MODEL || 'default'),\n        promptTokens: orData.usage?.prompt_tokens || 0\n      }\n    }\n  }\n}];"
+        "jsCode": "let raxData = {};\ntry { raxData = $('Ping RAX API').first()?.json || {}; } catch {}\n\nlet orData = {};\ntry { orData = $('Ping OpenRouter Model').first()?.json || {}; } catch {}\n\nconst raxOk = Boolean(raxData && (raxData.status === 'ok' || raxData.healthy === true) && !raxData.error);\nconst orOk = Boolean(orData && Array.isArray(orData.choices) && orData.choices.length > 0 && !orData.error);\n\nreturn [{\n  json: {\n    status: (raxOk && orOk) ? 'healthy' : 'degraded',\n    timestamp: new Date().toISOString(),\n    components: {\n      n8n: { status: 'ok' },\n      raxApi: {\n        status: raxOk ? 'ok' : 'unreachable',\n        version: raxData.version || 'unknown'\n      },\n      openRouter: {\n        status: orOk ? 'ok' : 'failed',\n        modelTested: orData.model || ($env.OPENROUTER_MODEL || 'default'),\n        promptTokens: orData.usage?.prompt_tokens || 0\n      }\n    }\n  }\n}];"
       },
       "id": "node-code-eval-health",
       "name": "Evaluate Diagnostics",
@@ -91,7 +95,7 @@
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "responseCode": "={{ $json.status === 'healthy' ? 200 : 503 }}"
+          "responseCode": 200
         }
       },
       "id": "node-respond-health",

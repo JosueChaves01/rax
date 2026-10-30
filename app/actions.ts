@@ -33,7 +33,7 @@ import { createUserClient } from "@/lib/supabase/server";
 import { appUrl, missingConfig } from "@/lib/supabase/config";
 import { completeOnboarding } from "@/lib/services/onboarding";
 import { isDomainError } from "@/lib/errors";
-import { audit, guard, type ServiceDeps } from "@/lib/services/base";
+import { audit, guard, sysRepo, type ServiceDeps } from "@/lib/services/base";
 import type { ItemChange } from "@/features/diagnosis/rules";
 import { createProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
 import { addComment, addItem, changeItem, confirmSummary, editSummary } from "@/lib/services/diagnosis";
@@ -633,7 +633,8 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
   if (!d) return { ok: false as const, error: "Tu sesión terminó. Volvé a entrar.", code: "unauthenticated" };
 
   try {
-    const allProfiles = await d.repo.profiles.list().catch(() => []);
+    const sys = sysRepo(d);
+    const allProfiles = await sys.profiles.list().catch(() => []);
     const isMentor = d.actor.role === "mentor";
 
     // Determinar quién es el emprendedor y quién es el mentor
@@ -652,8 +653,16 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
         const mentorProfile =
           allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved") ||
           allProfiles.find((p) => p.role === "mentor");
-        mentorId = mentorProfile?.id || "men1";
+        mentorId = mentorProfile?.id;
       }
+    }
+
+    if (!mentorId) {
+      return {
+        ok: false as const,
+        error: "No hay mentores disponibles en la plataforma para formalizar el acuerdo.",
+        code: "validation",
+      };
     }
 
     const now = d.now();
@@ -677,10 +686,35 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
       createdAt: now,
       updatedAt: now,
     };
-    await d.repo.projects.insert(project);
+
+    if (d.actor.role === "entrepreneur" && d.actor.id === entrepreneurId) {
+      await d.repo.projects.insert(project);
+    } else {
+      await sys.projects.insert(project);
+    }
     await audit(d, "project.created", { projectId, targetId: project.id });
 
-    // Asignar mentor al proyecto
+    // Armado inicial del proyecto (membresía de dueño, conversación y diagnóstico)
+    await sys.projectMembers.insert({
+      id: `${projectId}:${entrepreneurId}`,
+      projectId,
+      profileId: entrepreneurId,
+      role: "owner",
+      createdAt: now,
+    });
+    const conv = await sys.conversations.insert({ id: d.newId("conv"), projectId, createdAt: now });
+    await sys.diagnoses.insert({ id: d.newId("dx"), projectId, status: "exploring", updatedAt: now });
+    await sys.messages.insert({
+      id: d.newId("msg"),
+      conversationId: conv.id,
+      projectId,
+      author: "assistant",
+      content: `Hola. Este proyecto fue iniciado con un acuerdo de mentoría enfocado en «${projectName}». Los objetivos iniciales y términos ya están formalizados.`,
+      dimension: "nature",
+      createdAt: now,
+    });
+
+    // Asignar mentor al proyecto (con permisos de sistema para cumplir con RLS de asignación)
     const assignment: MentorAssignment = {
       id: d.newId("asg"),
       projectId,
@@ -689,7 +723,7 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
       assignedBy: d.actor.id,
       createdAt: now,
     };
-    await d.repo.mentorAssignments.insert(assignment);
+    await sys.mentorAssignments.insert(assignment);
     await audit(d, "mentor.assigned", { projectId, targetId: assignment.id, meta: { mentorId } });
 
     // Crear relación de mentoría
@@ -709,7 +743,7 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
       createdAt: now,
       updatedAt: now,
     };
-    await d.repo.mentorshipRelations.insert(relation);
+    await sys.mentorshipRelations.insert(relation);
     await audit(d, "mentorship.relation_created", {
       projectId,
       targetId: relation.id,
@@ -743,7 +777,7 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
       status: "confirmed_by_entrepreneur",
       createdAt: now,
     };
-    await d.repo.mentorshipAgreements.insert(agreement);
+    await sys.mentorshipAgreements.insert(agreement);
     await audit(d, "mentorship.agreement_updated", { projectId, targetId: agreement.id });
 
     // Notificar a n8n si está configurado
@@ -783,7 +817,8 @@ export const loadExplorationContextAction = async () => {
   if (!d) return { ok: false as const, error: "No autenticado" };
 
   try {
-    const allProfiles = await d.repo.profiles.list().catch(() => []);
+    const sys = sysRepo(d);
+    const allProfiles = await sys.profiles.list().catch(() => []);
     const approvedMentors = allProfiles.filter((p) => p.role === "mentor" && p.mentorStatus === "approved");
     const mentors = approvedMentors.length > 0 ? approvedMentors : allProfiles.filter((p) => p.role === "mentor");
 
@@ -803,7 +838,8 @@ export const generateMentorshipExplorationWithAiAction = async (prompt?: string)
   if (!d) return { ok: false as const, error: "No autenticado" };
 
   try {
-    const allProfiles = await d.repo.profiles.list().catch(() => []);
+    const sys = sysRepo(d);
+    const allProfiles = await sys.profiles.list().catch(() => []);
     const firstMentor =
       allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved") ||
       allProfiles.find((p) => p.role === "mentor");

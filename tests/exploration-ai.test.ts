@@ -134,6 +134,21 @@ describe("Workflow de Exploración y Creación de Proyecto Mentor-Cliente con As
     expect(agreements).toHaveLength(1);
     expect(agreements[0].frequency).toBe("biweekly");
     expect(agreements[0].scope).toContain("Estrategia de pricing");
+
+    // Verificar bootstrap completo de workspace (membresía, conversación, diagnóstico y mensaje)
+    const members = await entrepreneur.repo.projectMembers.list({ projectId });
+    expect(members).toHaveLength(1);
+    expect(members[0].role).toBe("owner");
+
+    const convs = await entrepreneur.repo.conversations.list({ projectId });
+    expect(convs).toHaveLength(1);
+
+    const diags = await entrepreneur.repo.diagnoses.list({ projectId });
+    expect(diags).toHaveLength(1);
+    expect(diags[0].status).toBe("exploring");
+
+    const msgs = await entrepreneur.repo.messages.list({ projectId });
+    expect(msgs.length).toBeGreaterThanOrEqual(1);
   });
 
   it("ejecuta la herramienta setup_mentorship_project del agente de IA", async () => {

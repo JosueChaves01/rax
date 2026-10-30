@@ -145,5 +145,28 @@ describe("Validación Estructural de Workflows de n8n (v1+)", () => {
     expect(workflow.connections["Is Model Output Valid?"].main[1][0].node).toBe(rejected.name);
     expect(rejected.parameters.options.responseCode).toContain("502");
   });
+
+  it("RAX-02 adapta su rol y catálogo de workflows según el actor (apoyo para mentor, guía/intermediario para estudiante/emprendedor)", () => {
+    const workflow = JSON.parse(fs.readFileSync(path.join(workflowsDir, "RAX-02-mentor-chat.json"), "utf-8"));
+    const verifier = workflow.nodes.find((node: { id: string }) => node.id === "node-code-sanitize-chat");
+    const jsCode = verifier.parameters.jsCode as string;
+
+    // 1. Roles y permisos de workflows (RBAC en n8n)
+    expect(jsCode).toContain("WORKFLOW_CATALOG");
+    expect(jsCode).toContain("'RAX-05': { name: 'Pre-Session Briefing', roles: ['mentor']");
+    expect(jsCode).toContain("'RAX-06': { name: 'Session Synthesis', roles: ['mentor']");
+    expect(jsCode).toContain("'RAX-04': { name: 'Diagnosis Items', roles: ['entrepreneur']");
+    expect(jsCode).toContain("AVISO DE PERMISOS");
+
+    // 2. Rol para Mentor: Apoyo y copiloto profesional
+    expect(jsCode).toContain("ROL DEL INTERLOCUTOR: MENTOR O TUTOR");
+    expect(jsCode).toContain("Tu función es actuar como APOYO y copiloto profesional para el mentor/tutor");
+
+    // 3. Rol para Estudiante / Emprendedor: Guía e intermediario de preguntas hacia el mentor/tutor
+    expect(jsCode).toContain("ROL DEL INTERLOCUTOR: ESTUDIANTE, APRENDIZ O EMPRENDEDOR");
+    expect(jsCode).toContain("Tu función es actuar como GUÍA FORMATIVO E INTERMEDIARIO DE PREGUNTAS hacia su mentor o tutor");
+    expect(jsCode).toContain("FORMULAR PREGUNTAS CLAVE");
+    expect(jsCode).toContain("NUNCA lo desvíes a validar ideas en el mercado");
+  });
 });
 

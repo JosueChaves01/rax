@@ -112,12 +112,12 @@ export default function ExplorationPage() {
     loadExplorationContextAction().then((res) => {
       if (res.ok && res.mentors) {
         setAvailableMentors(res.mentors);
-        if (res.mentors.length > 0 && !selectedMentorId) {
-          setSelectedMentorId(res.mentors[0].id);
+        if (res.mentors.length > 0) {
+          setSelectedMentorId((curr) => curr || res.mentors[0].id);
         }
       }
     });
-  }, [selectedMentorId]);
+  }, []);
 
   // Autocompletar con Asistente de IA
   const handleAutoFillWithAi = async (customPrompt?: string) => {

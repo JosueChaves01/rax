@@ -15,17 +15,30 @@ if [ -d "/workflows" ] && [ "$(ls -A /workflows 2>/dev/null)" ]; then
   else
     echo "=> Sincronizando flujos de RAX (RAX-00 a RAX-99)..."
     
-    # Limpiar duplicados previos antes de importar para evitar acumulaciones
+    # Limpiar duplicados y relaciones previas antes de importar para evitar registros huerfanos
     node -e "
     const { DatabaseSync } = require('node:sqlite');
     try {
       const db = new DatabaseSync('/home/node/.n8n/database.sqlite');
       db.exec('PRAGMA foreign_keys = OFF;');
-      db.prepare('DELETE FROM workflow_entity').run();
-      db.prepare('DELETE FROM webhook_entity').run();
-      db.prepare('DELETE FROM workflow_published_version').run();
+      const tables = [
+        'workflow_entity',
+        'webhook_entity',
+        'workflow_published_version',
+        'shared_workflow',
+        'workflow_history',
+        'workflow_dependency',
+        'workflow_publish_history',
+        'workflow_statistics',
+        'workflows_tags'
+      ];
+      for (const t of tables) {
+        try { db.prepare('DELETE FROM ' + t).run(); } catch {}
+      }
       db.exec('PRAGMA foreign_keys = ON;');
-    } catch {}
+    } catch (e) {
+      console.error('Aviso al limpiar tablas previas:', e.message);
+    }
     " 2>/dev/null || true
 
     n8n import:workflow --separate --input=/workflows || echo "=> Aviso: Importación completada con avisos o flujos preexistentes."
@@ -36,14 +49,29 @@ if [ -d "/workflows" ] && [ "$(ls -A /workflows 2>/dev/null)" ]; then
       fi
     done
 
-    # Registrar rutas de webhooks en la base de datos
+    # Asegurar consistencia de publicación, proyectos y rutas de webhooks en la base de datos
     node -e "
     const { DatabaseSync } = require('node:sqlite');
     try {
       const db = new DatabaseSync('/home/node/.n8n/database.sqlite');
-      const workflows = db.prepare('SELECT id, nodes FROM workflow_entity').all();
+      
+      // 1. Obtener proyecto por defecto para asegurar vinculacion en shared_workflow si fuera necesario
+      const project = db.prepare(\"SELECT id FROM project WHERE type='personal' LIMIT 1\").get() || db.prepare(\"SELECT id FROM project LIMIT 1\").get();
+      const projectId = project ? project.id : null;
+
+      const workflows = db.prepare('SELECT id, versionId, nodes FROM workflow_entity').all();
+      const insertPub = db.prepare('INSERT OR REPLACE INTO workflow_published_version (workflowId, publishedVersionId, createdAt, updatedAt) VALUES (?, ?, datetime(\"now\"), datetime(\"now\"))');
+      const updateWf = db.prepare('UPDATE workflow_entity SET active = 1, activeVersionId = COALESCE(activeVersionId, versionId) WHERE id = ?');
+      const insertShared = projectId ? db.prepare(\"INSERT OR IGNORE INTO shared_workflow (workflowId, projectId, role, createdAt, updatedAt) VALUES (?, ?, 'workflow:owner', datetime('now'), datetime('now'))\") : null;
       const insertWebhook = db.prepare('INSERT OR REPLACE INTO webhook_entity (workflowId, webhookPath, method, node, webhookId, pathLength) VALUES (?, ?, ?, ?, ?, ?)');
+
       for (const wf of workflows) {
+        updateWf.run(wf.id);
+        insertPub.run(wf.id, wf.versionId);
+        if (insertShared) {
+          insertShared.run(wf.id, projectId);
+        }
+
         let nodes = [];
         try { nodes = typeof wf.nodes === 'string' ? JSON.parse(wf.nodes) : wf.nodes; } catch {}
         for (const n of nodes) {
@@ -54,7 +82,7 @@ if [ -d "/workflows" ] && [ "$(ls -A /workflows 2>/dev/null)" ]; then
           }
         }
       }
-    } catch (e) { console.error('Error registrando webhooks:', e.message); }
+    } catch (e) { console.error('Error finalizando configuracion de workflows:', e.message); }
     " 2>/dev/null || true
     echo "$HASH_CURRENT" > "$MARKER_FILE"
     echo "=> Flujos de RAX sincronizados y activados exitosamente (19 flujos únicos)."
