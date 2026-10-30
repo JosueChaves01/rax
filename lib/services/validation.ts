@@ -122,7 +122,9 @@ export async function suggestHypotheses(d: ServiceDeps, projectId: string): Prom
     .map((i) => ({ id: i.id, title: i.title, content: i.content }));
 
   const firstSession = sessions.find((s) => s.kind === "first_review" && s.status === "completed");
-  const firstSessionNotes = firstSession ? notes.filter((n) => n.sessionId === firstSession.id) : [];
+  const firstSessionNotes = firstSession
+    ? notes.filter((n) => n.sessionId === firstSession.id && !n.isPrivate)
+    : [];
   const mentorAgreement = firstSessionNotes.find((n) => n.kind === "agreement")?.body;
 
   const existingHypotheses = hypotheses.map((h) => ({

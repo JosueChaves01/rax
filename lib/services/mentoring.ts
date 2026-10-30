@@ -379,7 +379,7 @@ export async function generatePreSessionBriefing(
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const lastSession = previousSessions[0];
   const previousSessionNotes = lastSession
-    ? allNotes.filter((n) => n.sessionId === lastSession.id).map((n) => ({ kind: n.kind, body: n.body }))
+    ? allNotes.filter((n) => n.sessionId === lastSession.id && !n.isPrivate).map((n) => ({ kind: n.kind, body: n.body }))
     : [];
 
   let recentMessages: Array<{ author: string; content: string }> | undefined;
@@ -476,7 +476,8 @@ export async function generatePostSessionSynthesis(
   const ctx: PostSessionSynthesisContext = {
     projectName: project.name,
     sessionKind: s.kind,
-    sessionNotes: sessionNotes.map((n) => ({ kind: n.kind, body: n.body, isPrivate: n.isPrivate })),
+    // El resumen se persiste en la sesión, visible para el emprendedor; notas privadas no entran al proveedor.
+    sessionNotes: sessionNotes.filter((n) => !n.isPrivate).map((n) => ({ kind: n.kind, body: n.body, isPrivate: false })),
     briefingAgenda: s.preSessionBriefing?.suggestedAgenda,
     goals: allGoals.map((g) => ({ id: g.id, title: g.title })),
   };

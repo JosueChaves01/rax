@@ -9,6 +9,7 @@ export type Action =
   | "project.read"
   | "project.update"
   | "conversation.write"
+  | "agent.chat"
   | "diagnosis.edit"
   | "diagnosis.confirm_summary"
   | "diagnosis.comment"
@@ -49,6 +50,7 @@ const MATRIX: Record<Exclude<Action, "admin.manage">, Who[]> = {
   "project.read": ["owner", "collaborator", "mentor"],
   "project.update": ["owner"],
   "conversation.write": ["owner", "collaborator"],
+  "agent.chat": ["owner", "collaborator", "mentor"],
   "diagnosis.edit": ["owner", "collaborator"],
   "diagnosis.confirm_summary": ["owner"],
   "diagnosis.comment": ["owner", "collaborator", "mentor"],
@@ -79,8 +81,8 @@ export function can(actor: Profile, action: Action, rel: ProjectRelation = NO_RE
   // El administrador gestiona usuarios y asignaciones, pero no lee el contenido de proyectos ajenos.
   const allowed = MATRIX[action];
   return (
-    (rel.isOwner && allowed.includes("owner")) ||
-    (rel.isCollaborator && allowed.includes("collaborator")) ||
+    (rel.isOwner && actor.role === "entrepreneur" && allowed.includes("owner")) ||
+    (rel.isCollaborator && actor.role === "entrepreneur" && allowed.includes("collaborator")) ||
     (rel.isAssignedMentor && actor.role === "mentor" && allowed.includes("mentor"))
   );
 }

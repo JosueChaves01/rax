@@ -53,6 +53,7 @@ export const AiProposalItemSchema = z.object({
     "recommendation",
     "intervention",
     "agenda_topic",
+    "field_value",
   ]),
   title: z.string().min(1).max(300),
   description: z.string().max(4000).optional(),
@@ -64,9 +65,16 @@ export const AiProposalItemSchema = z.object({
   sourceQuote: z.string().max(1000).optional(),
   sourceEntityType: z.string().optional(),
   sourceEntityId: z.string().optional(),
+  /** Typed draft for one contextual form field; server/UI still require human application. */
+  fieldPath: z.string().max(200).optional(),
+  value: z.union([z.string().max(4000), z.number(), z.boolean(), z.null()]).optional(),
   needsHumanApproval: z.boolean().default(true),
   uncertainties: z.array(z.string()).default([]),
   metadata: z.record(z.string(), z.unknown()).optional(),
+}).superRefine((proposal, ctx) => {
+  if (proposal.type === "field_value" && (!proposal.fieldPath || proposal.value === undefined)) {
+    ctx.addIssue({ code: "custom", message: "Una propuesta de campo requiere fieldPath y value." });
+  }
 });
 
 export type AiProposalItem = z.infer<typeof AiProposalItemSchema>;
@@ -122,6 +130,22 @@ export const ChatSyncRequestSchema = z.object({
   actor: EventActorSchema,
   messageId: z.string().min(1),
   message: z.string().min(1).max(5000),
+  workContext: z.object({
+    stage: z.string().min(1).max(80),
+    flowId: z.string().regex(/^RAX-(?:0[0-9]|1[0-5]|9[01]|99)$/).optional(),
+    section: z.string().max(160).optional(),
+    taskId: z.string().max(128).optional(),
+    fieldPath: z.string().max(200).optional(),
+    currentValue: z.string().max(4000).optional(),
+    fieldSchema: z.object({
+      type: z.enum(["string", "number", "integer", "boolean", "date", "enum"]),
+      label: z.string().max(160),
+      description: z.string().max(1000).optional(),
+      required: z.boolean().optional(),
+      maxLength: z.number().int().min(1).max(10_000).optional(),
+      options: z.array(z.string().max(200)).max(50).optional(),
+    }).strict().optional(),
+  }).optional(),
   context: z.object({
     projectName: z.string(),
     projectSummary: z.string().nullable().optional(),

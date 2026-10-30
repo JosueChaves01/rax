@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { improveDocumentWithAIAction } from "@/app/actions";
 import type { MentorResource } from "@/types/domain";
 
 interface DocumentEditorViewProps {
@@ -27,34 +26,6 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
     { id: "s2", text: "Añadir evidencias o casos contrastables", checked: false },
     { id: "s3", text: "Alinear con los objetivos del ciclo", checked: false },
   ]);
-
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [suggestionApplied, setSuggestionApplied] = useState(false);
-
-  const handleImproveWithAI = async () => {
-    setAiGenerating(true);
-    setAiError(null);
-    try {
-      const res = await improveDocumentWithAIAction({
-        title: initialDoc?.title || "Documento",
-        conclusion,
-        argumentsText: argumentos,
-        dataText: datos,
-      });
-      if (!res.ok) {
-        setAiError(res.error);
-        return;
-      }
-      setConclusion(res.reply);
-      setSuggestionApplied(true);
-      setSuggestions((prev) => prev.map((s) => ({ ...s, checked: true })));
-    } catch (error) {
-      setAiError(error instanceof Error ? error.message : "No se pudo generar una sugerencia.");
-    } finally {
-      setAiGenerating(false);
-    }
-  };
 
   const toggleSuggestion = (id: string) => {
     setSuggestions((prev) =>
@@ -197,26 +168,16 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
               </p>
             </div>
 
-            {/* Esta acción solo ofrece una sugerencia temporal; no guarda una versión. */}
+            {/* La acción se habilita cuando estos campos estén vinculados al agente principal. */}
             <button
               type="button"
-              disabled={aiGenerating}
-              onClick={handleImproveWithAI}
+              disabled
+              title="La mejora estará disponible cuando el documento use el agente principal con un proyecto autorizado."
               className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
-              {aiGenerating ? "Preparando sugerencia…" : "Sugerir reformulación"}
+              Sugerencia de IA no disponible
             </button>
-
-            {aiError && (
-              <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
-                {aiError}
-              </div>
-            )}
-            {suggestionApplied && (
-              <div role="status" className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                Sugerencia aplicada solo en esta sesión; aún no está guardada.
-              </div>
-            )}
+            <p className="text-xs text-muted">La sugerencia se habilitará al integrar documentos con el agente principal y su contexto autorizado.</p>
 
             {/* El modelo de documentos aún no tiene guardado/revisión persistentes. */}
             <div className="pt-4 border-t border-slate-100">

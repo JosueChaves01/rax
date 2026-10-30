@@ -12,11 +12,9 @@ interface TasksViewProps {
   projectName?: string;
 }
 
-type TabScope = "mis-tareas" | "equipo" | "seguimiento";
 type FilterStatus = "todas" | "pendientes" | "en-progreso" | "completadas";
 
 export function TasksView({ initialTasks, projectId, projectName }: TasksViewProps) {
-  const [scope, setScope] = useState<TabScope>("mis-tareas");
   const [filter, setFilter] = useState<FilterStatus>("todas");
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [isPending, startTransition] = useTransition();
@@ -50,10 +48,12 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
       setActionNotice(null);
       try {
         const res = await requestTaskProposalsAction(projectId);
-        if (res.ok) {
+        if (res.ok && res.data?.dispatched) {
           setActionNotice(
-            "✓ Evento despachado al flujo de n8n (RAX-08). Las propuestas generadas requerirán aprobación del mentor."
+            "Evento recibido por la entrada de n8n. La ejecución del flujo y la generación de propuestas todavía no están confirmadas."
           );
+        } else if (res.ok) {
+          setActionNotice("El agente principal aún no está conectado: n8n no está disponible y no se generaron propuestas.");
         } else {
           setActionNotice(`Aviso n8n: ${res.error}`);
         }
@@ -70,7 +70,7 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
     return true;
   });
 
-  // Cálculo dinámico de recordatorios inteligentes (RAX-10)
+  // Indicador local basado en las fechas límite almacenadas; no envía recordatorios.
   const now = Date.now();
   const twoDaysMs = 48 * 60 * 60 * 1000;
   const urgentTasks = tasks.filter((t) => {
@@ -105,10 +105,11 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
             <button
               key={s}
               type="button"
-              onClick={() => setScope(s)}
+              disabled={s !== "mis-tareas"}
+              title={s !== "mis-tareas" ? "Este filtro todavía no está disponible; se muestran las tareas del proyecto." : undefined}
               className={cx(
                 "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
-                scope === s
+                s === "mis-tareas"
                   ? "bg-white text-slate-900 shadow-2xs"
                   : "text-slate-500 hover:text-slate-900"
               )}
@@ -259,7 +260,7 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-5">
             <div>
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span>🔔</span> Recordatorios inteligentes (RAX-10)
+                <span>🔔</span> Fechas próximas y vencidas
               </h2>
               <p
                 className={cx(
@@ -269,7 +270,7 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
               >
                 {urgentTasks.length > 0
                   ? `Tienes ${urgentTasks.length} tarea${urgentTasks.length > 1 ? "s" : ""} próxima${urgentTasks.length > 1 ? "s" : ""} a vencer o en riesgo`
-                  : "Todos tus compromisos están al día"}
+                  : "No hay tareas próximas o vencidas"}
               </p>
             </div>
 
@@ -305,7 +306,7 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
                 })
               ) : (
                 <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-500 text-xs">
-                  Sin alertas urgentes de vencimiento en las próximas 48 horas.
+                  Sin fechas próximas o vencidas en las próximas 48 horas.
                 </div>
               )}
             </div>
@@ -313,10 +314,10 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
             {/* Sugerencia de IA (Panel 9 del Mock + RAX-08) */}
             <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 space-y-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800">
-                💡 Sugerencia de IA (Flujo RAX-08)
+                💡 Propuestas de tareas
               </span>
               <p className="text-xs text-slate-700 leading-relaxed">
-                Considera solicitar a n8n la generación de compromisos accionables basados en los objetivos de la mentoría.
+                El agente principal podrá proponer compromisos accionables a partir de los objetivos cuando la integración esté lista.
               </p>
               <div className="pt-2 flex flex-col gap-2">
                 <button
@@ -325,7 +326,7 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
                   onClick={handleRequestN8nProposals}
                   className="w-full px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50 text-center"
                 >
-                  {isPending ? "Contactando n8n…" : "↻ Proponer tareas con n8n"}
+                  {isPending ? "Consultando…" : "↻ Proponer tareas"}
                 </button>
                 <Link
                   href="/app/sesiones"

@@ -95,5 +95,54 @@ describe("Validación Estructural de Workflows de n8n (v1+)", () => {
     expect(code).toContain("notRun: results.length");
     expect(code).not.toContain("status: 'passed'");
   });
+
+  it("verifica vigencia temporal en RAX-02 y conserva el código de rechazo", () => {
+    const workflow = JSON.parse(fs.readFileSync(path.join(workflowsDir, "RAX-02-mentor-chat.json"), "utf-8"));
+    const verifier = workflow.nodes.find((node: { id: string }) => node.id === "node-code-sanitize-chat");
+    const denied = workflow.nodes.find((node: { id: string }) => node.id === "node-respond-chat-denied");
+
+    expect(verifier.parameters.jsCode).toContain("Math.abs(now - reqTime) > 300");
+    expect(denied.parameters.options.responseCode).toContain("$json.statusCode");
+  });
+
+  it("firma cada callback hacia RAX sobre el cuerpo exacto con timestamp anti-replay", () => {
+    const callbackFiles = expectedWorkflows.filter((file) =>
+      /RAX-(0[3-9]|1[0-5]|90)-/.test(file),
+    );
+    for (const file of callbackFiles) {
+      const workflow = JSON.parse(fs.readFileSync(path.join(workflowsDir, file), "utf-8"));
+      const callback = workflow.nodes.find((node: { type: string; name: string; parameters?: { url?: string } }) =>
+        node.type === "n8n-nodes-base.httpRequest" && (/callback|report error/i.test(node.name) || /api\/n8n\/callback/i.test(node.parameters?.url ?? "")),
+      );
+      expect(callback, `${file}: falta el callback HTTP`).toBeDefined();
+      const headers = callback.parameters.headerParameters.parameters;
+      expect(headers.find((header: { name: string }) => header.name === "x-rax-signature")?.value).toContain("callbackSignature");
+      expect(headers.find((header: { name: string }) => header.name === "x-rax-timestamp")?.value).toContain("callbackTimestamp");
+      expect(callback.parameters.jsonBody).toBe("={{ $json.callbackBody }}");
+
+      const signer = workflow.nodes.find((node: { name: string }) => node.name === "Sign RAX Callback");
+      expect(signer, `${file}: falta firmador de callback`).toBeDefined();
+      expect(signer.parameters.jsCode).toContain("RAX_N8N_SHARED_SECRET");
+      expect(signer.parameters.jsCode).toContain("Math.floor(Date.now() / 1000)");
+      expect(signer.parameters.jsCode).toContain("timestamp + '.' + callbackBody");
+      expect(signer.parameters.jsCode).toContain("JSON.stringify(callbackPayload)");
+    }
+  });
+
+  it("RAX-02 rechaza JSON inválido del modelo y no fabrica una respuesta de éxito", () => {
+    const workflow = JSON.parse(fs.readFileSync(path.join(workflowsDir, "RAX-02-mentor-chat.json"), "utf-8"));
+    const formatter = workflow.nodes.find((node: { id: string }) => node.id === "node-code-validate-chat-output");
+    const outputGate = workflow.nodes.find((node: { id: string }) => node.id === "node-if-chat-output-valid");
+    const rejected = workflow.nodes.find((node: { id: string }) => node.id === "node-respond-chat-invalid");
+    const code = formatter.parameters.jsCode as string;
+
+    expect(code).toContain("The model returned invalid JSON");
+    expect(code).toContain("The model returned an invalid proposal");
+    expect(code).toContain("needsHumanApproval: true");
+    expect(code).not.toContain("Entendido. Sigamos profundizando.");
+    expect(outputGate.type).toBe("n8n-nodes-base.if");
+    expect(workflow.connections["Is Model Output Valid?"].main[1][0].node).toBe(rejected.name);
+    expect(rejected.parameters.options.responseCode).toContain("502");
+  });
 });
 

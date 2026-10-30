@@ -26,10 +26,9 @@ import { createUserClient } from "@/lib/supabase/server";
 import { appUrl, missingConfig } from "@/lib/supabase/config";
 import { completeOnboarding } from "@/lib/services/onboarding";
 import { isDomainError } from "@/lib/errors";
-import type { ServiceDeps } from "@/lib/services/base";
+import { guard, type ServiceDeps } from "@/lib/services/base";
 import type { ItemChange } from "@/features/diagnosis/rules";
 import { createProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
-import { sendMessage } from "@/lib/services/conversation";
 import { addComment, addItem, changeItem, confirmSummary, editSummary } from "@/lib/services/diagnosis";
 import {
   addNote,
@@ -94,7 +93,9 @@ import {
 import { dismissIntervention } from "@/lib/services/portfolio";
 import { createResource } from "@/lib/services/resources";
 import { recordCycleEvaluation } from "@/lib/services/evaluation";
-import { invokeSyncChatN8n, dispatchEventToN8n } from "@/lib/n8n/dispatcher";
+import { appendAgentAssistantMessage, appendAgentUserMessage, getAgentThread, getOrCreateAgentThread, listAgentMessages } from "@/lib/services/agent-chat";
+import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
+import { canUseCapability, invokeMainAgent, MainAgentChatInputSchema, selectRaxCapability } from "@/lib/n8n/main-agent";
 import type { MentorIntervention } from "@/types/domain";
 import * as V from "@/lib/validation/inputs";
 
@@ -235,10 +236,22 @@ export const setSharingAction = async (projectId: string, share: boolean) =>
 /* ── Conversación ── */
 
 export async function sendMessageAction(projectId: string, content: string) {
-  return run(projectId, async (d) => {
-    const r = await sendMessage(d, V.parse(V.Ids, projectId), V.parse(V.Text(8000), content));
-    return r.ok ? { aiError: null, proposals: r.proposalsCreated, summaryDrafted: r.summaryDrafted } : { aiError: r.aiError, proposals: 0, summaryDrafted: false };
-  });
+  const checkedProjectId = V.parse(V.Ids, projectId);
+  const checkedContent = V.parse(V.Text(4000), content);
+  const result = await sendMainAgentMessageAction({ projectId: checkedProjectId, stage: "conversation", message: checkedContent });
+  if (!result.ok) return result;
+  const turn = result.data;
+  if (!turn) return { ok: false as const, error: "No se pudo guardar el mensaje." };
+  return {
+    ok: true as const,
+    data: {
+      aiError: turn.ok ? null : turn.message,
+      proposals: turn.ok ? turn.proposals.length : 0,
+      summaryDrafted: false,
+      reply: turn.ok ? turn.reply : turn.message,
+      threadId: turn.threadId,
+    },
+  };
 }
 
 /* ── Diagnóstico ── */
@@ -453,7 +466,7 @@ export const requestTaskProposalsAction = async (projectId: string) =>
         : [];
     const existingTasks = await d.repo.tasks.list({ projectId });
     const now = d.now();
-    await dispatchEventToN8n({
+    const dispatch = await dispatchEventToN8n({
       eventId: d.newId("evt"),
       eventType: "task.proposals_requested",
       occurredAt: now,
@@ -469,7 +482,7 @@ export const requestTaskProposalsAction = async (projectId: string) =>
         contextSource: "tasks_dashboard",
       },
     });
-    return true;
+    return { dispatched: dispatch.ok, error: dispatch.error, status: dispatch.status };
   });
 
 /* ── Hoja de Ruta y Tareas Multimodales ── */
@@ -507,78 +520,14 @@ export const improveDocumentWithAIAction = async (input: {
   conclusion: string;
   argumentsText: string;
   dataText: string;
-}) => {
-  const d = await getDeps();
-  if (!d) return { ok: false as const, error: "Inicia sesión para pedir una sugerencia de IA." };
-
-  const prompt = `Sugiere una reformulación breve de la conclusión usando el Principio de la Pirámide de Minto.\nTítulo: ${input.title}\nConclusión actual: ${input.conclusion}\nArgumentos actuales: ${input.argumentsText}\nDatos y evidencia aportados: ${input.dataText}\n\nNo inventes cifras, clientes, resultados, fuentes ni evidencia. Si faltan datos, no los completes. Devuelve solo la conclusión sugerida y cualquier incertidumbre relevante.`;
-
-  try {
-    const chatRes = await invokeSyncChatN8n({
-      correlationId: d.newId("doc_opt"),
-      projectId: "doc_preview",
-      messageId: d.newId("msg"),
-      message: prompt,
-      actor: { id: d.actor.id, role: d.actor.role, verified: true },
-      context: {
-        projectName: "Documentos",
-        projectSummary: "Optimización de documento con pirámide de Minto",
-        recentMessages: [],
-        currentItems: [],
-        coveredDimensions: [],
-        pendingDimensions: [],
-        mentorNotes: [],
-      },
-    });
-    const reply = chatRes.response?.reply?.trim();
-    if (!chatRes.ok || !reply) {
-      return { ok: false as const, error: chatRes.error || "La IA no devolvió una sugerencia válida." };
-    }
-    return { ok: true as const, reply };
-  } catch {
-    return { ok: false as const, error: "No se pudo conectar con el servicio de IA." };
-  }
+}): Promise<{ ok: true; reply: string } | { ok: false; error: string }> => {
+  void input;
+  return { ok: false as const, error: "La mejora con IA estará disponible cuando esta pantalla use el agente principal con un proyecto autorizado." };
 };
 
-export const evaluateExerciseAction = async (exerciseText: string) => {
-  const d = await getDeps();
-  if (!d) return { ok: false as const, error: "Inicia sesión para evaluar tu ejercicio." };
-  const validatedExercise = V.parse(V.Text(4000), exerciseText.trim());
-  if (!validatedExercise) return { ok: false as const, error: "Escribe una respuesta antes de evaluarla." };
-  const prompt = `Evalúa esta respuesta usando el marco PREP:\nObjeción: «Tu servicio parece caro frente a alternativas de software gratuitas».\nRespuesta del emprendedor:\n"${validatedExercise}"\n\nAnaliza el Punto, la Razón, el Ejemplo y el Punto final. No asumas que las cifras o casos son ciertos: señala que no puedes verificarlos. Devuelve una calificación explícita sobre 10 y hasta tres frases de retroalimentación constructiva.`;
-
-  try {
-    const chatRes = await invokeSyncChatN8n({
-      correlationId: d.newId("eval_prep"),
-      projectId: "prep_eval",
-      messageId: d.newId("msg"),
-      message: prompt,
-      actor: { id: d.actor.id, role: d.actor.role, verified: true },
-      context: {
-        projectName: "Aprendizaje Aplicado",
-        projectSummary: "Evaluación de ejercicio PREP de objeciones comerciales",
-        recentMessages: [],
-        currentItems: [],
-        coveredDimensions: [],
-        pendingDimensions: [],
-        mentorNotes: [],
-      },
-    });
-
-    const reply = chatRes.response?.reply || "";
-    const scoreMatch = reply.match(/(\d+)\s*\/\s*10/);
-    if (!chatRes.ok || !scoreMatch) {
-      return { ok: false as const, error: chatRes.error || "La IA no devolvió una evaluación con puntaje válido." };
-    }
-
-    return {
-      ok: true as const,
-      score: `${scoreMatch[1]}/10`,
-      feedback: reply,
-    };
-  } catch {
-    return { ok: false as const, error: "No se pudo conectar con el servicio de IA." };
-  }
+export const evaluateExerciseAction = async (exerciseText: string): Promise<{ ok: true; score: string; feedback: string } | { ok: false; error: string }> => {
+  void exerciseText;
+  return { ok: false as const, error: "La evaluación estará disponible cuando PREP se integre como capacidad del agente principal con un proyecto autorizado." };
 };
 
 export const completeExplorationAction = async (input: {
@@ -594,6 +543,7 @@ export const completeExplorationAction = async (input: {
 
   const relations = await d.repo.mentorshipRelations.list({ projectId: primary.id });
   const rel = relations[0];
+  let dispatchOk = false;
   if (rel) {
     const now = d.now();
     await d.repo.mentorshipRelations.update(rel.id, {
@@ -602,7 +552,7 @@ export const completeExplorationAction = async (input: {
       stage: "diagnosis",
       updatedAt: now,
     });
-    await dispatchEventToN8n({
+    const dispatch = await dispatchEventToN8n({
       eventId: d.newId("evt"),
       eventType: "onboarding.completed",
       occurredAt: now,
@@ -615,9 +565,15 @@ export const completeExplorationAction = async (input: {
       entityId: primary.id,
       payload: { motivation: input.motivation, description: input.description },
     });
+    dispatchOk = dispatch.ok;
   }
 
-  return { ok: true, notice: "Exploración y compatibilidad registradas exitosamente con n8n." };
+  return {
+    ok: true,
+    notice: dispatchOk
+      ? "Exploración y compatibilidad guardadas. El evento llegó a la entrada de n8n; el flujo especializado aún no está verificado."
+      : "Exploración y compatibilidad guardadas. n8n no está disponible y no se ejecutó ningún flujo.",
+  };
 };
 
 export const diagnoseTaskDelayAction = async (
@@ -791,60 +747,115 @@ export const recordCycleEvaluationAction = async (
     return recordCycleEvaluation(d, input);
   });
 
-/* ── Chat Contextual Síncrono con n8n (RAX-02) ── */
+/* ── Chat contextual del agente principal ── */
 
-export async function sendN8nChatAction(
-  message: string,
-  history: Array<{ sender: "user" | "ai" | "mentor"; text: string }> = []
-): Promise<
-  | { ok: true; reply: string; chips: string[]; provider: "n8n" }
-  | { ok: false; error: string }
-> {
-  const d = await getDeps();
-  if (!d) return { ok: false, error: "Inicia sesión para usar el chat." };
+/** Chat principal contextualizado por RAX: actor, proyecto y datos se resuelven en el servidor. */
+export async function sendMainAgentMessageAction(input: unknown) {
+  const parsed = MainAgentChatInputSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "El mensaje o el contexto del formulario no son válidos." };
 
-  const correlationId = d.newId("corr");
-  const recentMessages = history.slice(-6).map((m) => ({
-    author: m.sender === "user" ? d.actor.name : "RAX AI",
-    content: m.text,
-    createdAt: new Date().toISOString(),
-  }));
+  return run(parsed.data.projectId, async (d) => {
+    const { project } = await guard(d, parsed.data.projectId, "agent.chat");
+    const turn = { ...parsed.data, role: d.actor.role };
+    const selection = selectRaxCapability(turn);
+    if (!canUseCapability(d.actor.role, selection.primary, [selection.requiredAction])) {
+      return { ok: false as const, capability: selection.primary, status: "unavailable" as const, message: "No tenés permiso para usar esta capacidad en este proyecto." };
+    }
+    await guard(d, parsed.data.projectId, selection.requiredAction);
 
-  // 1. Invocar n8n síncrono (RAX-02)
-  try {
-    const n8nRes = await invokeSyncChatN8n({
-      message: message.trim(),
-      correlationId,
-      projectId: "global",
-      messageId: d.newId("msg"),
-      actor: {
-        id: d.actor.id,
-        role: d.actor.role,
-        verified: true,
+    const thread = await getOrCreateAgentThread(d, project.id);
+    const previousMessages = await listAgentMessages(d, thread.id);
+    const userMessage = await appendAgentUserMessage(d, thread.id, parsed.data.message);
+
+    const [diagnoses, items] = await Promise.all([
+      d.repo.diagnoses.list({ projectId: project.id }),
+      d.repo.diagnosisItems.list({ projectId: project.id }),
+    ]);
+    const recentMessages = previousMessages
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(-12)
+      .map((m) => ({
+        author: m.author === "assistant" ? "RAX" : d.actor.name,
+        content: m.content,
+        createdAt: m.createdAt,
+      }));
+    const request = {
+      correlationId: d.newId("corr"),
+      projectId: project.id,
+      actor: { id: d.actor.id, role: d.actor.role, verified: true as const },
+      messageId: userMessage.id,
+      message: userMessage.content,
+      workContext: {
+        stage: parsed.data.stage,
+        flowId: parsed.data.flowId,
+        section: parsed.data.section,
+        taskId: parsed.data.taskId,
+        fieldPath: parsed.data.fieldPath,
+        currentValue: parsed.data.currentValue,
+        fieldSchema: parsed.data.fieldSchema,
       },
       context: {
-        projectName: "RAX Innovation",
-        projectSummary: "Validación de modelo y acompañamiento",
+        projectName: project.name,
+        projectSummary: diagnoses[0]?.summary ?? project.description ?? null,
         recentMessages,
-        currentItems: [],
+        currentItems: items
+          .filter((item) => item.reviewStatus !== "rejected")
+          .slice(0, 60)
+          .map(({ id, category, title, content, infoType, reviewStatus, uncertainty }) => ({ id, category, title, content, infoType, reviewStatus, uncertainty })),
         coveredDimensions: [],
         pendingDimensions: [],
+        // No se incorpora ninguna nota de mentor al contexto del agente en esta versión.
         mentorNotes: [],
       },
-    });
-
-    if (n8nRes.ok && n8nRes.response?.reply?.trim()) {
-      const reply = n8nRes.response.reply;
-      const chips =
-        n8nRes.response.proposals && n8nRes.response.proposals.length > 0
-          ? n8nRes.response.proposals.map((p) => p.title).slice(0, 4)
-          : ["Generar plantilla con IA", "Ver ejemplo práctico", "Consultar a mi mentor"];
-
-      return { ok: true, reply, chips, provider: "n8n" };
+    };
+    let invocation;
+    try {
+      invocation = await invokeMainAgent(turn, request);
+    } catch {
+      invocation = {
+        ok: false as const,
+        capability: selection.primary,
+        status: "unavailable" as const,
+        message: "No se pudo completar la solicitud al agente.",
+      };
     }
-    return { ok: false, error: n8nRes.error || "El servicio de chat no devolvió una respuesta." };
-  } catch (err: unknown) {
-    console.warn("[n8n-chat] Falló la solicitud:", err);
-    return { ok: false, error: "No se pudo conectar con el servicio de chat." };
-  }
+
+    if (invocation.ok) {
+      const assistantMessage = await appendAgentAssistantMessage(d, thread.id, {
+        content: invocation.reply,
+        proposals: invocation.proposals as unknown as Array<Record<string, unknown>>,
+      });
+      return {
+        ok: true as const,
+        threadId: thread.id,
+        userMessage,
+        assistantMessage,
+        reply: assistantMessage.content,
+        proposals: invocation.proposals,
+        capability: invocation.capability,
+      };
+    }
+
+    // Persist only a safe, user-facing classification; never leak provider/network error details.
+    const safeFailure = invocation.status === "disabled"
+      ? { code: "agent_disabled", message: "El agente está deshabilitado mientras se completa la verificación de staging." }
+      : invocation.status === "invalid"
+        ? { code: "agent_context_invalid", message: "No se pudo validar el contexto de esta solicitud." }
+        : { code: "agent_unavailable", message: "Esta capacidad no está disponible en este momento." };
+    const assistantMessage = await appendAgentAssistantMessage(d, thread.id, {
+      content: safeFailure.message,
+      error: safeFailure,
+    });
+    return { ok: false as const, threadId: thread.id, userMessage, assistantMessage, capability: invocation.capability, status: invocation.status, message: safeFailure.message };
+  });
+}
+
+/** Loads only the signed-in actor's agent thread for this authorized project. */
+export async function loadMainAgentThreadAction(projectId: string) {
+  return run(projectId, async (d) => {
+    await guard(d, projectId, "agent.chat");
+    const thread = await getAgentThread(d, projectId);
+    if (!thread) return { thread: null, messages: [] };
+    return { thread, messages: await listAgentMessages(d, thread.id) };
+  });
 }

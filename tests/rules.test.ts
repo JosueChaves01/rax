@@ -23,6 +23,15 @@ describe("matriz de permisos", () => {
     expect(can(mentor, "project.read", NO_RELATION)).toBe(false);
     expect(can(admin, "project.read", NO_RELATION)).toBe(false);
     expect(can(admin, "admin.manage")).toBe(true);
+    expect(can(ent, "agent.chat", owner)).toBe(true);
+    expect(can(PEOPLE[1], "agent.chat", { ...NO_RELATION, isCollaborator: true })).toBe(true);
+    expect(can(mentor, "agent.chat", assigned)).toBe(true);
+    expect(can(admin, "agent.chat", owner)).toBe(false);
+    expect(can(admin, "agent.chat", { ...NO_RELATION, isCollaborator: true })).toBe(false);
+    expect(can(admin, "agent.chat", assigned)).toBe(false);
+    // Los roles mentor/admin no ganan acceso al falsificar la relación de propietario o colaborador.
+    expect(can(mentor, "agent.chat", owner)).toBe(false);
+    expect(can(admin, "project.read", owner)).toBe(false);
     // Un emprendedor con relación "mentor" falsificada no obtiene permisos de mentor.
     expect(can(ent, "mentor.decide", assigned)).toBe(false);
   });

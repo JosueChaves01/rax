@@ -64,14 +64,27 @@ export default function ExplorationPage() {
   const [description, setDescription] = useState("");
   const [relationAccepted, setRelationAccepted] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const handleAcceptMentor = () => {
-    setRelationAccepted(true);
     startTransition(async () => {
-      await completeExplorationAction({
-        motivation: selectedMotivation,
-        description,
-      });
+      setActionError(null);
+      setActionNotice(null);
+      try {
+        const result = await completeExplorationAction({
+          motivation: selectedMotivation,
+          description,
+        });
+        if (!result.ok) {
+          setActionError(result.error || "No se pudo registrar la solicitud.");
+          return;
+        }
+        setActionNotice(result.notice || "La acción terminó, pero no se confirmó la creación de una relación nueva.");
+        setRelationAccepted(true);
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : "No se pudo registrar la solicitud.");
+      }
     });
   };
 
@@ -148,7 +161,7 @@ export default function ExplorationPage() {
                 Nombre de la iniciativa
               </label>
               <input
-                defaultValue="RAX Innovation Lab"
+                placeholder="Nombre de la iniciativa"
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50"
               />
             </div>
@@ -157,7 +170,7 @@ export default function ExplorationPage() {
                 Sector o industria
               </label>
               <input
-                defaultValue="SaaS B2B & Educación"
+                placeholder="Sector o industria"
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50"
               />
             </div>
@@ -244,27 +257,27 @@ export default function ExplorationPage() {
               Paso 3: Compatibilidad mentor-emprendedor
             </h1>
             <p className="text-xs text-slate-500 mt-1">
-              Evaluación automatizada de compatibilidad basada en tus respuestas y la experiencia de los mentores disponibles.
+              El emparejamiento automatizado y la disponibilidad de mentores aún no están conectados.
             </p>
           </div>
 
           <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 flex flex-col sm:flex-row items-center gap-6">
             <div className="w-20 h-20 rounded-full bg-blue-600 text-white flex flex-col items-center justify-center font-bold text-xl shrink-0 shadow-sm">
-              <span>IA</span>
-              <span className="text-[9px] font-normal uppercase tracking-wider">Matching</span>
+              <span>Manual</span>
+              <span className="text-[9px] font-normal uppercase tracking-wider">Pendiente</span>
             </div>
 
             <div className="space-y-2 text-center sm:text-left min-w-0">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                 <h2 className="text-base font-bold text-slate-900">
-                  Calce según tu perfil y necesidades
+                  Compatibilidad de mentoría
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                  Disponible
+                  No disponible
                 </span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Tus respuestas serán evaluadas para emparejarte con el mentor más calificado según tu sector, requerimientos de tracción y disponibilidad de agenda.
+                Puedes registrar tu motivación y descripción; esta pantalla no calcula compatibilidad ni asigna un mentor.
               </p>
               <div className="pt-2 flex flex-wrap gap-2 text-[11px] text-slate-600">
                 <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200">
@@ -274,7 +287,7 @@ export default function ExplorationPage() {
                   ✓ Acuerdos de confidencialidad
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200">
-                  ✓ Sesiones guiadas con IA
+                  Matching automatizado pendiente
                 </span>
               </div>
             </div>
@@ -295,9 +308,11 @@ export default function ExplorationPage() {
                   : "bg-blue-600 text-white hover:bg-blue-700"
               )}
             >
-              {relationAccepted ? "✓ Relación solicitada exitosamente" : "Confirmar y solicitar mentor"}
+              {relationAccepted ? "✓ Solicitud registrada" : "Registrar interés en mentoría"}
             </button>
           </div>
+          {actionError && <p role="alert" className="text-xs text-rose-700">{actionError}</p>}
+          {actionNotice && <p role="status" className="text-xs text-blue-800">{actionNotice}</p>}
         </div>
       )}
 
@@ -308,7 +323,7 @@ export default function ExplorationPage() {
               Paso 4: Acuerdo preliminar y próximos pasos
             </h1>
             <p className="text-xs text-slate-500 mt-1">
-              Frecuencia y compromisos mutuos acordados para el primer ciclo de 30 días.
+              Propuesta de frecuencia y objetivos; no se registra un acuerdo en esta pantalla.
             </p>
           </div>
 
@@ -318,20 +333,20 @@ export default function ExplorationPage() {
                 <p className="text-xs font-bold text-slate-900">Frecuencia de sesiones</p>
                 <p className="text-[11px] text-slate-500">Encuentros virtuales coordinados por ambas partes</p>
               </div>
-              <span className="text-xs font-semibold text-blue-600">Quincenal</span>
+              <span className="text-xs font-semibold text-blue-600">Propuesta: quincenal</span>
             </div>
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-slate-900">Objetivo del ciclo</p>
                 <p className="text-[11px] text-slate-500">Validación de hipótesis y seguimiento de acuerdos</p>
               </div>
-              <span className="text-xs font-semibold text-emerald-600">Definido</span>
+              <span className="text-xs font-semibold text-amber-700">Por definir</span>
             </div>
           </div>
 
           <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-center">
             <p className="text-xs text-blue-900 font-semibold">
-              ¡Listo! Tu exploración ha sido registrada exitosamente.
+              Este resumen es una vista previa. El acuerdo y los datos del perfil no se guardan aquí.
             </p>
             <Link
               href="/app"
@@ -367,7 +382,7 @@ export default function ExplorationPage() {
             href="/app"
             className="px-6 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-xs"
           >
-            Finalizar exploración
+              Volver al panel
           </Link>
         )}
       </div>

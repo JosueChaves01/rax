@@ -164,6 +164,13 @@ describe("Fase 4: Ciclo de Sesiones, Briefing 4-Capas y Privacidad Dual (Princip
     expect(interpret).toHaveBeenCalledOnce();
     expect(interpret.mock.calls[0][0].mentorNotes).not.toContain(privateNote.body);
 
+    // A generated briefing is persisted to the session and can be read by the entrepreneur.
+    const nextSession = await scheduleSession(mentor, p.id, { kind: "follow_up" });
+    const briefingAi = new SimulatedProvider();
+    const briefingSpy = vi.spyOn(briefingAi, "generatePreSessionBriefing");
+    await generatePreSessionBriefing(as("men1", briefingAi), nextSession.id);
+    expect(briefingSpy.mock.calls[0][0].previousSessionNotes.map((n) => n.body)).not.toContain(privateNote.body);
+
     // 3. Emprendedor consulta el workspace: NO debe ver la nota privada
     const wsEntrepreneur = await getWorkspace(ent, p.id);
     const entrepreneurNotes = wsEntrepreneur.notes.filter((n) => n.sessionId === session.id);
@@ -199,9 +206,13 @@ describe("Fase 4: Ciclo de Sesiones, Briefing 4-Capas y Privacidad Dual (Princip
     await addNote(mentor, session.id, "agreement", "Foco puesto en reducir el tiempo de onboarding.", undefined, false);
     await addNote(mentor, session.id, "commitment", "Entrevistar a 5 usuarios que abandonaron en el paso 2.", undefined, false);
     await addNote(mentor, session.id, "decision", "Descartar soporte de autenticación LDAP por ahora.", undefined, false);
+    const privateNote = await addNote(mentor, session.id, "observation", "Nota privada: evaluar capacidad personal confidencial.", undefined, true);
 
     // 1. Generar síntesis pos-sesión
-    const synthesis = await generatePostSessionSynthesis(mentor, session.id);
+    const synthesisAi = new SimulatedProvider();
+    const synthesisSpy = vi.spyOn(synthesisAi, "generatePostSessionSynthesis");
+    const synthesis = await generatePostSessionSynthesis(as("men1", synthesisAi), session.id);
+    expect(synthesisSpy.mock.calls[0][0].sessionNotes.some((n) => n.body === privateNote.body)).toBe(false);
     expect(synthesis.summary).toBeDefined();
     expect(synthesis.agreedDecisions.length).toBeGreaterThanOrEqual(1);
     expect(synthesis.entrepreneurCommitments.length).toBeGreaterThanOrEqual(1);

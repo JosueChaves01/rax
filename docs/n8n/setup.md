@@ -11,7 +11,12 @@ Esta guía describe los pasos necesarios para instalar, configurar y desplegar l
 # Integración n8n
 N8N_WEBHOOK_BASE_URL=https://n8n.tu-dominio.com/     # o http://localhost:5678/
 RAX_N8N_SHARED_SECRET=tu-clave-secreta-hmac-32-chars # Secreto compartido para firmas HMAC
+# Ambos switches se dejan desactivados hasta importar y verificar los flujos en staging.
+RAX_N8N_EVENTS_ENABLED=false
+RAX_N8N_MAIN_AGENT_ENABLED=false
 ```
+
+No actives estos switches por tener una URL configurada. RAX-01, callbacks, persistencia y ejecución de herramientas deben pasar primero las pruebas de staging descritas en [main-agent-plan.md](../main-agent-plan.md).
 
 ### En la Instancia de n8n
 Configura estas variables en el entorno donde corre n8n (Docker, docker-compose o n8n Cloud):
@@ -30,14 +35,8 @@ OPENROUTER_MODEL=meta-llama/llama-3.3-70b-instruct:free
 
 ## 2. Configuración de Credenciales en n8n
 
-### Credencial para OpenRouter
-1. En el panel de n8n, navega a **Credentials → New Credential**.
-2. Selecciona **Header Auth** (o usa el nodo OpenRouter oficial si está disponible en tu versión).
-3. Configuración:
-   - **Name**: `OpenRouter Header Auth`
-   - **Header Name**: `Authorization`
-   - **Header Value**: `Bearer sk-or-v1-tu-clave-real-aqui`
-4. Guarda la credencial. Los nodos HTTP Request de los workflows `RAX-00` a `RAX-14` están configurados para referenciar esta credencial genérica sin exponer secretos en el código.
+### Secretos del proveedor
+Los exports actuales leen `$env.OPENROUTER_API_KEY` y `$env.OPENROUTER_MODEL`; no están enlazados a la credencial de Header Auth que ofrecía una versión anterior de esta guía. Configura esos valores en el gestor de secretos/entorno de n8n y valida los permisos de lectura de variables para Code nodes. No pegues claves en el editor del workflow ni en el repositorio. Las credenciales solo se consideran verificadas tras una ejecución de staging con una cuenta de prueba.
 
 ---
 
@@ -68,7 +67,7 @@ Para importar los 19 workflows sin reconstruirlos manualmente:
    - `RAX-90-error-handler.json`
    - `RAX-91-controlled-reprocessing.json`
    - `RAX-99-ai-evaluation.json`
-4. Activa los workflows haciendo clic en el switch **Active** en la esquina superior derecha de cada uno.
+4. **No actives los workflows todavía.** Los JSON actuales incluyen rutas declaradas no operativas (RAX-01, RAX-91), callbacks no idempotentes y subflujos que aún no están conectados al agente. Importarlos en una instancia no los deja listos para producción.
 
 ### Opción B: Mediante n8n CLI (en servidor auto-hospedado)
 ```bash
@@ -79,10 +78,11 @@ n8n import:workflow --input=workflows/n8n/
 
 ## 4. Verificación de Instalación
 
-Una vez importados y activados:
+Tras importar en un entorno de staging aislado, completar los contratos y habilitar workflows individualmente:
 1. Envía una petición GET al webhook de diagnóstico:
    ```bash
    curl -i https://n8n.tu-dominio.com/webhook/rax-health
    ```
-2. Debes recibir una respuesta HTTP 200 con `{ "status": "healthy" }`, confirmando que n8n, la API de RAX y el modelo de OpenRouter se comunican correctamente.
+2. El health check solo acredita que responde el webhook de salud. No demuestra que OpenRouter, callbacks, persistencia ni las herramientas del agente funcionen.
+3. Mantén `RAX_N8N_EVENTS_ENABLED=false` y `RAX_N8N_MAIN_AGENT_ENABLED=false` hasta que RAX-01, RAX-02, subflujos, callbacks firmados y persistencia pasen las pruebas sintéticas de [main-agent-plan.md](../main-agent-plan.md).
 

@@ -5,10 +5,15 @@ import { Empty, Notice, Tag, cx } from "@/shared/ui/primitives";
 import { INFO_COLOR } from "@/shared/ui/domain-colors";
 import { loadWorkspace } from "../data";
 import { Composer } from "../composer";
+import { getDeps } from "@/lib/runtime";
+import { getAgentThread, listAgentMessages } from "@/lib/services/agent-chat";
 
 export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { w } = await loadWorkspace(id);
+  const deps = await getDeps();
+  const agentThread = deps && (deps.actor.role === "entrepreneur" || deps.actor.role === "mentor") ? await getAgentThread(deps, id) : undefined;
+  const agentMessages = deps && agentThread ? await listAgentMessages(deps, agentThread.id) : [];
 
   if (w.conversationHidden) {
     return (
@@ -27,18 +32,15 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
           <h2 id="conv-title" className="display text-2xl">
             Conversación
           </h2>
-          {w.ai.id === "simulated" ? (
-            <Tag color="var(--color-highlight)" title="No hay un modelo de IA conectado: las respuestas siguen reglas fijas.">
-              Simulación · sin modelo de IA
-            </Tag>
-          ) : (
-            <Tag color="var(--color-cyan)">{w.ai.label}</Tag>
-          )}
+          <Tag color="var(--color-highlight)" title="La conversación usa el hilo común, pero las capacidades de agente aún requieren una instancia n8n operativa.">
+            Agente principal · no operativo
+          </Tag>
           {!canWrite && <Tag>Solo lectura</Tag>}
         </header>
         <ol className="flex-1 space-y-4 px-5 py-6" aria-label="Mensajes">
-          {w.messages.map((m) => {
-            const mine = m.author === "entrepreneur";
+          {[...w.messages.map((m) => ({ id: m.id, author: m.author === "entrepreneur" ? "user" as const : m.author === "assistant" ? "assistant" as const : "system" as const, content: m.content, provider: m.provider })),
+            ...agentMessages.map((m) => ({ id: m.id, author: m.author, content: m.content, provider: undefined }))].map((m) => {
+            const mine = m.author === "user";
             return (
               <li key={m.id} className={cx("flex", mine ? "justify-end" : "justify-start")}>
                 <div
@@ -48,7 +50,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
                   )}
                 >
                   <p className="mb-1 flex items-center gap-2 text-[0.6875rem] text-faint">
-                    <span>{mine ? (w.people[m.authorId ?? ""]?.name ?? "Emprendedor/a") : "RAX"}</span>
+                    <span>{mine ? "Tú" : "RAX"}</span>
                     {m.provider === "simulated" && <span className="text-highlight">· simulación</span>}
                     {m.provider === "openrouter" && <span className="text-cyan">· modelo de IA</span>}
                   </p>
@@ -66,9 +68,9 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       </section>
 
       <aside aria-labelledby="entendio" className="space-y-3">
-        <h2 id="entendio" className="eyebrow">Lo que RAX ordenó · pendiente de tu revisión</h2>
+        <h2 id="entendio" className="eyebrow">Propuestas previas del diagnóstico · pendiente de revisión</h2>
         {recent.length === 0 ? (
-          <Notice>Nada pendiente. Cuando conversés, las propuestas aparecen acá y en el diagnóstico.</Notice>
+          <Notice>No hay propuestas pendientes. La generación automática de diagnóstico estará disponible cuando RAX-04 se conecte al agente principal.</Notice>
         ) : (
           <ul className="space-y-2">
             {recent.map((i) => (

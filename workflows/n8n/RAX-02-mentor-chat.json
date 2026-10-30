@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst headers = $input.first().json.headers || {};\nconst body = $input.first().json.body || {};\n\nconst signatureHeader = headers['x-rax-signature'];\nconst timestampHeader = headers['x-rax-timestamp'];\nconst rawBodyStr = JSON.stringify(body);\n\n// 1. Verificación de seguridad HMAC\nconst secret = $env.RAX_N8N_SHARED_SECRET;\nif (!secret) { return [{ json: { valid: false, authorized: false, statusCode: 503, error: 'RAX_N8N_SHARED_SECRET is not configured' } }]; }\nconst hmac = crypto.createHmac('sha256', secret);\nconst expectedSig = 'sha256=' + hmac.update(`${timestampHeader}.${rawBodyStr}`).digest('hex');\n\nif (signatureHeader !== expectedSig) {\n  return [{\n    json: {\n      valid: false,\n      statusCode: 401,\n      error: 'Invalid HMAC signature'\n    }\n  }];\n}\n\n// 2. Control de Privacidad Estricto:\n// Si el actor es el emprendedor, purgeamos cualquier nota privada de mentor que pudiera haberse filtrado\nconst actorRole = body.actor?.role;\nconst context = body.context || {};\nlet sanitizedNotes = [];\nif (actorRole === 'mentor' || actorRole === 'admin') {\n  sanitizedNotes = context.mentorNotes || [];\n}\n\n// 3. Construir el prompt contextual para OpenRouter (Nivel 2)\nconst systemPrompt = `Eres el asistente de mentoría de RAX. Tu misión es acompañar al emprendedor con pedagogía socrática.\nREGLAS OBLIGATORIAS:\n1. Responde en español neutral y profesional.\n2. Haz una sola pregunta o reflexión a la vez para no abrumar.\n3. Distingue entre hechos registrados, afirmaciones del emprendedor e hipótesis no comprobadas.\n4. Si el usuario menciona una duda o falta de información, decláralo como incertidumbre en lugar de adivinar.\n5. Si identificas un elemento clave (problema, cliente, métrica), sugiérelo como propuesta con needsHumanApproval: true.\n6. Devuelve EXCLUSIVAMENTE un objeto JSON válido con los campos: reply (string), askedDimension (string opcional), proposals (array de propuestas), uncertainties (array de strings).`;\n\nconst userPrompt = JSON.stringify({\n  actorRole,\n  userMessage: body.message,\n  projectName: context.projectName,\n  projectSummary: context.projectSummary,\n  recentMessages: context.recentMessages || [],\n  coveredDimensions: context.coveredDimensions || [],\n  pendingDimensions: context.pendingDimensions || [],\n  mentorNotesAllowed: sanitizedNotes\n});\n\nreturn [{\n  json: {\n    valid: true,\n    correlationId: body.correlationId,\n    model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',\n    apiKey: $env.OPENROUTER_API_KEY || '',\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "const crypto = require('crypto');\nconst input = $input.first().json;\nconst headers = input.headers || {};\nconst body = input.body || {};\n\nconst signatureHeader = headers['x-rax-signature'];\nconst timestampHeader = headers['x-rax-timestamp'];\nconst rawBodyStr = JSON.stringify(body);\nconst now = Math.floor(Date.now() / 1000);\nconst reqTime = Number(timestampHeader);\nif (!timestampHeader || !Number.isFinite(reqTime) || Math.abs(now - reqTime) > 300) {\n  return [{ json: { valid: false, statusCode: 401, error: 'Missing or expired request timestamp' } }];\n}\nconst secret = $env.RAX_N8N_SHARED_SECRET;\nif (!secret) return [{ json: { valid: false, statusCode: 503, error: 'RAX_N8N_SHARED_SECRET is not configured' } }];\nconst expectedSig = 'sha256=' + crypto.createHmac('sha256', secret).update(`${timestampHeader}.${rawBodyStr}`).digest('hex');\nif (signatureHeader !== expectedSig) return [{ json: { valid: false, statusCode: 401, error: 'Invalid HMAC signature' } }];\nif (!body.actor || !['entrepreneur', 'mentor'].includes(body.actor.role) || !body.projectId || !body.message || !body.correlationId) {\n  return [{ json: { valid: false, statusCode: 400, error: 'Invalid chat request' } }];\n}\n\nconst context = body.context || {};\nconst mentorNotes = body.actor.role === 'mentor' && Array.isArray(context.mentorNotes) ? context.mentorNotes : [];\nconst systemPrompt = `Eres el asistente de mentoría de RAX. Responde en español neutral y profesional. Distingue hechos registrados, afirmaciones e hipótesis; no inventes evidencia, datos ni resultados. Si falta información, dilo y pregunta. Si workContext.fieldPath está presente, devuelve una propuesta field_value cuyo fieldPath coincida exactamente y cuyo value respete fieldSchema; marca needsHumanApproval=true. flowId solo es contexto: no significa que el workflow se ejecutó. Nunca afirmes que guardaste o ejecutaste algo. Devuelve exclusivamente JSON válido con reply (string), askedDimension (opcional), proposals (array) y uncertainties (array).`;\nconst userPrompt = JSON.stringify({\n  actorRole: body.actor.role,\n  userMessage: body.message,\n  projectName: context.projectName,\n  projectSummary: context.projectSummary,\n  recentMessages: context.recentMessages || [],\n  currentItems: context.currentItems || [],\n  coveredDimensions: context.coveredDimensions || [],\n  pendingDimensions: context.pendingDimensions || [],\n  workContext: body.workContext || {},\n  mentorNotes\n});\nreturn [{ json: { valid: true, correlationId: body.correlationId, workContext: body.workContext || {}, model: $env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free', apiKey: $env.OPENROUTER_API_KEY || '', systemPrompt, userPrompt } }];"
       },
       "id": "node-code-sanitize-chat",
       "name": "Sanitize & Build Chat Prompt",
@@ -91,19 +91,6 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nconst prep = $('Sanitize & Build Chat Prompt').first().json;\n\nlet output = null;\ntry {\n  const content = response.choices?.[0]?.message?.content || '{}';\n  output = JSON.parse(content);\n} catch (e) {\n  output = {\n    reply: 'He recibido tu mensaje y estoy procesándolo con tu mentor. ¿Podrías brindarme más detalles?',\n    uncertainties: ['Salida no estructurada del modelo']\n  };\n}\n\nreturn [{\n  json: {\n    correlationId: prep.correlationId,\n    reply: output.reply || 'Entendido. Sigamos profundizando.',\n    dimension: output.askedDimension || null,\n    proposals: (output.proposals || []).map(p => ({\n      ...p,\n      needsHumanApproval: true\n    })),\n    uncertainties: output.uncertainties || [],\n    usage: {\n      model: response.model || prep.model,\n      promptTokens: response.usage?.prompt_tokens || 0,\n      completionTokens: response.usage?.completion_tokens || 0\n    }\n  }\n}];"
-      },
-      "id": "node-code-validate-chat-output",
-      "name": "Validate & Structure Output",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1060,
-        240
-      ]
-    },
-    {
-      "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {
@@ -124,7 +111,7 @@
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify({ error: $json.error }) }}",
         "options": {
-          "responseCode": 401
+          "responseCode": "={{ $json.statusCode || 401 }}"
         }
       },
       "id": "node-respond-chat-denied",
@@ -135,6 +122,56 @@
         840,
         420
       ]
+    },
+    {
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "name": "Validate & Structure Output",
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Sanitize & Build Chat Prompt').first().json;\nconst content = response.choices?.[0]?.message?.content;\nlet output;\ntry { output = JSON.parse(content); } catch { return [{ json: { valid: false, statusCode: 502, error: 'The model returned invalid JSON' } }]; }\nif (!output || typeof output.reply !== 'string' || !output.reply.trim() || output.reply.length > 5000 || !Array.isArray(output.proposals) || output.proposals.length > 50 || (output.uncertainties !== undefined && !Array.isArray(output.uncertainties))) {\n  return [{ json: { valid: false, statusCode: 502, error: 'The model response did not match the required schema' } }];\n}\nconst allowedTypes = new Set(['task', 'diagnosis_item', 'hypothesis', 'experiment', 'goal', 'recommendation', 'intervention', 'agenda_topic', 'field_value']);\nfor (const proposal of output.proposals) {\n  if (!proposal || typeof proposal !== 'object' || !allowedTypes.has(proposal.type) || typeof proposal.title !== 'string' || !proposal.title.trim() || proposal.title.length > 300) {\n    return [{ json: { valid: false, statusCode: 502, error: 'The model returned an invalid proposal' } }];\n  }\n  if (proposal.type === 'field_value') {\n    const field = prep.workContext || {};\n    const schema = field.fieldSchema || {};\n    const value = proposal.value;\n    const matchesType = schema.type === 'number' ? typeof value === 'number'\n      : schema.type === 'integer' ? Number.isInteger(value)\n      : schema.type === 'boolean' ? typeof value === 'boolean'\n      : ['string', 'date', 'enum'].includes(schema.type) ? typeof value === 'string'\n      : ['string', 'number', 'boolean'].includes(typeof value) || value === null;\n    const matchesLength = typeof value !== 'string' || value.length <= (schema.maxLength || 4000);\n    const matchesOptions = schema.type !== 'enum' || !Array.isArray(schema.options) || schema.options.includes(value);\n    const matchesRequired = schema.required !== true || (typeof value !== 'string' || value.trim().length > 0);\n    if (typeof field.fieldPath !== 'string' || proposal.fieldPath !== field.fieldPath || proposal.fieldPath.length > 200 || !matchesType || !matchesLength || !matchesOptions || !matchesRequired) {\n      return [{ json: { valid: false, statusCode: 502, error: 'The model returned a field proposal that does not match the requested field' } }];\n    }\n  }\n}\nreturn [{ json: {\n  valid: true,\n  correlationId: prep.correlationId,\n  reply: output.reply.trim(),\n  dimension: typeof output.askedDimension === 'string' ? output.askedDimension : undefined,\n  proposals: output.proposals.map(p => ({ ...p, needsHumanApproval: true })),\n  uncertainties: Array.isArray(output.uncertainties) ? output.uncertainties.filter(x => typeof x === 'string').slice(0, 50) : [],\n  usage: { model: response.model || prep.model, promptTokens: response.usage?.prompt_tokens || 0, completionTokens: response.usage?.completion_tokens || 0 }\n} }];"
+      },
+      "position": [
+        1060,
+        240
+      ],
+      "id": "node-code-validate-chat-output"
+    },
+    {
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "name": "Is Model Output Valid?",
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "position": [
+        1220,
+        240
+      ],
+      "id": "node-if-chat-output-valid"
+    },
+    {
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "name": "Reject Invalid Model Output",
+      "parameters": {
+        "respondWith": "json",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 502 }}"
+        },
+        "responseBody": "={{ JSON.stringify({ error: $json.error }) }}"
+      },
+      "position": [
+        1440,
+        420
+      ],
+      "id": "node-respond-chat-invalid"
     }
   ],
   "connections": {
@@ -191,11 +228,27 @@
     },
     "Validate & Structure Output": {
       "main": [
+        {
+          "node": "Is Model Output Valid?",
+          "index": 0,
+          "type": "main"
+        }
+      ]
+    },
+    "Is Model Output Valid?": {
+      "main": [
         [
           {
             "node": "Respond Synchronous Chat",
-            "type": "main",
-            "index": 0
+            "index": 0,
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "node": "Reject Invalid Model Output",
+            "index": 0,
+            "type": "main"
           }
         ]
       ]

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateHmacSignature, getN8nSharedSecret, verifyHmacSignature } from "@/lib/n8n/security";
-import { RaxEventSchema, N8nCallbackPayloadSchema, ChatSyncRequestSchema } from "@/lib/n8n/contracts";
+import { AiProposalItemSchema, RaxEventSchema, N8nCallbackPayloadSchema, ChatSyncRequestSchema } from "@/lib/n8n/contracts";
 
 describe("Integración RAX ↔ n8n: Seguridad y Contratos", () => {
   const secret = "test-secret-key-123456";
@@ -163,6 +163,22 @@ describe("Integración RAX ↔ n8n: Seguridad y Contratos", () => {
 
     const parsed = ChatSyncRequestSchema.safeParse(chatRequest);
     expect(parsed.success).toBe(true);
+  });
+
+  it("valida contexto de campos y propuestas de valor tipadas para revisión humana", () => {
+    const request = ChatSyncRequestSchema.safeParse({
+      correlationId: "corr_field", projectId: "prj_101",
+      actor: { id: "usr_ent_1", role: "entrepreneur", verified: true },
+      messageId: "msg_1000", message: "Ayúdame a redactar el problema",
+      workContext: {
+        stage: "form", flowId: "RAX-04", section: "Problema", fieldPath: "diagnosis.problem",
+        currentValue: "", fieldSchema: { type: "string", label: "Problema", required: true, maxLength: 300 },
+      },
+      context: { projectName: "EcoDelivery", recentMessages: [], currentItems: [], coveredDimensions: [], pendingDimensions: [], mentorNotes: [] },
+    });
+    expect(request.success).toBe(true);
+    expect(AiProposalItemSchema.safeParse({ type: "field_value", title: "Borrador", fieldPath: "diagnosis.problem", value: "Demora en entregas", needsHumanApproval: true }).success).toBe(true);
+    expect(AiProposalItemSchema.safeParse({ type: "field_value", title: "Sin ruta", value: "texto" }).success).toBe(false);
   });
 });
 

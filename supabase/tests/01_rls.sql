@@ -47,6 +47,12 @@ update public.profiles set onboarded_at = now(), onboarding = '{"intent":"entrep
 -- Ana crea su proyecto; el servidor (service role) crea conversación, diagnóstico y membresía.
 insert into public.projects (id, owner_id, name) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'Almuerzos saludables');
+select pg_temp.expect_denied('el dueño no agrega un mentor como colaborador',
+  $$insert into public.project_members (project_id, profile_id, role)
+    values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'collaborator')$$);
+select pg_temp.expect_denied('el dueño no agrega un admin como colaborador',
+  $$insert into public.project_members (project_id, profile_id, role)
+    values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000ad', 'collaborator')$$);
 select pg_temp.expect_denied('el cliente no crea la conversación',
   $$insert into public.conversations (project_id) values ('10000000-0000-0000-0000-000000000001')$$);
 select pg_temp.expect_denied('el cliente no se agrega como dueño de otro proyecto',
@@ -56,6 +62,15 @@ insert into public.project_members (project_id, profile_id, role) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'owner');
 insert into public.conversations (project_id) values ('10000000-0000-0000-0000-000000000001');
 insert into public.diagnoses (project_id) values ('10000000-0000-0000-0000-000000000001');
+select pg_temp.act('00000000-0000-0000-0000-0000000000ad');
+select pg_temp.act(null);
+insert into public.project_members (project_id, profile_id, role)
+values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000ad', 'collaborator');
+select pg_temp.act('00000000-0000-0000-0000-0000000000ad');
+select pg_temp.expect('admin con fila collaborator heredada no es miembro de proyecto',
+  not public.is_project_member('10000000-0000-0000-0000-000000000001'));
+select pg_temp.expect('admin no obtiene acceso al contenido del proyecto', (select count(*) from public.diagnosis_items) = 0);
+select pg_temp.act('00000000-0000-0000-0000-00000000000a');
 insert into public.messages (conversation_id, project_id, author, content)
 select id, project_id, 'assistant', 'Hola. Texto fijo de la plataforma.' from public.conversations;
 select pg_temp.act('00000000-0000-0000-0000-00000000000a');
@@ -128,6 +143,14 @@ select pg_temp.expect('Ana ve la nota compartida, no la privada',
 select pg_temp.act('00000000-0000-0000-0000-00000000000c');
 select pg_temp.expect('Carla autora ve sus notas compartidas y privadas',
   (select count(*) = 2 from public.session_notes where session_id = '50000000-0000-0000-0000-000000000001'));
+select pg_temp.act('00000000-0000-0000-0000-0000000000ad');
+insert into public.mentor_assignments (project_id, mentor_id, assigned_by)
+values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000d',
+        '00000000-0000-0000-0000-0000000000ad');
+select pg_temp.act('00000000-0000-0000-0000-00000000000d');
+select pg_temp.expect('un mentor asignado distinto del autor solo ve notas compartidas',
+  (select count(*) filter (where not is_private) = 1 and count(*) filter (where is_private) = 0
+   from public.session_notes where session_id = '50000000-0000-0000-0000-000000000001'));
 
 select pg_temp.act('00000000-0000-0000-0000-00000000000c');
 select pg_temp.expect('Carla asignada ve el proyecto y el diagnóstico',
@@ -145,6 +168,25 @@ select pg_temp.act('00000000-0000-0000-0000-00000000000a');
 update public.projects set share_conversation_with_mentor = true where id = '10000000-0000-0000-0000-000000000001';
 select pg_temp.act('00000000-0000-0000-0000-00000000000c');
 select pg_temp.expect('con permiso, Carla ve la conversación', (select count(*) from public.messages) = 2);
+
+-- Chat del agente: un hilo privado por actor, separado de la conversación compartida.
+select pg_temp.act('00000000-0000-0000-0000-00000000000a');
+insert into public.agent_threads (id, project_id, creator_id) values
+  ('60000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a');
+insert into public.agent_messages (id, thread_id, project_id, author, author_id, content) values
+  ('61000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'user', '00000000-0000-0000-0000-00000000000a', 'Consulta privada');
+select pg_temp.expect_denied('el cliente no suplanta mensajes del agente',
+  $$insert into public.agent_messages (thread_id, project_id, author, author_id, content)
+    values ('60000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'assistant', '00000000-0000-0000-0000-00000000000a', 'respuesta falsa')$$);
+select pg_temp.act('00000000-0000-0000-0000-00000000000c');
+select pg_temp.expect('la mentora asignada no lee el hilo privado de Ana',
+  (select count(*) = 0 from public.agent_messages where thread_id = '60000000-0000-0000-0000-000000000001'));
+insert into public.agent_threads (id, project_id, creator_id) values
+  ('60000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c');
+insert into public.agent_messages (thread_id, project_id, author, author_id, content) values
+  ('60000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'user', '00000000-0000-0000-0000-00000000000c', 'Consulta de mentor');
+select pg_temp.expect('la mentora solo ve su propio hilo',
+  (select count(*) = 1 from public.agent_messages where thread_id = '60000000-0000-0000-0000-000000000002'));
 
 -- Hipótesis: solo la mentora asignada aprueba.
 select pg_temp.act('00000000-0000-0000-0000-00000000000a');

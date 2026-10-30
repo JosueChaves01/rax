@@ -31,8 +31,11 @@ Este documento lista las restricciones técnicas, límites de cuota y dependenci
 
 - No se detectó una instancia de n8n ni Docker en el host de desarrollo local.
 - Por tanto, la instalación en un servidor de n8n queda catalogada como **pendiente de importación** por el operador, siguiendo los pasos de [setup.md](setup.md) utilizando los 19 archivos JSON provistos en `workflows/n8n/`.
+- RAX rechaza despachos reales salvo que `RAX_N8N_EVENTS_ENABLED=true`; RAX-02 además requiere `RAX_N8N_MAIN_AGENT_ENABLED=true`. Ambos deben permanecer apagados hasta que staging confirme la ejecución real.
 
-## 4. Bloqueo del contrato de callback
+## 4. Contrato de callback y persistencia
 
-`POST /api/n8n/callback` exige `x-rax-signature` y `x-rax-timestamp` HMAC válidos. Los nodos HTTP de callback de los workflows exportados actualmente no generan esas cabeceras, por lo que el endpoint los rechazará con `401`. No se debe quitar esta autenticación para hacerlos funcionar: antes de activar los workflows, cada callback debe firmar exactamente el cuerpo enviado con `RAX_N8N_SHARED_SECRET`. Además, el endpoint aún registra metadatos de auditoría, no persiste propuestas para revisión; hasta implementar esa persistencia, no se debe anunciar que el resultado quedó procesado.
+`POST /api/n8n/callback` exige `x-rax-signature` y `x-rax-timestamp` HMAC válidos. Los callbacks exportados ahora incluyen un nodo de firma que calcula ambas cabeceras usando `RAX_N8N_SHARED_SECRET` y el mismo cuerpo JSON que se envía. La modificación solo se validó estructuralmente; debe comprobarse en staging con la versión/configuración real de n8n y una firma válida, vencida y alterada. Configura la misma clave fuera del repositorio en RAX y n8n. No quites la autenticación para hacer funcionar los callbacks.
+
+La ruta de callback de RAX todavía valida el contrato y registra metadatos de auditoría; no persiste las propuestas recibidas en elementos de dominio ni en una bandeja de revisión. Un `200` solo acredita el acuse de recibo de esa ruta, no que una propuesta se haya guardado o aplicado. Mantén los workflows desactivados hasta verificar autenticación, persistencia y revisión humana en staging.
 

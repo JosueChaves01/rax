@@ -34,6 +34,14 @@ export async function dispatchEventToN8n(
   }
 
   const event = parsedEvent.data;
+  if (!overrideUrl && process.env.RAX_N8N_EVENTS_ENABLED !== "true") {
+    return {
+      ok: false,
+      status: 503,
+      correlationId: event.correlationId,
+      error: "La ejecución de eventos n8n está deshabilitada hasta verificarse en staging.",
+    };
+  }
   const baseUrl = overrideUrl ?? getN8nBaseUrl();
 
   if (!baseUrl) {
@@ -114,6 +122,9 @@ export async function invokeSyncChatN8n(
   request: ChatSyncRequest,
   overrideUrl?: string
 ): Promise<{ ok: boolean; response?: ChatSyncResponse; error?: string }> {
+  if (!overrideUrl && process.env.RAX_N8N_MAIN_AGENT_ENABLED !== "true") {
+    return { ok: false, error: "El agente principal n8n está deshabilitado hasta verificarse en staging." };
+  }
   const baseUrl = overrideUrl ?? getN8nBaseUrl();
   if (!baseUrl) {
     return { ok: false, error: "N8N_WEBHOOK_BASE_URL no configurado" };

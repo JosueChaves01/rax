@@ -163,6 +163,35 @@ export interface Message {
   createdAt: ISODate;
 }
 
+/** Conversación del agente principal, separada de la entrevista y propiedad de un solo actor. */
+export type AgentThreadStatus = "active" | "error" | "closed";
+export interface AgentThread {
+  id: Id;
+  projectId: Id;
+  creatorId: Id;
+  status: AgentThreadStatus;
+  lastErrorCode?: string;
+  lastErrorMessage?: string;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export type AgentMessageAuthor = "user" | "assistant";
+export type AgentMessageStatus = "complete" | "failed";
+export interface AgentMessage {
+  id: Id;
+  threadId: Id;
+  projectId: Id;
+  author: AgentMessageAuthor;
+  authorId: Id;
+  content: string;
+  proposals: Array<Record<string, unknown>>;
+  status: AgentMessageStatus;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: ISODate;
+}
+
 /* ───────────── Diagnóstico ───────────── */
 
 export type DiagnosisStatus =

@@ -1,5 +1,7 @@
 import type {
   AuditEvent,
+  AgentMessage,
+  AgentThread,
   Comment,
   Conversation,
   Diagnosis,
@@ -46,6 +48,8 @@ export interface Table<T extends { id: string }> {
 export type ProjectMemberRow = ProjectMember & { id: string };
 
 export interface Repository {
+  agentThreads: Table<AgentThread>;
+  agentMessages: Table<AgentMessage>;
   profiles: Table<Profile>;
   projects: Table<Project>;
   projectMembers: Table<ProjectMemberRow>;

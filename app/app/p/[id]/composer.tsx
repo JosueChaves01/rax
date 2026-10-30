@@ -30,7 +30,7 @@ export function Composer({ projectId }: { projectId: string }) {
     <div className="space-y-3 border-t border-line px-5 py-4">
       {pending && (
         <p role="status" className="text-xs text-cyan">
-          RAX está ordenando lo que dijiste…
+          Enviando el mensaje al agente principal…
         </p>
       )}
       {error && <Notice tone="error">{error}</Notice>}

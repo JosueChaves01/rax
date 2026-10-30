@@ -98,13 +98,21 @@
             },
             {
               "name": "x-rax-correlation-id",
-              "value": "={{ $json.payload.correlationId }}"
+              "value": "={{ $json.callbackCorrelationId }}"
+            },
+            {
+              "name": "x-rax-signature",
+              "value": "={{ $json.callbackSignature }}"
+            },
+            {
+              "name": "x-rax-timestamp",
+              "value": "={{ $json.callbackTimestamp }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "jsonBody": "={{ $json.callbackBody }}",
         "options": {
           "timeout": 10000
         }
@@ -115,6 +123,19 @@
       "typeVersion": 4.2,
       "position": [
         1160,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst input = $input.first().json;\nconst secret = $env.RAX_N8N_SHARED_SECRET;\nif (!secret) throw new Error('RAX_N8N_SHARED_SECRET is not configured');\nconst callbackPayload = input.payload;\nif (!callbackPayload || typeof callbackPayload !== 'object') throw new Error('Missing callback payload');\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst callbackBody = JSON.stringify(callbackPayload);\nconst signature = 'sha256=' + crypto.createHmac('sha256', secret).update(timestamp + '.' + callbackBody).digest('hex');\nreturn [{ json: { ...input, callbackPayload, callbackBody, callbackTimestamp: timestamp, callbackSignature: signature, callbackCorrelationId: callbackPayload.correlationId } }];"
+      },
+      "id": "node-code-sign-callback",
+      "name": "Sign RAX Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
         300
       ]
     }
@@ -154,6 +175,17 @@
       ]
     },
     "Format Resources Callback": {
+      "main": [
+        [
+          {
+            "node": "Sign RAX Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign RAX Callback": {
       "main": [
         [
           {

@@ -1,5 +1,7 @@
 import type {
   AuditEvent,
+  AgentMessage,
+  AgentThread,
   Comment,
   Conversation,
   Diagnosis,
@@ -644,6 +646,24 @@ const cycleEvaluationSpec: Spec<CycleEvaluation> = {
   readOnly: ["version"],
 };
 
+const agentThreadSpec: Spec<AgentThread> = {
+  table: "agent_threads",
+  fields: {
+    id: ["id", same], projectId: ["project_id", same], creatorId: ["creator_id", same],
+    status: ["status", same], lastErrorCode: ["last_error_code", nul], lastErrorMessage: ["last_error_message", nul],
+    createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
+  },
+};
+
+const agentMessageSpec: Spec<AgentMessage> = {
+  table: "agent_messages",
+  fields: {
+    id: ["id", same], threadId: ["thread_id", same], projectId: ["project_id", same], author: ["author", same],
+    authorId: ["author_id", same], content: ["content", same], proposals: ["proposals", arr], status: ["status", same],
+    errorCode: ["error_code", nul], errorMessage: ["error_message", nul], createdAt: ["created_at", tsReq],
+  },
+};
+
 class HistoryTable extends PgTable<DiagnosisItemHistory> {
   constructor(private readonly hdb: Db) {
     super(hdb, history);
@@ -659,6 +679,8 @@ class HistoryTable extends PgTable<DiagnosisItemHistory> {
 
 export function createPgRepository(db: Db): Repository {
   return {
+    agentThreads: new PgTable(db, agentThreadSpec),
+    agentMessages: new PgTable(db, agentMessageSpec),
     profiles: new PgTable(db, profile),
     projects: new PgTable(db, project),
     projectMembers: new PgTable(db, member),

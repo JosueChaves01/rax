@@ -25,7 +25,7 @@ RAX ordena la información del emprendedor sin perder trazabilidad y lleva a la 
 
 Dentro: los 12 pasos del flujo (ver [user-flows.md](user-flows.md)), un mentor asignado por proyecto, IA en español.
 
-Fuera (por ahora): pagos, marketplace de mentores, agenda o videollamadas, notificaciones por correo, colaboración en tiempo real, analítica avanzada, RAG sobre documentos, n8n o colas (no hay caso de uso que lo justifique todavía).
+Fuera (por ahora): pagos, marketplace de mentores, agenda o videollamadas, notificaciones por correo, colaboración en tiempo real, analítica avanzada, RAG sobre documentos y colas. La plataforma sí requiere un agente principal compartido entre los chats, con acceso controlado al catálogo de flujos RAX; su plan y estado están en [main-agent-plan.md](main-agent-plan.md). La integración n8n actual todavía no está operativa.
 
 ## Principios de producto
 

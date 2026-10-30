@@ -12,10 +12,7 @@ interface SessionsViewProps {
   goals: MentorshipGoal[];
 }
 
-type SessionTab = "agenda" | "notas" | "documentos" | "tareas";
-
 export function SessionsView({ initialSessions, projects, goals }: SessionsViewProps) {
-  const [activeTab, setActiveTab] = useState<SessionTab>("agenda");
   const [sessions, setSessions] = useState<MentorSession[]>(initialSessions);
   const [selectedSessionId, setSelectedSessionId] = useState<string>(
     initialSessions[0]?.id || ""
@@ -27,12 +24,11 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
   const activeProject = projects.find((p) => p.id === activeSession?.projectId);
   const activeGoals = goals.filter((g) => g.status !== "discarded");
 
-  // Agenda basada en el briefing generado por n8n
+  // La agenda se muestra solo cuando existe en el briefing persistido de la sesión.
   const agendaList = activeSession?.preSessionBriefing?.suggestedAgenda?.length
     ? activeSession.preSessionBriefing.suggestedAgenda.map((item, idx) => ({
         id: idx + 1,
         title: item,
-        duration: idx === 0 ? "15 min" : idx === 1 ? "20 min" : idx === 2 ? "15 min" : "10 min",
         desc: "Punto estratégico estructurado para el encuentro.",
       }))
     : [];
@@ -44,14 +40,14 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
       try {
         const res = await generatePreSessionBriefingAction(activeSession.projectId, activeSession.id);
         if (res.ok && res.data) {
-          setActionNotice("✓ Agenda y briefing generados exitosamente con el flujo de n8n (RAX-05).");
+          setActionNotice("✓ Briefing y agenda generados y guardados en esta sesión.");
           setSessions((prev) =>
             prev.map((s) =>
               s.id === activeSession.id ? { ...s, preSessionBriefing: res.data } : s
             )
           );
         } else {
-          setActionNotice("✓ Solicitud de agenda enviada al workflow de n8n.");
+          setActionNotice("No se pudo generar el briefing. El servicio de IA no devolvió un resultado.");
         }
       } catch (err: unknown) {
         setActionNotice(`Aviso: ${err instanceof Error ? err.message : String(err)}`);
@@ -76,7 +72,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
             Sesión de mentoría — {activeProject?.name || "Proyecto Activo"}
           </h1>
           <p className="text-xs text-slate-500">
-            Tipo: {activeSession?.kind || "first_review"} • Conexión con Workflow RAX-05 (Preparación Inteligente)
+            Tipo: {activeSession?.kind || "first_review"} • Preparación asistida por IA de RAX
           </p>
           {sessions.length > 1 && (
             <div className="flex items-center gap-1.5 mt-2 overflow-x-auto">
@@ -112,10 +108,11 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
             <button
               key={tab}
               type="button"
-              onClick={() => setActiveTab(tab)}
+              disabled={tab !== "agenda"}
+              title={tab !== "agenda" ? "Esta vista todavía no está disponible." : undefined}
               className={cx(
                 "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
-                activeTab === tab
+                tab === "agenda"
                   ? "bg-white text-slate-900 shadow-2xs"
                   : "text-slate-500 hover:text-slate-900"
               )}
@@ -134,13 +131,13 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
 
       {/* 2. Distribución en 2 Columnas (Panel 6 del Mock) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Columna Izquierda: Agenda propuesta por IA / n8n (7 cols) */}
+        {/* Columna Izquierda: Agenda propuesta por IA (7 cols) */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 shadow-xs flex flex-col justify-between">
           <div className="space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <h2 className="text-base font-bold text-slate-900">
-                  Agenda propuesta por IA (Workflow RAX-05)
+                  Agenda propuesta por IA
                 </h2>
                 <p className="text-[11px] text-slate-500 mt-0.5">
                   Estructurada en bloques de tiempo (timeboxes)
@@ -152,7 +149,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
                 onClick={handleGenerateAgendaWithN8n}
                 className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer disabled:opacity-50"
               >
-                {isPending ? "Generando con n8n…" : "↻ Regenerar con n8n"}
+                {isPending ? "Generando…" : "↻ Regenerar agenda"}
               </button>
             </div>
 
@@ -171,22 +168,19 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
                         {item.desc}
                       </p>
                     </div>
-                    <span className="px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-mono font-semibold text-slate-700 shrink-0">
-                      {item.duration}
-                    </span>
                   </div>
                 ))
               ) : (
                 <div className="p-8 text-center text-slate-500 text-xs border border-dashed border-slate-200 rounded-xl">
                   {activeSession
-                    ? "No se ha generado una agenda automática aún. Pulsa «Regenerar con n8n» para crear una agenda a partir del contexto del proyecto."
+                    ? "No se ha generado una agenda aún. Pulsa «Regenerar agenda» para preparar una propuesta a partir del contexto del proyecto."
                     : "No hay una sesión activa seleccionada."}
                 </div>
               )}
             </div>
 
             <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-xs text-blue-800">
-              💡 <strong>Basado en:</strong> objetivos reales de la relación, tareas pendientes en la base de datos y síntesis de encuentros previos.
+              💡 <strong>Contexto disponible:</strong> objetivos registrados y agenda guardada en el briefing de esta sesión.
             </div>
           </div>
 
@@ -211,7 +205,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
               <h2 className="text-base font-bold text-slate-900">
                 Contexto relevante
               </h2>
-              <span className="text-xs text-slate-500 font-mono">En vivo</span>
+              <span className="text-xs text-slate-500 font-mono">Datos registrados</span>
             </div>
 
             <div className="space-y-4">

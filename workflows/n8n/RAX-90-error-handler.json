@@ -38,13 +38,21 @@
             },
             {
               "name": "x-rax-correlation-id",
-              "value": "={{ $json.correlationId }}"
+              "value": "={{ $json.callbackCorrelationId }}"
+            },
+            {
+              "name": "x-rax-signature",
+              "value": "={{ $json.callbackSignature }}"
+            },
+            {
+              "name": "x-rax-timestamp",
+              "value": "={{ $json.callbackTimestamp }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"operationId\": \"{{ $json.operationId }}\",\n  \"correlationId\": \"{{ $json.correlationId }}\",\n  \"workflowId\": \"{{ $json.workflowName }}\",\n  \"workflowVersion\": \"1.0.0\",\n  \"status\": \"failed\",\n  \"error\": {\n    \"code\": \"{{ $json.errorType }}\",\n    \"message\": \"{{ $json.errorMessage }}\",\n    \"recoverable\": {{ $json.errorType === 'transient' }},\n    \"providerStatus\": {{ $json.httpCode || 'null' }}\n  }\n}",
+        "jsonBody": "={{ $json.callbackBody }}",
         "options": {
           "timeout": 5000
         }
@@ -55,6 +63,19 @@
       "typeVersion": 4.2,
       "position": [
         680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst input = $input.first().json;\nconst secret = $env.RAX_N8N_SHARED_SECRET;\nif (!secret) throw new Error('RAX_N8N_SHARED_SECRET is not configured');\nconst callbackPayload = {\n  operationId: input.operationId || 'err_' + Date.now(),\n  correlationId: input.correlationId || 'unknown',\n  workflowId: input.workflowName || 'unknown',\n  workflowVersion: '1.0.0',\n  status: 'failed',\n  error: {\n    code: input.errorType || 'unknown',\n    message: input.errorMessage || 'Unknown execution error',\n    recoverable: input.errorType === 'transient',\n    providerStatus: input.httpCode || null\n  }\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst callbackBody = JSON.stringify(callbackPayload);\nconst signature = 'sha256=' + crypto.createHmac('sha256', secret).update(timestamp + '.' + callbackBody).digest('hex');\nreturn [{ json: { ...input, callbackPayload, callbackBody, callbackTimestamp: timestamp, callbackSignature: signature, callbackCorrelationId: callbackPayload.correlationId } }];"
+      },
+      "id": "node-code-sign-callback",
+      "name": "Sign RAX Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
         300
       ]
     }
@@ -72,6 +93,17 @@
       ]
     },
     "Classify & Sanitize Error": {
+      "main": [
+        [
+          {
+            "node": "Sign RAX Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign RAX Callback": {
       "main": [
         [
           {

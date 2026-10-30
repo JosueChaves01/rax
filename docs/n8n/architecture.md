@@ -1,5 +1,7 @@
 # Arquitectura de Integración: RAX ↔ n8n ↔ OpenRouter
 
+> **Estado:** este documento describe una arquitectura objetivo, no una integración operativa. Los chats ya comparten la puerta y el almacenamiento del agente, pero RAX-02 todavía no invoca herramientas y no puede ejecutar los flujos especializados. La instancia n8n no está conectada/verificada. El alcance y los criterios de conexión están en [Plan del agente principal](../main-agent-plan.md). No mostrar “activo”, “ejecutado” ni “aceptado” hasta verificar la operación real.
+
 ## 1. Principio Fundamental
 
 **RAX (Next.js 15 + Supabase) es la única fuente de verdad** del sistema: gobierna la autenticación, los permisos basados en roles (RLS), la persistencia de datos y las confirmaciones oficiales.

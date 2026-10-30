@@ -8,18 +8,22 @@
 
 | Orden | Prioridad | Paquete | Criterio de salida | Estado |
 |---|---|---|---|---|
-| 1 | P1 privacidad | Revisar RLS efectiva tras todas las migraciones, filtrar notas privadas antes del contexto IA y añadir pruebas SQL/servicio. | Policy final restringe notas privadas; contexto IA las excluye; ejecución RLS de Postgres pendiente. | Código y test de servicio listos; cobertura SQL añadida, falta ejecutar Postgres. |
-| 2 | P1 integración | Secreto n8n dedicado y obligatorio, health sin recursión, callback autenticado y persistente o respuesta explícita de no disponible; reprocesamiento real o eliminado como capacidad; RAX-99 debe ejecutar aserciones reales. | Contratos firmados de extremo a extremo, cero secretos de prueba, idempotencia probada y ningún estado “accepted/passed” falso. | Parcial: secreto dedicado, health local y no disponible explícito; firma HMAC del callback y persistencia real siguen pendientes. |
+| 1 | P1 privacidad | Revisar RLS efectiva tras todas las migraciones, filtrar notas privadas antes del contexto IA y añadir pruebas SQL/servicio. | Policy final restringe notas privadas; contexto IA las excluye; ejecución RLS de Postgres pendiente. | Filtros y pruebas de servicio listos; migration `20261029000005_rax_membership_role_hardening.sql` limita membresías a perfiles emprendedores; cobertura SQL añadida, falta ejecutar Postgres. |
+| 2 | P1 integración | Un agente principal común para todos los chats, con contexto de rol/proyecto/paso, catálogo autorizado de capacidades n8n y propuestas revisables; además, callbacks firmados/persistentes e idempotencia. | El agente puede invocar cada capacidad comprobada o reportarla como no disponible; campos propuestos requieren aprobación; ningún estado “accepted/passed” falso. | Los tres puntos de entrada (chat general, aprendizaje y conversación del proyecto) usan la misma acción y el mismo hilo privado por actor/proyecto. Los turnos y errores se guardan; migración 00006 y pruebas SQL añadidas. Solo RAX-02 tiene transporte gated; ningún subflujo se ejecuta. n8n no operativo. |
 | 3 | P1 compilación | Verificar el typecheck sobre el estado actual y resolver cualquier regresión introducida durante la remediación. | `npm run typecheck` sin errores y `npm run build` exitoso. | Completado: typecheck y build pasan; lint sin errores. |
-| 4 | P1 veracidad documental | Dejar de anunciar autoguardado, versiones, generación o revisión cuando no existen. La IA no debe inventar evidencia ni reportar éxito con fallback fijo. | UI identifica claramente borrador local/no guardado; salida externa validada; errores visibles; controles no disponibles no simulan éxito. | Completado en pantallas y acciones modificadas; validar build/integración. |
+| 4 | P1 veracidad documental | Dejar de anunciar autoguardado, versiones, generación o revisión cuando no existen. La IA no debe inventar evidencia ni reportar éxito con fallback fijo. | UI identifica claramente borrador local/no guardado; salida externa validada; errores visibles; controles no disponibles no simulan éxito. | Copy y acciones engañosas corregidas o deshabilitadas en chat, aprendizaje, documentos, sesiones, tareas, evaluación y exploración; build local pasa. |
 | 5 | P2 métricas | Retirar medidas derivadas sin denominador, escalas artificiales, “satisfacción” estimada desde autonomía y salud de n8n reportada como conectada sin verificación. | Cada KPI tiene definición/fuente y rango; sin datos se muestra “—”; tendencias usan métricas calculadas reales. | Completado en reportes; suite completa pasa. |
-| 6 | P1–P2 persistencia funcional | Implementar documentos/versiones, progreso de aprendizaje, chat contextual persistente, notificaciones con estado y decisiones de evaluación editables. | Cambios sobreviven recarga y tienen permisos, historial y estados de error coherentes. | Pendiente: esta iteración elimina claims engañosos, no añade modelos/migraciones de persistencia. |
+| 6 | P1–P2 persistencia funcional | Implementar documentos/versiones, progreso de aprendizaje, chat contextual persistente, notificaciones con estado y decisiones de evaluación editables. | Cambios sobreviven recarga y tienen permisos, historial y estados de error coherentes. | Hilos del agente ya persisten y son privados por usuario/proyecto mediante migración 00006. Documentos/versiones, progreso de aprendizaje, notificaciones y decisiones editables siguen pendientes. |
 | 7 | P2–P3 preparación de piloto | Upload firmado/escaneo, compatibilidad explicable, accesibilidad, recuperación de cuenta, consentimiento IA, rate limiting y observabilidad. | Revisión funcional, de privacidad y de operación en staging con datos sintéticos. | Pendiente |
 | 8 | Salida | RLS y pruebas DB, contratos n8n, E2E A–E en staging, errores/duplicados, regresión y revisión visual. | Cero P0/P1; recorrido completo documentado; aprobación para aceptación. | Pendiente |
 
 ## Corrección de precisión sobre privacidad
 
 La auditoría inicial identificó una política amplia en `20261028000002_rax_security.sql`, pero no ponderó que `20261029000003_rax_sessions_memory.sql` la reemplaza con una policy que limita las notas privadas a su autor. Por tanto, la lectura REST de notas privadas por otro actor **no queda confirmada** cuando se aplican las migraciones en orden. Sigue pendiente comprobar esa policy con la base real; el repositorio en memoria tampoco aplica RLS, y `buildInterviewContext` aceptaba todas las notas recibidas. La fase 1 añade defensa de aplicación y cobertura para ambos casos. No se debe ejecutar el vector con datos reales.
+
+## Requisito actualizado: chats con agente principal
+
+El requisito de producto es que todos los chats se comuniquen con un agente principal común, capaz de consultar contexto autorizado e invocar los flujos especializados para ayudar a llenar/generar campos en cualquier etapa, sección, tarea o paso. El chat general, aprendizaje y conversación de proyecto ya entran por la misma acción y guardan en el hilo privado de la persona para ese proyecto. Se conservan intactos los mensajes de entrevista anteriores. El historial nuevo se carga desde la base por el servicio y RLS. RAX-02 permanece apagado hasta staging; RAX-04 y los otros 17 flujos no ejecutan herramientas. No se ha implementado todavía la aplicación confirmada de propuestas a campos. La especificación y los límites constan en [main-agent-plan.md](main-agent-plan.md). No declarar el requisito completo todavía.
 
 ## Dependencias
 
@@ -41,3 +45,14 @@ La auditoría inicial identificó una política amplia en `20261028000002_rax_se
 - `npm run lint`: aprobado sin errores; permanecen advertencias existentes sin relación directa con estas correcciones.
 - `npm run build`: aprobado; Next.js compiló y generó las 22 páginas estáticas.
 - No se ejecutaron RLS contra Postgres ni llamadas a servicios externos.
+
+## Avance para preparación de uso real
+
+- `npm test`: 101 pruebas aprobadas; incluye catálogo principal, puertas de staging, acciones/hilos persistentes, roles de chat y exclusión de notas privadas.
+- `npm run typecheck`: aprobado después del build.
+- `npm run lint`: cero errores; 11 advertencias existentes.
+- `npm run build`: aprobado; 22 páginas estáticas generadas.
+- El agente y los eventos n8n quedan detrás de `RAX_N8N_MAIN_AGENT_ENABLED` y `RAX_N8N_EVENTS_ENABLED`. Están apagados por defecto y requieren staging verificado.
+- Se añadió migración incremental de membresías. No se ejecutó porque `supabase` CLI y `psql` no están instalados; no se modificó ninguna base externa.
+- Hilos del agente ya persisten, pero la migración y RLS no se ejecutaron en PostgreSQL. Aprendizaje y documentos aún no persisten su progreso/contenido. RAX-02 no invoca subflujos; RAX-04 y el resto de capacidades siguen no disponibles. No hay staging operativo ni E2E de flujos. RAX no debe declararse listo para uso real todavía.
+- La evaluación PREP y la mejora de documentos se deshabilitaron hasta que usen el agente principal con un proyecto y permisos reales; ya no envían IDs de proyecto ficticios a n8n.

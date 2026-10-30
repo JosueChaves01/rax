@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { cx } from "@/shared/ui/primitives";
-import { recordCycleEvaluationAction } from "@/app/actions";
 
 interface EvaluationViewProps {
   projectId: string;
@@ -30,49 +29,17 @@ const RECOMMENDATIONS = [
 ];
 
 export function EvaluationView({
-  projectId,
-  relationId,
   goalsCount,
   achievedGoalsCount,
   milestonesCount,
   achievedMilestonesCount,
 }: EvaluationViewProps) {
   const [selectedRec, setSelectedRec] = useState<"close" | "renew" | "new_stage" | "pause">("renew");
-  const [isPending, startTransition] = useTransition();
-  const [savedSuccess, setSavedSuccess] = useState(false);
-  const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
   const progressPercent = goalsCount > 0
     ? Math.round((achievedGoalsCount / goalsCount) * 100)
     : 0;
 
-  const handleSave = () => {
-    if (!relationId || !projectId) {
-      setSavedSuccess(true);
-      return;
-    }
-    startTransition(async () => {
-      setErrorNotice(null);
-      try {
-        const res = await recordCycleEvaluationAction(projectId, {
-          relationId,
-          cycleNumber: 1,
-          goalEvaluations: [],
-          autonomyAssessment: { rating: 4, notes: "Excelente autonomía y avance en validación" },
-          mentorFeedback: "Compromiso constante y rápida iteración con clientes.",
-          decision: selectedRec,
-          nextCycleFocus: "Escalar adquisición comercial y afinar retención.",
-        });
-        if (res.ok) {
-          setSavedSuccess(true);
-        } else {
-          setErrorNotice(res.error);
-        }
-      } catch (err) {
-        setErrorNotice(err instanceof Error ? err.message : String(err));
-      }
-    });
-  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -80,7 +47,7 @@ export function EvaluationView({
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
         <div className="grid grid-cols-5 gap-2 sm:gap-4">
           {EVAL_STEPS.map((s) => {
-            const isDone = s.num < 4;
+            const isDone = false;
             const isCurrent = s.num === 4;
 
             return (
@@ -117,21 +84,19 @@ export function EvaluationView({
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 shadow-xs space-y-6">
         <div className="border-b border-slate-100 pb-4">
           <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
-            Fase de Cierre o Renovación (Workflow RAX-14)
+            Evaluación de la etapa
           </span>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
             Evaluación de la etapa
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Esta evaluación se compone a partir de los resultados reales obtenidos durante el ciclo de mentoría.
+            Los contadores reflejan objetivos e hitos registrados. El formulario aún no captura feedback, autonomía ni detalle por objetivo.
           </p>
         </div>
 
-        {errorNotice && (
-          <div className="p-3.5 bg-rose-50 border border-rose-200 text-xs text-rose-800 rounded-xl">
-            {errorNotice}
-          </div>
-        )}
+        <div className="p-3.5 bg-amber-50 border border-amber-200 text-xs text-amber-900 rounded-xl">
+          El guardado de evaluaciones no está disponible: faltan campos para registrar feedback, autonomía y resultados por objetivo.
+        </div>
 
         {/* 2 Columnas: Resultados Clave vs Recomendación */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -142,9 +107,7 @@ export function EvaluationView({
             </h2>
 
             <div className="p-4 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
-              <span className="text-xs font-semibold text-slate-700">
-                Objetivos alcanzados
-              </span>
+              <span className="text-xs font-semibold text-slate-700">Objetivos alcanzados</span>
               <span className="text-sm font-bold font-mono text-blue-600">
                 {achievedGoalsCount} / {goalsCount}
               </span>
@@ -215,15 +178,6 @@ export function EvaluationView({
           </div>
         </div>
 
-        {savedSuccess && (
-          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
-            <span>✓ Evaluación y decisión de ciclo guardadas en el historial inmutable y despachadas a n8n (RAX-14).</span>
-            <Link href="/app" className="font-bold underline text-emerald-700">
-              Volver al inicio →
-            </Link>
-          </div>
-        )}
-
         {/* 3. Botones al pie: [Cancelar] [Guardar y continuar] */}
         <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
           <Link
@@ -234,11 +188,10 @@ export function EvaluationView({
           </Link>
           <button
             type="button"
-            disabled={isPending}
-            onClick={handleSave}
+            disabled
             className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
           >
-            {isPending ? "Guardando..." : "Guardar y continuar →"}
+            Guardado no disponible
           </button>
         </div>
       </div>

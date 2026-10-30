@@ -468,7 +468,8 @@ export async function suggestGoalsAndAgreement(
         : undefined,
     confirmedDiagnosis,
     prioritizedProblems,
-    mentorNotes: notes.map((n) => n.body),
+    // Los emprendedores pueden gestionar objetivos; eso no les concede acceso a notas privadas.
+    mentorNotes: notes.filter((n) => !n.isPrivate).map((n) => n.body),
     existingGoals: existingGoals.map((g) => ({
       title: g.title,
       baseline: g.baseline,
