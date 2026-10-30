@@ -687,11 +687,9 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
       updatedAt: now,
     };
 
-    if (d.actor.role === "entrepreneur" && d.actor.id === entrepreneurId) {
-      await d.repo.projects.insert(project);
-    } else {
-      await sys.projects.insert(project);
-    }
+    // El armado del proyecto desde exploración es un flujo orquestado por el sistema
+    // (inserta membresía de dueño, conversación, diagnósticos, acuerdo y asignación)
+    await sys.projects.insert(project);
     await audit(d, "project.created", { projectId, targetId: project.id });
 
     // Armado inicial del proyecto (membresía de dueño, conversación y diagnóstico)
@@ -731,7 +729,7 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
       threadId: initialThread.id,
       projectId,
       author: "assistant",
-      authorId: "system",
+      authorId: entrepreneurId,
       content: `¡Hola! Bienvenido a tu espacio de trabajo para «${projectName}».\n\nHe registrado tu acuerdo de mentoría preliminar (${agr?.frequency || "quincenal"}, ${agr?.sessionDurationMinutes || 60} min). Tus objetivos y compromisos ya están formalizados.\n\n¿En qué podemos enfocarnos hoy? Podés hacerme preguntas sobre tu plan de estudio o validación, pedirme que desglosamos tareas o preparar la agenda para tu próxima sesión.`,
       proposals: [],
       artifacts: [],
@@ -831,8 +829,8 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
       notice: "Proyecto creado y acuerdo de mentoría formalizado con éxito.",
     };
   } catch (e) {
-    if (isDomainError(e)) return { ok: false as const, error: e.message, code: e.code };
     console.error("[rax] error creando proyecto desde exploración:", e);
+    if (isDomainError(e)) return { ok: false as const, error: e.message, code: e.code };
     return { ok: false as const, error: "No se pudo crear el proyecto. Intentá nuevamente." };
   }
 };

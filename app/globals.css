@@ -11,18 +11,18 @@
   --color-panel: #121316;
   --color-graphite: #1c1d20;
   --color-raised: #24262a;
-  --color-line: rgb(255 255 255 / 0.09);
-  --color-line-strong: rgb(255 255 255 / 0.18);
-  --color-ink: #ffffff;
-  --color-muted: #a6a7ad;
-  --color-faint: #74757c;
-  --color-highlight: #ffd21f;
+  --color-line: rgb(0 0 0 / 0.08);
+  --color-line-strong: rgb(0 0 0 / 0.16);
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+  --color-faint: #94a3b8;
+  --color-highlight: #b45309;
   --color-accent: #2563eb;
   --color-accent-strong: #1d4ed8;
-  --color-brand-orange: #ff4a1c;
+  --color-brand-orange: #ea580c;
   --color-cyan: #0284c7;
-  --color-ok: #10b981;
-  --color-danger: #ef4444;
+  --color-ok: #059669;
+  --color-danger: #dc2626;
 
   /* Paleta Shell SaaS Híbrida */
   --color-sidebar-bg: #0b132b;
@@ -37,15 +37,15 @@
   --color-canvas-text: #0f172a;
   --color-canvas-muted: #64748b;
 
-  /* Tipos de información */
-  --color-info-statement: #e8e8ea;
-  --color-info-observation: #8fd4ff;
-  --color-info-evidence: #10b981;
-  --color-info-ai: #0284c7;
-  --color-info-hypothesis: #f97316;
-  --color-info-correction: #eab308;
-  --color-info-unknown: #94a3b8;
-  --color-info-decision: #ffffff;
+  /* Tipos de información con alto contraste accesible para lienzo claro */
+  --color-info-statement: #334155;
+  --color-info-observation: #0369a1;
+  --color-info-evidence: #047857;
+  --color-info-ai: #1d4ed8;
+  --color-info-hypothesis: #c2410c;
+  --color-info-correction: #b45309;
+  --color-info-unknown: #475569;
+  --color-info-decision: #6d28d9;
 
   --font-display: var(--font-inter), system-ui, sans-serif;
   --font-title: var(--font-anton), "Impact", "Arial Narrow", sans-serif;

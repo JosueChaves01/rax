@@ -18,6 +18,7 @@ export interface Db {
 export function fromPgError(code: string | undefined, message: string): Error {
   switch (code) {
     case "42501": // privilegio insuficiente, RLS o nuestros triggers de guarda
+      console.error(`[db] 42501 insufficient_privilege: ${message}`);
       return forbidden();
     case "23505":
       return conflict("Ya existe un registro igual.");

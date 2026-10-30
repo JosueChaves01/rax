@@ -44,8 +44,8 @@ export function DiagnosisBoard(props: {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <div role="radiogroup" aria-label="Filtrar elementos" className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="radiogroup" aria-label="Filtrar elementos" className="flex flex-wrap gap-1.5">
           {FILTERS.map(([f, label]) => (
             <button
               key={f}
@@ -53,17 +53,27 @@ export function DiagnosisBoard(props: {
               aria-checked={filter === f}
               onClick={() => setFilter(f)}
               className={cx(
-                "rounded-full border px-3 py-1 text-xs",
-                filter === f ? "border-accent bg-accent text-white" : "border-line-strong text-muted hover:text-ink",
+                "rounded-full border px-3 py-1.5 text-xs font-medium transition cursor-pointer flex items-center gap-1.5",
+                filter === f
+                  ? "border-blue-600 bg-blue-600 text-white font-semibold shadow-xs"
+                  : "border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50",
               )}
             >
-              {label} <span className="font-mono opacity-80">{counts[f]}</span>
+              <span>{label}</span>
+              <span
+                className={cx(
+                  "font-mono text-[10px] px-1.5 py-0.2 rounded-full",
+                  filter === f ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-600",
+                )}
+              >
+                {counts[f]}
+              </span>
             </button>
           ))}
         </div>
         {props.perms["diagnosis.edit"] && (
-          <Button size="sm" className="ml-auto" aria-expanded={adding} onClick={() => setAdding((v) => !v)}>
-            + Agregar a mano
+          <Button size="sm" variant="secondary" aria-expanded={adding} onClick={() => setAdding((v) => !v)}>
+            {adding ? "Cerrar formulario" : "+ Agregar elemento"}
           </Button>
         )}
       </div>
@@ -78,11 +88,16 @@ export function DiagnosisBoard(props: {
         </Empty>
       ) : (
         visible.map(({ c, items }) => (
-          <section key={c} aria-labelledby={`cat-${c}`}>
-            <h3 id={`cat-${c}`} className="eyebrow mb-2 flex items-center gap-2">
-              {CATEGORY_LABEL[c]} <span className="font-mono text-faint">{items.length}</span>
-            </h3>
-            <ul className="grid gap-3 2xl:grid-cols-2">
+          <section key={c} aria-labelledby={`cat-${c}`} className="space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2 pt-2">
+              <h3 id={`cat-${c}`} className="text-xs font-bold uppercase tracking-wider text-slate-800 font-mono">
+                {CATEGORY_LABEL[c]}
+              </h3>
+              <span className="font-mono text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                {items.length}
+              </span>
+            </div>
+            <ul className="grid gap-3.5 2xl:grid-cols-2">
               {items.map((i) => (
                 <ItemCard
                   key={`${i.id}-${i.version}`}
@@ -106,17 +121,20 @@ export function DiagnosisBoard(props: {
 function Legend() {
   const types: InfoType[] = ["entrepreneur_statement", "documented_observation", "verifiable_evidence", "ai_interpretation", "hypothesis", "human_correction", "unknown", "agreed_decision"];
   return (
-    <details className="rounded-xl border border-line px-4 py-2 text-xs text-muted">
-      <summary className="cursor-pointer select-none">Cómo leer las tarjetas</summary>
-      <div className="mt-2 flex flex-wrap gap-1.5 pb-2">
+    <details className="rounded-xl border border-slate-200 bg-white p-3.5 text-xs text-slate-600 shadow-2xs group">
+      <summary className="cursor-pointer select-none font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-2">
+        <span>ℹ️</span>
+        <span>Cómo leer las tarjetas y tipos de información</span>
+      </summary>
+      <div className="mt-3 flex flex-wrap gap-1.5 pb-2 border-t border-slate-100 pt-3">
         {types.map((t) => (
           <Tag key={t} color={INFO_COLOR[t]} dashed={t === "unknown"}>
             {INFO_TYPE_LABEL[t]}
           </Tag>
         ))}
       </div>
-      <p className="pb-2">
-        Borde amarillo: propuesta pendiente de confirmar. Borde verde: respaldado por evidencia. Borde punteado: dato desconocido, que también es
+      <p className="pb-1 text-slate-500 text-[11px] leading-relaxed">
+        <strong>Borde amarillo:</strong> propuesta pendiente de confirmar. <strong>Borde verde:</strong> respaldado por evidencia. <strong>Borde punteado:</strong> dato desconocido, que también es
         información válida. Que alguien haya afirmado algo no significa que esté verificado.
       </p>
     </details>
@@ -133,12 +151,16 @@ function AddItemForm({ projectId, onDone }: { projectId: string; onDone: () => v
   const allowed: InfoType[] = ["entrepreneur_statement", "documented_observation", "hypothesis", "unknown"];
   return (
     <form
-      className="grid gap-3 rounded-2xl border border-line bg-panel p-4 sm:grid-cols-2"
+      className="grid gap-3.5 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
         run(() => addItemAction(projectId, { category, title, content, infoType, uncertainty }), onDone);
       }}
     >
+      <div className="sm:col-span-2 border-b border-slate-100 pb-2">
+        <h4 className="text-sm font-bold text-slate-900">Agregar elemento al diagnóstico</h4>
+        <p className="text-xs text-slate-500">Registra manualmente una afirmación, hecho o incógnita.</p>
+      </div>
       <Field id="ai-cat" label="Sección">
         <select id="ai-cat" className={inputClass} value={category} onChange={(e) => setCategory(e.target.value as DiagnosisCategory)}>
           {CATEGORY_ORDER.map((c) => (
@@ -172,7 +194,7 @@ function AddItemForm({ projectId, onDone }: { projectId: string; onDone: () => v
       </Field>
       <div className="flex items-end">
         <Button variant="primary" type="submit" disabled={pending} className="w-full">
-          Agregar
+          Agregar al diagnóstico
         </Button>
       </div>
       {error && (
@@ -203,27 +225,39 @@ export function SummaryPanel({
 
   if (!summary) {
     return (
-      <section className="rounded-2xl border border-dashed border-line-strong bg-panel/50 p-5">
-        <p className="eyebrow">Resumen inicial</p>
-        <p className="mt-2 text-sm text-muted">
-          Todavía no hay contexto suficiente para un primer resumen. Aparece cuando la conversación cubre al menos el problema y las personas
-          involucradas.
+      <section className="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-5 shadow-2xs">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">Resumen inicial de la etapa</p>
+        <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+          Todavía no hay contexto suficiente para un primer resumen. Se sintetiza a partir de las respuestas en la conversación de la etapa Entender.
         </p>
       </section>
     );
   }
   return (
-    <section aria-labelledby="summary-title" className={cx("rounded-2xl border p-5", confirmedAt ? "border-line bg-panel" : "border-highlight/50 bg-highlight/5")}>
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 id="summary-title" className="eyebrow">
-          Resumen inicial
-        </h2>
+    <section
+      aria-labelledby="summary-title"
+      className={cx(
+        "rounded-2xl border p-5 shadow-xs transition-colors",
+        confirmedAt
+          ? "border-emerald-200 bg-emerald-50/40"
+          : "border-amber-200/90 bg-amber-50/40",
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-base">{confirmedAt ? "✓" : "📝"}</span>
+          <h2 id="summary-title" className="text-xs font-bold uppercase tracking-wider text-slate-700 font-mono">
+            Resumen inicial de diagnóstico
+          </h2>
+        </div>
         {confirmedAt ? (
-          <Tag color="var(--color-ok)">
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
             Confirmado {confirmedBy ? `por ${confirmedBy}` : ""} · {formatDate(confirmedAt)}
-          </Tag>
+          </span>
         ) : (
-          <Tag color="var(--color-highlight)">Pendiente de tu confirmación</Tag>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+            Pendiente de confirmación
+          </span>
         )}
       </div>
       {editing ? (
@@ -242,31 +276,34 @@ export function SummaryPanel({
             <Button size="sm" variant="primary" type="submit" disabled={pending}>
               Guardar
             </Button>
-            <Button size="sm" variant="ghost" type="button" onClick={() => setEditing(false)}>
+            <Button size="sm" variant="secondary" type="button" onClick={() => setEditing(false)}>
               Cancelar
             </Button>
           </div>
         </form>
       ) : (
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{summary}</p>
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 font-normal">{summary}</p>
       )}
       {!confirmedAt && canConfirm && !editing && (
-        <div className="mt-4 rounded-xl border border-line bg-bg p-4">
-          <p className="display text-xl">
-            ¿Esto representa lo que querés hacer <span className="text-highlight">o hay algo que corregir?</span>
+        <div className="mt-4 rounded-xl border border-amber-200 bg-white p-4 shadow-2xs">
+          <p className="text-sm font-semibold text-slate-900">
+            ¿Esto representa lo que querés hacer <span className="text-amber-700 font-bold">o hay algo que corregir?</span>
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            Al confirmar este resumen, se transferirá como contexto para tu mentor en la <strong>Etapa 2 · Orientar</strong>.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button variant="primary" size="sm" disabled={pending} onClick={() => run(() => confirmSummaryAction(projectId))}>
-              Sí, me representa
+              ✓ Sí, me representa
             </Button>
-            <Button size="sm" onClick={() => setEditing(true)}>
+            <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
               Corregir el resumen
             </Button>
           </div>
         </div>
       )}
       {confirmedAt && canConfirm && !editing && (
-        <Button size="sm" variant="ghost" className="mt-3" onClick={() => setEditing(true)}>
+        <Button size="sm" variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
           Editar (requiere volver a confirmar)
         </Button>
       )}

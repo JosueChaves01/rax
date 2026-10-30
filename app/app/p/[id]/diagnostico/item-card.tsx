@@ -75,8 +75,14 @@ export function ItemCard({
   return (
     <li
       className={cx(
-        "rounded-2xl border bg-panel p-4 transition-colors",
-        st === "proposal" ? "border-highlight/40" : st === "rejected" ? "border-line opacity-60" : st === "evidence_backed" ? "border-ok/40" : "border-line",
+        "rounded-2xl border p-4.5 transition-all shadow-2xs hover:shadow-xs",
+        st === "proposal"
+          ? "border-amber-300 bg-amber-50/20"
+          : st === "rejected"
+            ? "border-slate-200 bg-slate-50/60 opacity-60"
+            : st === "evidence_backed"
+              ? "border-emerald-300 bg-emerald-50/20"
+              : "border-slate-200 bg-white hover:border-slate-300",
         item.infoType === "unknown" && "border-dashed",
       )}
     >
@@ -89,16 +95,18 @@ export function ItemCard({
         <UncertaintyMeter value={item.uncertainty} />
         {item.priority && <Tag color="var(--color-accent)">Prioridad #{item.priority.rank}</Tag>}
         {item.evidenceIds.length > 0 && <Tag color="var(--color-ok)">{item.evidenceIds.length} evidencia(s)</Tag>}
-        <span className="ml-auto font-mono text-[0.625rem] text-faint">v{item.version}</span>
+        <span className="ml-auto font-mono text-[0.625rem] text-slate-400">v{item.version}</span>
       </div>
 
-      <h4 className={cx("mt-3 font-semibold", isRejected && "line-through")}>{item.title}</h4>
-      <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{item.content}</p>
+      <h4 className={cx("mt-3 text-sm font-semibold text-slate-900 leading-snug", isRejected && "line-through text-slate-400")}>
+        {item.title}
+      </h4>
+      <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-600 leading-relaxed">{item.content}</p>
 
-      <p className="mt-2 text-[0.6875rem] text-faint">
+      <p className="mt-2.5 text-[0.6875rem] text-slate-400">
         {item.source.quote ? (
           <>
-            De la conversación: <q className="italic">{item.source.quote}</q>
+            De la conversación: <q className="italic text-slate-500">{item.source.quote}</q>
           </>
         ) : item.authorId === "ai" ? (
           "Inferido por la IA (sin cita literal): requiere confirmación."
@@ -107,30 +115,30 @@ export function ItemCard({
         )}{" "}
         · {formatDate(item.updatedAt)}
       </p>
-      {item.priority && <p className="mt-1 text-[0.6875rem] text-faint">Prioridad: {item.priority.rationale} ({name(item.priority.setBy)})</p>}
+      {item.priority && <p className="mt-1 text-[0.6875rem] text-slate-500 font-medium">Prioridad: {item.priority.rationale} ({name(item.priority.setBy)})</p>}
       {item.reviewStatus === "needs_clarification" && lastClarification?.reason && (
-        <p className="mt-2 rounded-lg bg-accent/10 px-3 py-2 text-xs">
+        <p className="mt-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-900">
           <strong>{name(lastClarification.actorId)} pide aclarar:</strong> {lastClarification.reason}
         </p>
       )}
       {comments.length > 0 && (
-        <ul className="mt-3 space-y-1 border-l-2 border-line pl-3 text-xs">
+        <ul className="mt-3 space-y-1 border-l-2 border-slate-200 pl-3 text-xs">
           {comments.map((c) => (
             <li key={c.id}>
-              <span className="font-semibold">{name(c.authorId)}:</span> <span className="text-muted">{c.body}</span>
+              <span className="font-semibold text-slate-800">{name(c.authorId)}:</span> <span className="text-slate-600">{c.body}</span>
             </li>
           ))}
         </ul>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-1" role="group" aria-label={`Acciones sobre ${item.title}`}>
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 pt-3" role="group" aria-label={`Acciones sobre ${item.title}`}>
         {canEdit && !isRejected && item.reviewStatus !== "confirmed" && (
           <Button size="sm" variant="primary" disabled={pending} onClick={() => apply({ kind: "confirm" })}>
             Confirmar
           </Button>
         )}
         {canEdit && !isRejected && (
-          <Button size="sm" variant="ghost" aria-expanded={mode === "edit"} onClick={() => toggle("edit")}>
+          <Button size="sm" variant="secondary" aria-expanded={mode === "edit"} onClick={() => toggle("edit")}>
             Corregir
           </Button>
         )}
@@ -183,7 +191,7 @@ export function ItemCard({
 
       {mode === "edit" && (
         <form
-          className="mt-3 space-y-3 rounded-xl border border-line p-3"
+          className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 shadow-2xs text-xs"
           onSubmit={(e) => {
             e.preventDefault();
             apply({ kind: "edit", title, content, uncertainty, reason: reason || undefined });
@@ -217,7 +225,7 @@ export function ItemCard({
 
       {(mode === "reject" || mode === "clarify") && (
         <form
-          className="mt-3 space-y-3 rounded-xl border border-line p-3"
+          className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 shadow-2xs text-xs"
           onSubmit={(e) => {
             e.preventDefault();
             apply(mode === "reject" ? { kind: "reject", reason } : { kind: "request_clarification", reason });
@@ -234,14 +242,14 @@ export function ItemCard({
 
       {mode === "evidence" && (
         <form
-          className="mt-3 space-y-3 rounded-xl border border-line p-3"
+          className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 shadow-2xs text-xs"
           onSubmit={(e) => {
             e.preventDefault();
             if (evidenceId) apply({ kind: "attach_evidence", evidenceId });
           }}
         >
           {evidence.length === 0 ? (
-            <p className="text-sm text-muted">Todavía no hay evidencias. Agregalas en «Evidencia e historial».</p>
+            <p className="text-sm text-slate-500">Todavía no hay evidencias. Agregalas en «Evidencia e historial».</p>
           ) : (
             <>
               <Field id={fid("ev")} label="Evidencia que respalda este elemento">
@@ -264,7 +272,7 @@ export function ItemCard({
 
       {mode === "comment" && (
         <form
-          className="mt-3 space-y-3 rounded-xl border border-line p-3"
+          className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 shadow-2xs text-xs"
           onSubmit={(e) => {
             e.preventDefault();
             run(
@@ -286,23 +294,25 @@ export function ItemCard({
       )}
 
       {mode === "history" && (
-        <ol className="mt-3 space-y-2 rounded-xl border border-line p-3 text-xs" aria-label="Historial del elemento">
+        <ol className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 text-xs text-slate-700 shadow-2xs" aria-label="Historial del elemento">
           {[...history].reverse().map((h) => (
-            <li key={h.id} className="border-b border-line pb-2 last:border-0 last:pb-0">
-              <p>
-                <span className="font-mono text-faint">v{h.version}</span> <strong>{CHANGE_LABEL[h.change]}</strong> por {name(h.actorId)} ·{" "}
-                <span className="text-faint">{formatDate(h.createdAt)}</span>
-              </p>
-              {h.reason && <p className="text-muted">Motivo: {h.reason}</p>}
+            <li key={h.id} className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-1 shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-1 text-[0.6875rem]">
+                <span className="font-semibold text-slate-800">
+                  {name(h.actorId)} · {CHANGE_LABEL[h.change]}
+                </span>
+                <span className="font-mono text-slate-400">{formatDate(h.createdAt)}</span>
+              </div>
+              {h.reason && <p className="italic text-slate-500">«{h.reason}»</p>}
               {h.before && h.before.content !== h.after.content && (
-                <p className="mt-1">
-                  <del className="text-faint">{h.before.content}</del>
+                <p className="border-t border-slate-100 pt-1 text-[0.6875rem] text-slate-500">
+                  <del className="text-rose-600 line-through">{h.before.content}</del>
                   <br />
-                  <ins className="no-underline">{h.after.content}</ins>
+                  <ins className="no-underline text-emerald-700 font-medium">{h.after.content}</ins>
                 </p>
               )}
               {h.before && h.before.infoType !== h.after.infoType && (
-                <p className="text-muted">
+                <p className="text-slate-500 text-[0.6875rem]">
                   Tipo: {INFO_TYPE_LABEL[h.before.infoType]} → {INFO_TYPE_LABEL[h.after.infoType]}
                 </p>
               )}
@@ -317,13 +327,27 @@ export function ItemCard({
 function UncertaintyMeter({ value }: { value: Uncertainty }) {
   const level = UNCERTAINTY_LEVEL[value];
   return (
-    <span className="inline-flex items-center gap-1.5 text-[0.6875rem] text-muted" title={UNCERTAINTY_LABEL[value]}>
+    <span className="inline-flex items-center gap-1.5 text-[0.6875rem] text-slate-500 font-medium" title={UNCERTAINTY_LABEL[value]}>
       <span aria-hidden className="flex gap-0.5">
         {[1, 2, 3].map((n) => (
-          <span key={n} className={cx("h-2.5 w-1 rounded-sm", value === "unknown" ? "border border-dashed border-faint" : n <= level ? "bg-highlight" : "bg-white/15")} />
+          <span
+            key={n}
+            className={cx(
+              "h-2.5 w-1 rounded-xs transition-colors",
+              value === "unknown"
+                ? "border border-dashed border-slate-400 bg-slate-100"
+                : n <= level
+                  ? level === 1
+                    ? "bg-emerald-500"
+                    : level === 2
+                      ? "bg-amber-500"
+                      : "bg-rose-500"
+                  : "bg-slate-200",
+            )}
+          />
         ))}
       </span>
-      {UNCERTAINTY_LABEL[value]}
+      <span>{UNCERTAINTY_LABEL[value]}</span>
     </span>
   );
 }

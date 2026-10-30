@@ -1,20 +1,56 @@
+import Link from "next/link";
 import { DIAGNOSIS_STATUS_LABEL } from "@/features/labels";
-import { Tag } from "@/shared/ui/primitives";
+import type { DiagnosisStatus } from "@/types/domain";
 import { loadWorkspace } from "../data";
 import { DiagnosisBoard, SummaryPanel } from "./board";
+
+const STATUS_CONFIG: Record<DiagnosisStatus, { label: string; bg: string }> = {
+  exploring: { label: "En exploración", bg: "bg-blue-50 text-blue-700 border-blue-200" },
+  pending_review: { label: "Pendiente de revisión", bg: "bg-amber-50 text-amber-700 border-amber-200" },
+  reviewed: { label: "Revisado", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  ready_for_prioritization: { label: "Listo para priorizar", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  ready_for_experiments: { label: "Listo para experimentos", bg: "bg-purple-50 text-purple-700 border-purple-200" },
+};
 
 export default async function DiagnosisPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { w } = await loadWorkspace(id);
+
+  const statusConfig = STATUS_CONFIG[w.diagnosis.status] || {
+    label: DIAGNOSIS_STATUS_LABEL[w.diagnosis.status] || w.diagnosis.status,
+    bg: "bg-slate-100 text-slate-700 border-slate-200",
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="display text-4xl">
-          <span className="eyebrow mb-2 block font-sans normal-case">Etapa 1 · Entender</span>
-          Diagnóstico <span className="text-highlight">vivo.</span>
-        </h2>
-        <Tag color="var(--color-cyan)">{DIAGNOSIS_STATUS_LABEL[w.diagnosis.status]}</Tag>
+      {/* Encabezado limpio y moderno */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
+        <div>
+          <span className="font-mono text-xs uppercase tracking-wider text-blue-700 font-bold block mb-1">
+            Etapa 1 · Entender
+          </span>
+          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
+            Diagnóstico <span className="text-blue-600">vivo.</span>
+          </h1>
+          <p className="text-xs text-slate-500 mt-1.5 max-w-2xl leading-relaxed">
+            Se construye y refina a partir de la conversación con el Asistente de IA. Reúne afirmaciones, hechos, incógnitas y problemas para transferirlos como contexto a la <strong>Etapa 2 · Orientar</strong>.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold border shadow-2xs ${statusConfig.bg}`}>
+            ● {statusConfig.label}
+          </span>
+          <Link
+            href={`/app/p/${id}/conversacion`}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition shadow-2xs flex items-center gap-1.5"
+          >
+            <span>💬</span>
+            <span>Ir a la conversación</span>
+          </Link>
+        </div>
       </div>
+
       <SummaryPanel
         projectId={id}
         summary={w.diagnosis.summary}
@@ -22,6 +58,7 @@ export default async function DiagnosisPage({ params }: { params: Promise<{ id: 
         confirmedBy={w.diagnosis.summaryConfirmedBy ? w.people[w.diagnosis.summaryConfirmedBy]?.name : undefined}
         canConfirm={w.permissions["diagnosis.confirm_summary"]}
       />
+
       <DiagnosisBoard
         projectId={id}
         items={w.items}

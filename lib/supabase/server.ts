@@ -31,7 +31,13 @@ let system: SupabaseClient | null = null;
  */
 export function createSystemClient(): SupabaseClient {
   const cfg = publicSupabaseConfig();
-  const secret = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  let secret = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+  if (process.env.SUPABASE_SECRET_KEY && process.env.SUPABASE_SECRET_KEY !== anonKey) {
+    secret = process.env.SUPABASE_SECRET_KEY;
+  } else if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== anonKey) {
+    secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  }
   if (!cfg || !secret) throw new Error("Falta SUPABASE_SECRET_KEY.");
   system ??= createClient(cfg.url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
   return system;

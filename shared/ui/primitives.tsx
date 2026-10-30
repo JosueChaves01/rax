@@ -9,10 +9,10 @@ export function cx(...parts: Array<string | false | null | undefined>) {
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const VARIANT: Record<Variant, string> = {
-  primary: "bg-accent text-white hover:bg-accent-strong shadow-[0_0_0_1px_rgb(255_74_28/0.4),0_8px_24px_-8px_rgb(255_74_28/0.6)]",
-  secondary: "bg-raised text-ink hover:bg-graphite border border-line-strong",
-  ghost: "text-muted hover:text-ink hover:bg-white/5",
-  danger: "text-danger border border-danger/40 hover:bg-danger/10",
+  primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-xs border border-blue-700/50 cursor-pointer",
+  secondary: "bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 shadow-2xs hover:border-slate-400 cursor-pointer",
+  ghost: "text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer",
+  danger: "text-rose-600 border border-rose-300 hover:bg-rose-50 cursor-pointer",
 };
 
 export function Button({
@@ -50,7 +50,7 @@ export function Tag({ children, color, dashed, title }: { children: ReactNode; c
 }
 
 export function Card({ children, className, as: As = "section" }: { children: ReactNode; className?: string; as?: "section" | "article" | "div" | "li" }) {
-  return <As className={cx("rounded-2xl border border-line bg-panel", className)}>{children}</As>;
+  return <As className={cx("rounded-2xl border border-slate-200 bg-white shadow-2xs text-slate-800", className)}>{children}</As>;
 }
 
 export function Heading({ children, highlight, level = 2, className }: { children: ReactNode; highlight?: ReactNode; level?: 1 | 2 | 3; className?: string }) {
@@ -80,15 +80,15 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "error" | 
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-line-strong px-6 py-10 text-center">
-      <p className="display text-2xl text-muted">{title}</p>
-      {children && <div className="mx-auto mt-2 max-w-md text-sm text-muted">{children}</div>}
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-10 text-center shadow-2xs">
+      <p className="display text-xl font-bold text-slate-800">{title}</p>
+      {children && <div className="mx-auto mt-2 max-w-md text-sm text-slate-500">{children}</div>}
     </div>
   );
 }
 
 export const inputClass =
-  "w-full rounded-xl border border-line-strong bg-bg px-3 py-2 text-sm text-ink placeholder:text-faint focus:border-highlight focus:outline-none";
+  "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none shadow-2xs transition";
 
 export function Field({ label, hint, error, id, children }: { label: string; hint?: string; error?: string; id: string; children: ReactNode }) {
   return (
