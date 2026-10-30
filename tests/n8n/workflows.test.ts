@@ -102,6 +102,7 @@ describe("Validación Estructural de Workflows de n8n (v1+)", () => {
     const denied = workflow.nodes.find((node: { id: string }) => node.id === "node-respond-chat-denied");
 
     expect(verifier.parameters.jsCode).toContain("Math.abs(now - reqTime) > 300");
+    expect(verifier.parameters.jsCode).toContain("crypto.timingSafeEqual");
     expect(denied.parameters.options.responseCode).toContain("$json.statusCode");
   });
 

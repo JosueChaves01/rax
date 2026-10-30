@@ -46,16 +46,15 @@ export async function POST(req: NextRequest) {
 
   const payload = parsed.data;
 
-  // 3. Procesamiento seguro de propuestas
-  // Garantía: Todas las propuestas generadas por IA ingresan marcadas como 'needsHumanApproval: true'
-  // y se asocian al correlationId para trazabilidad completa.
+  // Do not accept domain proposals until a RAX-created operation can bind this
+  // callback to its authorized project, actor, and conversation thread.
   const proposals = payload.data?.proposals ?? [];
   const sanitizedProposals = proposals.map((p) => ({
     ...p,
     needsHumanApproval: true,
   }));
 
-  // 4. Persistencia en la base de datos (si la configuración de Supabase está disponible)
+  // Persist an audit record before acknowledging even metadata-only callbacks.
   try {
     const sysClient = createSystemClient();
     const repo = createPgRepository(supabaseDb(sysClient));
@@ -66,7 +65,7 @@ export async function POST(req: NextRequest) {
       id: randomUUID(),
       projectId: "global",
       actorId: "system",
-      action: "ai.invoked",
+      action: payload.status === "completed" ? "ai.invoked" : "ai.failed",
       targetId: payload.operationId,
       meta: {
         workflowId: payload.workflowId,
@@ -78,19 +77,38 @@ export async function POST(req: NextRequest) {
       },
       createdAt: now,
     });
-  } catch (err: unknown) {
-    // Si la BD no está configurada (ej. en ciertos entornos de test), no bloqueamos la respuesta
-    console.warn("[n8n-callback] No se pudo persistir auditoría en BD:", err);
+  } catch {
+    console.error("[n8n-callback] No se pudo persistir auditoría en BD.");
+    return NextResponse.json(
+      { ok: false, persisted: false, error: "callback_audit_persistence_failed" },
+      { status: 503 },
+    );
   }
 
-  // Retornar acuse de recibo inmediato
+  if (sanitizedProposals.length > 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        error: "proposal_persistence_not_implemented",
+        correlationId: payload.correlationId,
+        operationId: payload.operationId,
+        workflowId: payload.workflowId,
+        proposalsReceived: sanitizedProposals.length,
+      },
+      { status: 501 },
+    );
+  }
+
+  // This acknowledges an audit-only result, not a saved or applied proposal.
   return NextResponse.json({
     ok: true,
+    persisted: "audit_only",
     correlationId: payload.correlationId,
     operationId: payload.operationId,
     workflowId: payload.workflowId,
     status: payload.status,
-    proposalsReceived: sanitizedProposals.length,
+    proposalsReceived: 0,
     processedAt: new Date().toISOString(),
   });
 }

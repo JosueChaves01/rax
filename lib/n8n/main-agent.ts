@@ -38,8 +38,11 @@ export const MainAgentFieldSchema = z.object({
   description: z.string().max(1000).optional(),
   required: z.boolean().optional(),
   maxLength: z.number().int().min(1).max(10_000).optional(),
+  minimum: z.number().optional(),
+  maximum: z.number().optional(),
   options: z.array(z.string().max(200)).max(50).optional(),
 }).strict();
+export type MainAgentField = z.infer<typeof MainAgentFieldSchema>;
 
 export const MainAgentTurnSchema = z.object({
   role: z.enum(["entrepreneur", "mentor", "admin"]),
@@ -51,6 +54,7 @@ export const MainAgentTurnSchema = z.object({
   section: z.string().max(160).optional(),
   flowId: z.enum(["RAX-00", "RAX-01", "RAX-02", "RAX-03", "RAX-04", "RAX-05", "RAX-06", "RAX-07", "RAX-08", "RAX-09", "RAX-10", "RAX-11", "RAX-12", "RAX-13", "RAX-14", "RAX-15", "RAX-90", "RAX-91", "RAX-99"]).optional(),
   taskId: z.string().max(128).optional(),
+  entityId: z.string().max(128).optional(),
   fieldPath: z.string().max(200).optional(),
   currentValue: z.string().max(4000).optional(),
   fieldSchema: MainAgentFieldSchema.optional(),
@@ -66,6 +70,7 @@ export interface MainAgentTurn {
   section?: string;
   flowId?: RaxCapabilityId;
   taskId?: string;
+  entityId?: string;
   fieldPath?: string;
   currentValue?: unknown;
   fieldSchema?: z.infer<typeof MainAgentFieldSchema>;
@@ -110,7 +115,13 @@ export async function invokeMainAgent(turn: MainAgentTurn, request: ChatSyncRequ
     return { ok: false, capability: "RAX-02", status: "disabled", message: "El agente principal n8n está deshabilitado hasta verificarse en staging." };
   }
   const parsed = ChatSyncRequestSchema.safeParse(request);
-  if (!parsed.success || parsed.data.actor.role !== turn.role || parsed.data.projectId !== turn.projectId) {
+  if (!parsed.success
+    || parsed.data.actor.role !== turn.role
+    || parsed.data.projectId !== turn.projectId
+    || parsed.data.workContext?.stage !== turn.stage
+    || parsed.data.workContext?.flowId !== turn.flowId
+    || parsed.data.workContext?.fieldPath !== turn.fieldPath
+    || parsed.data.workContext?.entityId !== turn.entityId) {
     return { ok: false, capability: "RAX-02", status: "invalid", message: "El contexto del agente no coincide con la solicitud autorizada." };
   }
   const result = await invokeSyncChatN8n(parsed.data);

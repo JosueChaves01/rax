@@ -50,15 +50,18 @@
   4. n8n ejecuta en modo síncrono (`Respond to Webhook`) con timeout de 35 segundos.
   5. Retorna la respuesta validada al Server Action, que la renderiza en el cliente.
 
-### B. Comunicación Asíncrona (Event-Driven con Callback)
-- **Caso de uso**: Síntesis de sesión (`RAX-06`), preparación de agenda (`RAX-05`), diagnóstico (`RAX-04`), diseño de experimentos (`RAX-12`), evaluación (`RAX-14`).
-- **Flujo**:
-  1. La aplicación registra un hito o acción de usuario (p. ej., notas de sesión guardadas).
-  2. RAX emite un evento canónico vía `dispatchEventToN8n` a `POST /webhook/rax-events`.
-  3. `RAX-01` valida firma HMAC, verifica ventana de tiempo y esquema, y responde `202 Accepted` de inmediato.
-  4. n8n enruta al sub-workflow correspondiente en segundo plano.
-  5. El sub-workflow consulta a OpenRouter, valida la salida contra su esquema y realiza un callback a `POST /api/n8n/callback` en RAX.
-  6. RAX almacena las propuestas en estado `proposed` (`needsHumanApproval: true`).
+### B. Comunicación Asíncrona (flujo objetivo; aún no operativo)
+- **Uso previsto**: síntesis de sesión (`RAX-06`), preparación de agenda (`RAX-05`), diagnóstico (`RAX-04`), diseño de experimentos (`RAX-12`) y evaluación (`RAX-14`).
+- **Estado actual**: el envío de eventos está desactivado por defecto. `RAX-01` no acepta eventos operativos y los sub-workflows todavía no están conectados al agente principal. El callback firmado solo registra metadatos de auditoría; no guarda propuestas de dominio.
+- **Flujo objetivo una vez implementado y verificado en staging**:
+  1. La aplicación registra un hito o acción de usuario.
+  2. RAX emite un evento canónico firmado a `POST /webhook/rax-events`.
+  3. `RAX-01` valida firma HMAC, ventana de tiempo, esquema e idempotencia.
+  4. n8n enruta al sub-workflow autorizado.
+  5. El sub-workflow valida su salida y hace un callback firmado a `POST /api/n8n/callback`.
+  6. RAX persiste una propuesta revisable (`needsHumanApproval: true`) con autorización, idempotencia y trazabilidad.
+
+Este flujo objetivo no debe interpretarse como una capacidad disponible hasta que se complete la implementación y la prueba de staging.
 
 ## 3. Seguridad de Red y Criptográfica
 

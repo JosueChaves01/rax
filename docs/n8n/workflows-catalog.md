@@ -13,11 +13,11 @@ Este catálogo documenta los 19 workflows diseñados para la plataforma RAX, agr
 - **Propósito**: Verifica la conectividad entre n8n, la API de RAX (`GET /api/n8n/health`) y la disponibilidad del modelo en OpenRouter con una consulta de prueba económica (5 tokens).
 - **Salida**: Reporte de salud `{ status: "healthy" | "degraded", components: { n8n, raxApi, openRouter } }`.
 
-### `RAX-01 — Ingesta Segura de Eventos de RAX`
+### `RAX-01 — Ingesta Segura de Eventos de RAX` (no operativo)
 - **Archivo**: `workflows/n8n/RAX-01-event-ingress.json`
 - **Tipo**: Entrada / Enrutador.
 - **Activador**: Webhook POST `/webhook/rax-events`.
-- **Propósito**: Puerta de entrada para todos los eventos emitidos por RAX. Valida cabeceras HMAC-SHA256, ventana de tiempo anti-replay (300 s), esquema de datos y responde `202 Accepted` de inmediato antes de enrutar a los sub-workflows específicos.
+- **Estado real**: workflow exportado, pero la ruta de la aplicación responde no disponible y la puerta de eventos está apagada. No acepta ni enruta eventos en uso real. El propósito previsto es validar HMAC, ventana anti-replay (300 s), esquema e idempotencia antes de enrutar.
 
 ### `RAX-90 — Gestión Central de Errores`
 - **Archivo**: `workflows/n8n/RAX-90-error-handler.json`

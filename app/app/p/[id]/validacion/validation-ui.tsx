@@ -20,6 +20,7 @@ import { Button, Card, Field, Notice, Tag, cx, formatDate, inputClass } from "@/
 import { useAction } from "@/shared/ui/use-action";
 import { ExperimentWork } from "./experiment-work";
 import type { SuggestedHypothesis } from "@/lib/ai/schema";
+import { AgentFieldAssist } from "@/shared/ui/agent-field-assist";
 
 type Problem = { id: string; title: string; rank?: number };
 type People = Record<string, { id: string; name: string; role: string }>;
@@ -51,7 +52,7 @@ type HForm = {
 
 const EMPTY_H: HForm = { statement: "", segment: "", whyItMatters: "", currentEvidence: "", uncertainty: "high", costOfBeingWrong: "", evaluationCriterion: "" };
 
-function HypothesisForm({ initial, problems, submitLabel, onSubmit, pending, error }: { initial: HForm; problems: Problem[]; submitLabel: string; onSubmit: (h: HForm) => void; pending: boolean; error: string | null }) {
+function HypothesisForm({ projectId, initial, problems, submitLabel, onSubmit, pending, error }: { projectId: string; initial: HForm; problems: Problem[]; submitLabel: string; onSubmit: (h: HForm) => void; pending: boolean; error: string | null }) {
   const [h, setH] = useState<HForm>(initial);
 
   useEffect(() => {
@@ -72,6 +73,7 @@ function HypothesisForm({ initial, problems, submitLabel, onSubmit, pending, err
       <div className="md:col-span-2">
         <Field id={`${uid}-st`} label="Afirmación que querés comprobar" hint="Específica y observable. Ej.: «Al menos 5 de 20 … pagarán por adelantado …».">
           <textarea id={`${uid}-st`} rows={2} className={inputClass} value={h.statement} onChange={set("statement")} maxLength={600} required aria-describedby={issues.length ? `${uid}-issues` : `${uid}-st-hint`} />
+          <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="hypotheses" section="Hipótesis" fieldPath="hypothesis.statement" fieldSchema={{ type: "string", label: "Afirmación que querés comprobar", required: true, maxLength: 600 }} currentValue={h.statement} onApply={(value) => setH((prev) => ({ ...prev, statement: value }))} />
         </Field>
         {issues.length > 0 && (
           <ul id={`${uid}-issues`} className="mt-2 space-y-1 text-xs text-highlight" aria-live="polite">
@@ -83,6 +85,7 @@ function HypothesisForm({ initial, problems, submitLabel, onSubmit, pending, err
       </div>
       <Field id={`${uid}-seg`} label="Persona o segmento">
         <input id={`${uid}-seg`} className={inputClass} value={h.segment} onChange={set("segment")} maxLength={200} />
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="hypotheses" section="Hipótesis" fieldPath="hypothesis.segment" fieldSchema={{ type: "string", label: "Persona o segmento", maxLength: 200 }} currentValue={h.segment} onApply={(value) => setH((prev) => ({ ...prev, segment: value }))} />
       </Field>
       <Field id={`${uid}-rel`} label="Problema relacionado">
         <select id={`${uid}-rel`} className={inputClass} value={h.relatedItemId ?? ""} onChange={set("relatedItemId")}>
@@ -94,18 +97,23 @@ function HypothesisForm({ initial, problems, submitLabel, onSubmit, pending, err
             </option>
           ))}
         </select>
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="hypotheses" section="Hipótesis" fieldPath="hypothesis.relatedItemId" fieldSchema={{ type: "enum", label: "Problema relacionado", options: problems.map((problem) => problem.id) }} currentValue={h.relatedItemId ?? ""} onApply={(value) => setH((prev) => ({ ...prev, relatedItemId: value || undefined }))} />
       </Field>
       <Field id={`${uid}-why`} label="Por qué importa">
         <textarea id={`${uid}-why`} rows={2} className={inputClass} value={h.whyItMatters} onChange={set("whyItMatters")} maxLength={600} />
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="hypotheses" section="Hipótesis" fieldPath="hypothesis.whyItMatters" fieldSchema={{ type: "string", label: "Por qué importa", maxLength: 600 }} currentValue={h.whyItMatters} onApply={(value) => setH((prev) => ({ ...prev, whyItMatters: value }))} />
       </Field>
       <Field id={`${uid}-ev`} label="Evidencia actual">
         <textarea id={`${uid}-ev`} rows={2} className={inputClass} value={h.currentEvidence} onChange={set("currentEvidence")} maxLength={600} placeholder="Si no hay, decilo: también es información." />
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="hypotheses" section="Hipótesis" fieldPath="hypothesis.currentEvidence" fieldSchema={{ type: "string", label: "Evidencia actual", maxLength: 600 }} currentValue={h.currentEvidence} onApply={(value) => setH((prev) => ({ ...prev, currentEvidence: value }))} />
       </Field>
       <Field id={`${uid}-cost`} label="Consecuencia de estar equivocado">
         <textarea id={`${uid}-cost`} rows={2} className={inputClass} value={h.costOfBeingWrong} onChange={set("costOfBeingWrong")} maxLength={600} />
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="hypotheses" section="Hipótesis" fieldPath="hypothesis.costOfBeingWrong" fieldSchema={{ type: "string", label: "Consecuencia de estar equivocado", maxLength: 600 }} currentValue={h.costOfBeingWrong} onApply={(value) => setH((prev) => ({ ...prev, costOfBeingWrong: value }))} />
       </Field>
       <Field id={`${uid}-crit`} label="Criterio para evaluarla">
         <textarea id={`${uid}-crit`} rows={2} className={inputClass} value={h.evaluationCriterion} onChange={set("evaluationCriterion")} maxLength={600} />
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="hypotheses" section="Hipótesis" fieldPath="hypothesis.evaluationCriterion" fieldSchema={{ type: "string", label: "Criterio para evaluarla", maxLength: 600 }} currentValue={h.evaluationCriterion} onApply={(value) => setH((prev) => ({ ...prev, evaluationCriterion: value }))} />
       </Field>
       <Field id={`${uid}-unc`} label="Incertidumbre">
         <select id={`${uid}-unc`} className={inputClass} value={h.uncertainty} onChange={set("uncertainty")}>
@@ -113,6 +121,7 @@ function HypothesisForm({ initial, problems, submitLabel, onSubmit, pending, err
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="hypotheses" section="Hipótesis" fieldPath="hypothesis.uncertainty" fieldSchema={{ type: "enum", label: "Incertidumbre", options: Object.keys(UNCERTAINTY_LABEL) }} currentValue={h.uncertainty} onApply={(value) => setH((prev) => ({ ...prev, uncertainty: value as Uncertainty }))} />
       </Field>
       <div className="flex items-end">
         <Button variant="primary" type="submit" disabled={pending} className="w-full">
@@ -278,6 +287,7 @@ export function NewHypothesis({ projectId, problems }: { projectId: string; prob
       {open && (
         <div className="mt-4">
           <HypothesisForm
+            projectId={projectId}
             initial={formInitial}
             problems={problems}
             submitLabel="Guardar como borrador"
@@ -447,6 +457,8 @@ export function HypothesisCard(props: {
             </Button>
           </div>
           <ExperimentForm
+            projectId={projectId}
+            entityId={h.id}
             initial={expInitial}
             submitLabel="Crear experimento en diseño"
             onSubmit={(input, done) => run(() => createExperimentAction(projectId, h.id, input), () => (done(), setMode(null)))}
@@ -479,6 +491,7 @@ function ReformulateForm({ projectId, h, problems, onDone }: { projectId: string
   const { run, pending, error } = useAction();
   return (
     <HypothesisForm
+      projectId={projectId}
       initial={{ statement: h.statement, segment: h.segment, whyItMatters: h.whyItMatters, currentEvidence: h.currentEvidence, uncertainty: h.uncertainty, costOfBeingWrong: h.costOfBeingWrong, evaluationCriterion: h.evaluationCriterion, relatedItemId: h.relatedItemId }}
       problems={problems}
       submitLabel="Crear versión reformulada"
@@ -517,7 +530,7 @@ type EForm = {
 
 const EMPTY_E: EForm = { question: "", method: "", participants: "", activities: [], resources: "", budget: null, durationDays: null, metric: "", successCriterion: "", rejectionCriterion: "", risks: "", evidencePlan: "" };
 
-function ExperimentForm({ initial = EMPTY_E, submitLabel, onSubmit, pending, lockedCriteria }: { initial?: EForm; submitLabel: string; onSubmit: (e: EForm, done: () => void) => void; pending: boolean; lockedCriteria?: boolean }) {
+function ExperimentForm({ projectId, entityId, initial = EMPTY_E, submitLabel, onSubmit, pending, lockedCriteria }: { projectId: string; entityId: string; initial?: EForm; submitLabel: string; onSubmit: (e: EForm, done: () => void) => void; pending: boolean; lockedCriteria?: boolean }) {
   const [f, setF] = useState<EForm>(initial);
   const [acts, setActs] = useState(initial.activities.join("\n"));
 
@@ -532,6 +545,7 @@ function ExperimentForm({ initial = EMPTY_E, submitLabel, onSubmit, pending, loc
   const area = (k: keyof EForm, label: string, hint?: string, disabled?: boolean) => (
     <Field id={`${uid}-${k}`} label={label} hint={hint}>
       <textarea id={`${uid}-${k}`} rows={2} className={inputClass} value={f[k] as string} onChange={t(k)} maxLength={600} disabled={disabled} />
+      <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="experiments_preparing" section="Diseño de experimento" entityId={entityId} fieldPath={`experiment.${String(k)}`} fieldSchema={{ type: "string", label, maxLength: 600 }} currentValue={f[k] as string} onApply={(value) => setF((prev) => ({ ...prev, [k]: value }))} />
     </Field>
   );
   return (
@@ -547,13 +561,16 @@ function ExperimentForm({ initial = EMPTY_E, submitLabel, onSubmit, pending, loc
       {area("participants", "Participantes o fuentes")}
       <Field id={`${uid}-acts`} label="Actividades (una por línea)">
         <textarea id={`${uid}-acts`} rows={3} className={inputClass} value={acts} onChange={(e) => setActs(e.target.value)} />
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="experiments_preparing" section="Diseño de experimento" entityId={entityId} fieldPath="experiment.activities" fieldSchema={{ type: "string", label: "Actividades, una por línea", maxLength: 3000 }} currentValue={acts} onApply={setActs} />
       </Field>
       {area("resources", "Recursos necesarios")}
       <Field id={`${uid}-budget`} label="Presupuesto estimado" hint="Dejalo vacío si no lo sabés: no se inventa una cifra.">
         <input id={`${uid}-budget`} type="number" min={0} className={inputClass} value={f.budget ?? ""} onChange={num("budget")} />
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="experiments_preparing" section="Diseño de experimento" entityId={entityId} fieldPath="experiment.budget" fieldSchema={{ type: "number", label: "Presupuesto estimado", minimum: 0 }} currentValue={String(f.budget ?? "")} onApply={(value) => setF((prev) => ({ ...prev, budget: value.trim() ? Number(value) : null }))} />
       </Field>
       <Field id={`${uid}-dur`} label="Duración (días)">
         <input id={`${uid}-dur`} type="number" min={1} max={365} className={inputClass} value={f.durationDays ?? ""} onChange={num("durationDays")} />
+        <AgentFieldAssist projectId={projectId} flowId="RAX-12" stage="experiments_preparing" section="Diseño de experimento" entityId={entityId} fieldPath="experiment.durationDays" fieldSchema={{ type: "integer", label: "Duración en días", minimum: 1, maximum: 365 }} currentValue={String(f.durationDays ?? "")} onApply={(value) => setF((prev) => ({ ...prev, durationDays: value.trim() ? Number(value) : null }))} />
       </Field>
       {area("metric", "Métrica o señal a observar", undefined, lockedCriteria)}
       {area("evidencePlan", "Evidencia que se recopilará")}
@@ -687,6 +704,8 @@ function ExperimentCard({
       {mode === "edit" && (
         <div className="mt-3 rounded-lg border border-line p-3">
           <ExperimentForm
+            projectId={projectId}
+            entityId={e.id}
             initial={e}
             submitLabel="Guardar diseño"
             pending={pending}

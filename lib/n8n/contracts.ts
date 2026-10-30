@@ -135,6 +135,7 @@ export const ChatSyncRequestSchema = z.object({
     flowId: z.string().regex(/^RAX-(?:0[0-9]|1[0-5]|9[01]|99)$/).optional(),
     section: z.string().max(160).optional(),
     taskId: z.string().max(128).optional(),
+    entityId: z.string().max(128).optional(),
     fieldPath: z.string().max(200).optional(),
     currentValue: z.string().max(4000).optional(),
     fieldSchema: z.object({
@@ -143,6 +144,8 @@ export const ChatSyncRequestSchema = z.object({
       description: z.string().max(1000).optional(),
       required: z.boolean().optional(),
       maxLength: z.number().int().min(1).max(10_000).optional(),
+      minimum: z.number().optional(),
+      maximum: z.number().optional(),
       options: z.array(z.string().max(200)).max(50).optional(),
     }).strict().optional(),
   }).optional(),
@@ -157,6 +160,15 @@ export const ChatSyncRequestSchema = z.object({
       })
     ),
     currentItems: z.array(z.unknown()).default([]),
+    relatedRecords: z.object({
+      tasks: z.array(z.object({ id: z.string(), title: z.string(), status: z.string(), actionType: z.string().optional(), dueDate: z.string().optional(), experimentId: z.string().optional(), goalId: z.string().optional(), blockedReason: z.string().optional() }).strict()).max(50).default([]),
+      hypotheses: z.array(z.object({ id: z.string(), statement: z.string(), segment: z.string(), status: z.string(), uncertainty: z.string() }).strict()).max(50).default([]),
+      experiments: z.array(z.object({ id: z.string(), hypothesisId: z.string(), question: z.string(), method: z.string(), metric: z.string(), successCriterion: z.string(), rejectionCriterion: z.string(), status: z.string() }).strict()).max(50).default([]),
+      results: z.array(z.object({ id: z.string(), experimentId: z.string(), outcome: z.string(), observed: z.string(), metricValue: z.string(), learnings: z.string(), limitations: z.string() }).strict()).max(50).default([]),
+      evidence: z.array(z.object({ id: z.string(), kind: z.string(), title: z.string(), description: z.string() }).strict()).max(50).default([]),
+      sessions: z.array(z.object({ id: z.string(), kind: z.string(), status: z.string(), scheduledAt: z.string().optional() }).strict()).max(50).default([]),
+      goals: z.array(z.object({ id: z.string(), title: z.string(), description: z.string(), baseline: z.string(), targetResult: z.string(), status: z.string(), priority: z.string() }).strict()).max(50).default([]),
+    }).optional(),
     coveredDimensions: z.array(z.string()).default([]),
     pendingDimensions: z.array(z.string()).default([]),
     /** Las notas privadas de mentor quedan explícitamente excluidas si el actor es emprendedor */

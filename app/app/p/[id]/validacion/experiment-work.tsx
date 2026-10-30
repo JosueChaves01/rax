@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Experiment, Task, TaskStatus } from "@/types/domain";
-import { createTasksBatchAction, createTaskAction, setTaskStatusAction, suggestExperimentTasksAction } from "@/app/actions";
+import { createTasksBatchAction, createTaskAction, sendMainAgentMessageAction, setTaskStatusAction } from "@/app/actions";
 import { TASK_STATUS_LABEL } from "@/features/labels";
 import { Button, Notice, cx, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
@@ -48,13 +48,26 @@ export function ExperimentWork({
     setIsAiTasksLoading(true);
     setAiTasksError(null);
     try {
-      const res = await suggestExperimentTasksAction(projectId, e.id);
-      if (res.ok && res.data) {
-        setSuggestedTasks(res.data.tasks);
-        setSelectedIndices(new Set(res.data.tasks.map((_, i) => i)));
-        setTasksRationale(res.data.rationale ?? null);
+      const res = await sendMainAgentMessageAction({
+        projectId,
+        flowId: "RAX-08",
+        stage: "experiments_preparing",
+        section: "Tareas del experimento",
+        entityId: e.id,
+        message: "Propón tareas pequeñas, concretas y observables para este experimento. No las crees todavía.",
+      });
+      const turn = res.ok ? res.data : undefined;
+      const tasks = turn?.ok ? turn.proposals.filter((proposal) => proposal.type === "task").map((proposal) => ({ title: proposal.title })) : [];
+      if (turn?.ok && tasks.length > 0) {
+        setSuggestedTasks(tasks);
+        setSelectedIndices(new Set(tasks.map((_, i) => i)));
+        setTasksRationale(turn.reply);
       } else if (!res.ok) {
         setAiTasksError(res.error);
+      } else if (!turn?.ok) {
+        setAiTasksError(turn?.message ?? "El agente no devolvió propuestas de tareas.");
+      } else {
+        setAiTasksError("El agente no devolvió propuestas estructuradas de tareas.");
       }
     } catch {
       setAiTasksError("No se pudo conectar con el asistente de IA para tareas.");
@@ -96,7 +109,7 @@ export function ExperimentWork({
                           disabled={isAiTasksLoading || pending}
                           onClick={handleSuggestTasks}
                         >
-                          {isAiTasksLoading ? "✨ Generando..." : "✨ Generar con IA"}
+                            {isAiTasksLoading ? "✨ Consultando agente..." : "✨ Pedir tareas al agente"}
                         </Button>
                       )}
                     </div>
@@ -112,7 +125,7 @@ export function ExperimentWork({
                             disabled={isAiTasksLoading || pending}
                             onClick={handleSuggestTasks}
                           >
-                            {isAiTasksLoading ? "✨ Generando tareas..." : "✨ Generar tareas para este experimento con IA"}
+                            {isAiTasksLoading ? "✨ Consultando agente..." : "✨ Pedir tareas para este experimento"}
                           </Button>
                         )}
                       </div>

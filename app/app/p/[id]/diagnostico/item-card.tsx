@@ -9,6 +9,7 @@ import type { ItemChange } from "@/features/diagnosis/rules";
 import { INFO_COLOR, REVIEW_COLOR, UNCERTAINTY_LEVEL } from "@/shared/ui/domain-colors";
 import { Button, Field, Notice, Tag, cx, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
+import { AgentFieldAssist } from "@/shared/ui/agent-field-assist";
 
 export type People = Record<string, { id: string; name: string; role: string }>;
 
@@ -190,9 +191,11 @@ export function ItemCard({
         >
           <Field id={fid("t")} label="Título">
             <input id={fid("t")} className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required />
+            {canEdit && <AgentFieldAssist projectId={projectId} flowId="RAX-04" stage="conversation" section="Diagnóstico" fieldPath={`diagnosis.items.${item.id}.title`} fieldSchema={{ type: "string", label: "Título del elemento", required: true, maxLength: 120 }} currentValue={title} onApply={setTitle} />}
           </Field>
           <Field id={fid("c")} label="Contenido" hint="Tu corrección prevalece sobre la interpretación de la IA. La versión anterior queda en el historial.">
             <textarea id={fid("c")} className={inputClass} rows={3} value={content} onChange={(e) => setContent(e.target.value)} maxLength={2000} required />
+            {canEdit && <AgentFieldAssist projectId={projectId} flowId="RAX-04" stage="conversation" section="Diagnóstico" fieldPath={`diagnosis.items.${item.id}.content`} fieldSchema={{ type: "string", label: "Descripción del elemento", required: true, maxLength: 2000 }} currentValue={content} onApply={setContent} />}
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field id={fid("u")} label="Incertidumbre">
