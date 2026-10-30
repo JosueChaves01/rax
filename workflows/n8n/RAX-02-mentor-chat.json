@@ -228,11 +228,13 @@
     },
     "Validate & Structure Output": {
       "main": [
-        {
-          "node": "Is Model Output Valid?",
-          "index": 0,
-          "type": "main"
-        }
+        [
+          {
+            "node": "Is Model Output Valid?",
+            "index": 0,
+            "type": "main"
+          }
+        ]
       ]
     },
     "Is Model Output Valid?": {
