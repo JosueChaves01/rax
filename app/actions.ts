@@ -832,13 +832,18 @@ export async function sendMainAgentMessageAction(input: unknown) {
     let invocation;
     try {
       invocation = await invokeMainAgent(turn, request);
-    } catch {
+    } catch (err: unknown) {
+      console.error("[main-agent] Excepción en invokeMainAgent:", err);
       invocation = {
         ok: false as const,
         capability: selection.primary,
         status: "unavailable" as const,
         message: "No se pudo completar la solicitud al agente.",
       };
+    }
+
+    if (!invocation.ok) {
+      console.error(`[main-agent] Invocación no exitosa: status=${invocation.status}, capability=${invocation.capability}, message=${invocation.message}`);
     }
 
     if (invocation.ok) {

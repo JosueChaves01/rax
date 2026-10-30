@@ -157,18 +157,22 @@ export async function invokeSyncChatN8n(
     clearTimeout(timer);
 
     if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+      console.error(`[n8n-dispatcher] Falló invocación a ${targetUrl}: HTTP ${res.status} - ${errorText.slice(0, 500)}`);
       return { ok: false, error: `Error de n8n: HTTP ${res.status}` };
     }
 
     const json = await res.json();
     const parsed = ChatSyncResponseSchema.safeParse(json);
     if (!parsed.success) {
+      console.error(`[n8n-dispatcher] Salida de ${targetUrl} no cumple esquema:`, parsed.error.message);
       return { ok: false, error: `Salida de n8n no conforme al esquema: ${parsed.error.message}` };
     }
 
     return { ok: true, response: parsed.data };
   } catch (err: unknown) {
     clearTimeout(timer);
+    console.error(`[n8n-dispatcher] Error de red o timeout conectando a ${targetUrl}:`, err);
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
