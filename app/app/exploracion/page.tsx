@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { cx } from "@/shared/ui/primitives";
+import { completeExplorationAction } from "@/app/actions";
 
 interface MotivationCard {
   id: string;
@@ -63,6 +64,17 @@ export default function ExplorationPage() {
   const [description, setDescription] = useState("");
   const compatibilityScore = 94;
   const [relationAccepted, setRelationAccepted] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  const handleAcceptMentor = () => {
+    setRelationAccepted(true);
+    startTransition(async () => {
+      await completeExplorationAction({
+        motivation: selectedMotivation,
+        description,
+      });
+    });
+  };
 
   const handleNext = () => {
     if (currentStep < 4) setCurrentStep((prev) => prev + 1);
@@ -275,15 +287,16 @@ export default function ExplorationPage() {
             </span>
             <button
               type="button"
-              onClick={() => setRelationAccepted(true)}
+              disabled={isPending}
+              onClick={handleAcceptMentor}
               className={cx(
-                "px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer",
+                "px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50",
                 relationAccepted
                   ? "bg-emerald-600 text-white"
                   : "bg-blue-600 text-white hover:bg-blue-700"
               )}
             >
-              {relationAccepted ? "✓ Relación aceptada" : "Aceptar mentor"}
+              {relationAccepted ? "✓ Relación aceptada (n8n)" : "Aceptar mentor"}
             </button>
           </div>
         </div>

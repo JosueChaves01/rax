@@ -8,6 +8,7 @@ import { isCurrent } from "@/features/diagnosis/rules";
 import { GOAL_LABEL, NATURE_LABEL } from "@/features/labels";
 import { AiUnavailableError, type ExperimentSuggestionContext, type ExperimentTasksContext, type HypothesisSuggestionContext } from "@/lib/ai/provider";
 import type { ExperimentTasksSuggestion, HypothesesSuggestion, SuggestedExperiment } from "@/lib/ai/schema";
+import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 
 /* ───────────── Hipótesis ───────────── */
 
@@ -293,6 +294,33 @@ export async function recordResult(
     await audit(d, "hypothesis.status_changed", { projectId: h.projectId, targetId: h.id, meta: { from: h.status, to, by: "result" } });
   }
   await audit(d, "experiment.result_recorded", { projectId: e.projectId, targetId: experimentId, meta: { outcome: input.outcome } });
+
+  // Despacho asíncrono a n8n para análisis metodológico de evidencia (RAX-01 -> RAX-13)
+  dispatchEventToN8n({
+    eventId: d.newId("evt"),
+    eventType: "experiment.result_submitted",
+    occurredAt: d.now(),
+    schemaVersion: "1.0.0",
+    correlationId: `corr_exp_${experimentId}`,
+    actor: { id: d.actor.id, role: d.actor.role, verified: true },
+    entityType: "experiment",
+    entityId: experimentId,
+    projectId: e.projectId,
+    payload: {
+      hypothesisId: e.hypothesisId,
+      hypothesisStatement: h.statement,
+      metric: e.metric,
+      metricValue: input.metricValue,
+      observed: input.observed,
+      successCriterion: e.successCriterion,
+      rejectionCriterion: e.rejectionCriterion,
+      learnings: input.learnings,
+      limitations: input.limitations,
+      outcome: input.outcome,
+      evidenceNotes: input.learnings,
+    },
+  }).catch(() => {});
+
   return result;
 }
 
@@ -347,6 +375,31 @@ export async function suggestExperiment(d: ServiceDeps, projectId: string, hypot
       targetId: hypothesisId,
       meta: { task: "experiment_suggestion", provider: result.provider },
     });
+
+    // Despacho a n8n (RAX-12) para estructuración experimental
+    dispatchEventToN8n({
+      eventId: d.newId("evt"),
+      eventType: "experiment.design_requested",
+      occurredAt: d.now(),
+      schemaVersion: "1.0.0",
+      correlationId: `corr_hyp_${hypothesisId}`,
+      actor: { id: d.actor.id, role: d.actor.role, verified: true },
+      entityType: "hypothesis",
+      entityId: hypothesisId,
+      projectId,
+      payload: {
+        problem: items?.title || "",
+        assumptions: [h.statement],
+        founderContext: founderOnboarding
+          ? {
+              stage: NATURE_LABEL[founderOnboarding.stage] ?? founderOnboarding.stage,
+              sector: founderOnboarding.sector,
+              weeklyHours: founderOnboarding.weeklyHours,
+            }
+          : {},
+      },
+    }).catch(() => {});
+
     return result.suggestion;
   } catch (e) {
     await audit(d, "ai.failed", {

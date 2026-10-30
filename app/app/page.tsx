@@ -86,12 +86,20 @@ export default async function ProjectsPage() {
     ? "Carlos Méndez"
     : "Carlos Méndez (Asignado)";
 
+  const primaryProjectId = workspaces[0]?.project?.id;
+  const recentAudits = primaryProjectId
+    ? (await d.repo.auditEvents.list({ projectId: primaryProjectId })).sort(
+        (a, b) => b.createdAt.localeCompare(a.createdAt)
+      )
+    : [];
+
   return (
     <div className="space-y-10">
       <EntrepreneurDashboard
         entrepreneurName={d.actor.name}
         mentorName={mentorName}
         workspaces={workspaces}
+        recentAudits={recentAudits}
       />
 
       {/* Creación de proyecto si no tiene */}

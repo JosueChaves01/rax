@@ -2,17 +2,21 @@
 
 import Link from "next/link";
 import type { Workspace } from "@/lib/services/projects";
+import type { AuditEvent } from "@/types/domain";
+import { formatDate } from "@/shared/ui/primitives";
 
 interface EntrepreneurDashboardProps {
   entrepreneurName: string;
   mentorName?: string;
   workspaces: Workspace[];
+  recentAudits?: AuditEvent[];
 }
 
 export function EntrepreneurDashboard({
   entrepreneurName,
   mentorName = "Carlos Méndez",
   workspaces,
+  recentAudits = [],
 }: EntrepreneurDashboardProps) {
   const firstName = entrepreneurName.split(" ")[0] || "Emprendedor/a";
   const primaryWorkspace = workspaces[0];
@@ -32,7 +36,7 @@ export function EntrepreneurDashboard({
     { num: 5, title: "Ejecución", isCurrent: true },
   ];
 
-  const recentActivities = [
+  const defaultActivities = [
     {
       title: `${mentorName} te asignó un nuevo material`,
       time: "Hoy 10:24",
@@ -58,6 +62,40 @@ export function EntrepreneurDashboard({
       href: "/app/sesiones",
     },
   ];
+
+  const recentActivities =
+    recentAudits.length > 0
+      ? recentAudits.slice(0, 5).map((a) => {
+          let title = `Acción registrada: ${a.action}`;
+          let icon = "📝";
+          let href = "/app";
+
+          if (a.action.includes("task")) {
+            title = "Actualización en hoja de tareas";
+            icon = "✅";
+            href = "/app/tareas";
+          } else if (a.action.includes("session")) {
+            title = "Encuentro de mentoría coordinado";
+            icon = "📅";
+            href = "/app/sesiones";
+          } else if (a.action.includes("ai") || a.action.includes("proposal")) {
+            title = "Propuesta o recomendación de IA recibida";
+            icon = "💡";
+            href = "/app/sugerencias";
+          } else if (a.action.includes("resource")) {
+            title = "Material de biblioteca actualizado";
+            icon = "📚";
+            href = "/app/documentos";
+          }
+
+          return {
+            title,
+            time: formatDate(a.createdAt),
+            icon,
+            href,
+          };
+        })
+      : defaultActivities;
 
   return (
     <div className="space-y-6">

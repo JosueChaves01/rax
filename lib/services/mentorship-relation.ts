@@ -17,6 +17,7 @@ import { touch } from "./projects";
 import { assertCanDecideCompatibility, assertMentorshipStageTransition } from "@/features/mentoring/relations";
 import { isCurrent } from "@/features/diagnosis/rules";
 import type { GoalsSuggestionContext, GoalsSuggestionResult } from "@/lib/ai/provider";
+import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 
 /* ───────────── Relación de Mentoría ───────────── */
 
@@ -106,6 +107,21 @@ export async function decideCompatibility(
     meta: { status, nextStage },
   });
   await touch(d, rel.projectId);
+
+  dispatchEventToN8n({
+    eventId: d.newId("evt"),
+    eventType: "mentorship.compatibility_decided",
+    occurredAt: now,
+    schemaVersion: "1.0.0",
+    correlationId: `comp_${relationId}`,
+    actor: { id: d.actor.id, role: d.actor.role, verified: true },
+    relationshipId: relationId,
+    projectId: rel.projectId,
+    entityType: "mentorship_relation",
+    entityId: relationId,
+    payload: { status, nextStage, rationale: rationale?.trim() },
+  });
+
   return updated;
 }
 
@@ -189,6 +205,19 @@ export async function saveMentorshipAgreement(
       draft.version,
     );
     await audit(d, "mentorship.agreement_updated", { projectId: rel.projectId, targetId: updated.id });
+    dispatchEventToN8n({
+      eventId: d.newId("evt"),
+      eventType: "agreement.proposed",
+      occurredAt: now,
+      schemaVersion: "1.0.0",
+      correlationId: `agr_${updated.id}`,
+      actor: { id: d.actor.id, role: d.actor.role, verified: true },
+      relationshipId: rel.id,
+      projectId: rel.projectId,
+      entityType: "mentorship_agreement",
+      entityId: updated.id,
+      payload: { scope: input.scope, frequency: input.frequency },
+    });
     return updated;
   }
 
@@ -210,6 +239,19 @@ export async function saveMentorshipAgreement(
 
   await d.repo.mentorshipAgreements.insert(newAgreement);
   await audit(d, "mentorship.agreement_updated", { projectId: rel.projectId, targetId: newAgreement.id });
+  dispatchEventToN8n({
+    eventId: d.newId("evt"),
+    eventType: "agreement.proposed",
+    occurredAt: now,
+    schemaVersion: "1.0.0",
+    correlationId: `agr_${newAgreement.id}`,
+    actor: { id: d.actor.id, role: d.actor.role, verified: true },
+    relationshipId: rel.id,
+    projectId: rel.projectId,
+    entityType: "mentorship_agreement",
+    entityId: newAgreement.id,
+    payload: { scope: input.scope, frequency: input.frequency },
+  });
   return newAgreement;
 }
 
@@ -260,6 +302,21 @@ export async function confirmMentorshipAgreement(
     targetId: agreementId,
     meta: { status: nextStatus, by: d.actor.id },
   });
+
+  dispatchEventToN8n({
+    eventId: d.newId("evt"),
+    eventType: "agreement.confirmed",
+    occurredAt: now,
+    schemaVersion: "1.0.0",
+    correlationId: `agr_conf_${agreementId}`,
+    actor: { id: d.actor.id, role: d.actor.role, verified: true },
+    relationshipId: rel.id,
+    projectId: rel.projectId,
+    entityType: "mentorship_agreement",
+    entityId: agreementId,
+    payload: { status: nextStatus, by: d.actor.id },
+  });
+
   return updated;
 }
 

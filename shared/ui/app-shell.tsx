@@ -4,16 +4,18 @@ import { useState } from "react";
 import type { Profile } from "@/types/domain";
 import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
-import { NotificationDrawer } from "./notification-drawer";
+import { NotificationDrawer, type NotificationItem, DEFAULT_NOTIFICATIONS } from "./notification-drawer";
 import { MobileBottomNav } from "./mobile-bottom-nav";
 
 interface AppShellProps {
   actor: Profile;
+  notifications?: NotificationItem[];
   children: React.ReactNode;
 }
 
-export function AppShell({ actor, children }: AppShellProps) {
+export function AppShell({ actor, notifications, children }: AppShellProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const items = notifications && notifications.length > 0 ? notifications : DEFAULT_NOTIFICATIONS;
 
   return (
     <div className="flex min-h-dvh bg-[#f8fafc] text-slate-900 font-sans antialiased">
@@ -26,7 +28,7 @@ export function AppShell({ actor, children }: AppShellProps) {
         <AppHeader
           actor={actor}
           onOpenNotifications={() => setNotificationsOpen(true)}
-          unreadCount={5}
+          unreadCount={items.length}
         />
 
         {/* Contenedor central con scroll suave y padding ergonómico */}
@@ -42,6 +44,7 @@ export function AppShell({ actor, children }: AppShellProps) {
       <NotificationDrawer
         isOpen={notificationsOpen}
         onClose={() => setNotificationsOpen(false)}
+        notifications={items}
       />
     </div>
   );

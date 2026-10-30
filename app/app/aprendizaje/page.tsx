@@ -2,12 +2,21 @@
 
 import { useState } from "react";
 import { cx } from "@/shared/ui/primitives";
-import { sendN8nChatAction } from "@/app/actions";
+import { sendN8nChatAction, evaluateExerciseAction } from "@/app/actions";
 
 type TabKind = "asignados" | "en-progreso" | "completados";
 
 export default function LearningPage() {
   const [tab, setTab] = useState<TabKind>("asignados");
+  const [exerciseText, setExerciseText] = useState(
+    "Comprendo la comparación. Nuestro precio refleja que eliminamos 15 horas mensuales de trabajo manual que las herramientas gratuitas no resuelven. Por ejemplo, nuestro cliente Beta ahorró $800 en su primer mes evitando retrabajos. Por eso nuestra inversión se paga sola desde la segunda semana."
+  );
+  const [evaluation, setEvaluation] = useState({
+    score: "9/10",
+    feedback:
+      "Cumpliste adecuadamente con las cuatro etapas del método PREP. La cuantificación del ahorro económico ($800) fortalece considerablemente el Punto final frente a respuestas genéricas.",
+  });
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender: "ai" | "user"; text: string; provider?: string }>>([
     {
       sender: "ai",
@@ -59,6 +68,20 @@ export default function LearningPage() {
     const text = inputMessage;
     setInputMessage("");
     handleSendPrompt(text);
+  };
+
+  const handleEvaluate = async () => {
+    if (!exerciseText.trim() || isEvaluating) return;
+    setIsEvaluating(true);
+    try {
+      const res = await evaluateExerciseAction(exerciseText);
+      if (res.ok) {
+        setEvaluation({ score: res.score, feedback: res.feedback });
+        setShowAiModal(true);
+      }
+    } finally {
+      setIsEvaluating(false);
+    }
   };
 
   return (
@@ -146,15 +169,26 @@ export default function LearningPage() {
 
             {/* Tu ejercicio */}
             <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Tu ejercicio
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Tu ejercicio
+                </h3>
+                <button
+                  type="button"
+                  disabled={isEvaluating}
+                  onClick={handleEvaluate}
+                  className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isEvaluating ? "Evaluando con n8n…" : "✨ Evaluar mi respuesta con n8n (RAX-99)"}
+                </button>
+              </div>
               <p className="text-xs text-slate-600 leading-relaxed">
                 Escribe una respuesta a la objeción típica de un cliente: «Tu servicio parece caro frente a alternativas de software gratuitas».
               </p>
               <textarea
                 rows={3}
-                defaultValue="Comprendo la comparación. Nuestro precio refleja que eliminamos 15 horas mensuales de trabajo manual que las herramientas gratuitas no resuelven. Por ejemplo, nuestro cliente Beta ahorró $800 en su primer mes evitando retrabajos. Por eso nuestra inversión se paga sola desde la segunda semana."
+                value={exerciseText}
+                onChange={(e) => setExerciseText(e.target.value)}
                 className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-white leading-relaxed focus:outline-none focus:border-blue-600"
               />
             </div>
@@ -164,7 +198,7 @@ export default function LearningPage() {
               <div className="flex items-center gap-2">
                 <span className="text-base">🤖</span>
                 <span className="font-semibold text-emerald-900">
-                  Evaluación de IA (Workflow RAX-99): 9/10 Excelente estructura PREP
+                  Evaluación de IA (Workflow RAX-99): {evaluation.score}
                 </span>
               </div>
               <button
@@ -285,15 +319,20 @@ export default function LearningPage() {
       {showAiModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🤖</span>
-              <h3 className="text-base font-bold text-slate-900">
-                Evaluación en tiempo real (Workflow RAX-99)
-              </h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🤖</span>
+                <h3 className="text-base font-bold text-slate-900">
+                  Evaluación en tiempo real (Workflow RAX-99)
+                </h3>
+              </div>
+              <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-100 text-emerald-800">
+                Puntaje: {evaluation.score}
+              </span>
             </div>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Cumpliste adecuadamente con las cuatro etapas del método PREP. La cuantificación del ahorro económico ($800) fortalece considerablemente el Punto final frente a respuestas genéricas.
-            </p>
+            <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
+              {evaluation.feedback}
+            </div>
             <div className="flex justify-end">
               <button
                 type="button"

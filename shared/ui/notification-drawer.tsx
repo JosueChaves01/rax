@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
-interface NotificationItem {
+export interface NotificationItem {
   id: string;
   title: string;
   detail: string;
@@ -12,7 +12,7 @@ interface NotificationItem {
   href: string;
 }
 
-const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
+export const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
   {
     id: "notif-1",
     title: "Nuevo material asignado",
@@ -58,9 +58,11 @@ const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
 interface NotificationDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  notifications?: NotificationItem[];
 }
 
-export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps) {
+export function NotificationDrawer({ isOpen, onClose, notifications }: NotificationDrawerProps) {
+  const items = notifications && notifications.length > 0 ? notifications : DEFAULT_NOTIFICATIONS;
   // Cerrar con Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -108,7 +110,7 @@ export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps)
                 Estados y notificaciones
               </span>
               <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
-                {DEFAULT_NOTIFICATIONS.length}
+                {items.length}
               </span>
             </div>
             <button
@@ -126,7 +128,7 @@ export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps)
 
           {/* Lista de Notificaciones */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-            {DEFAULT_NOTIFICATIONS.map((n) => (
+            {items.map((n) => (
               <Link
                 key={n.id}
                 href={n.href}
