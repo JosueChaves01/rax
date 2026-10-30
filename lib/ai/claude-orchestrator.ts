@@ -2,6 +2,9 @@ import "server-only";
 import type { AgentArtifact, KnowledgeCitation, Project } from "@/types/domain";
 import type { KnowledgeContextResult } from "./knowledge-retrieval";
 import { extractArtifacts } from "./artifact-parser";
+import type { ServiceDeps } from "@/lib/services/base";
+import { executeWorkflowTool, makeProposal, RAX_WORKFLOW_TOOLS } from "./workflow-tools";
+import type { AiProposalItem } from "@/lib/n8n/contracts";
 
 export interface ClaudeTurnInput {
   project: Project;
@@ -9,6 +12,7 @@ export interface ClaudeTurnInput {
   history: Array<{ author: "user" | "assistant"; content: string }>;
   knowledge: KnowledgeContextResult;
   role: "entrepreneur" | "mentor" | "admin";
+  deps?: ServiceDeps;
 }
 
 export interface ClaudeTurnResult {
@@ -69,6 +73,20 @@ ${customInstructions}
 
 ${knowledgeBlock}
 
+<platform_workflows>
+Como orquestador de RAX, tienes acceso a los siguientes workflows especializados:
+- RAX-04 (extract_diagnosis_items): Identificar y extraer supuestos, hechos u observaciones al diagnóstico.
+- RAX-12 (design_experiment): Diseñar hipótesis y experimentos de validación con criterios ex-ante.
+- RAX-08 (propose_tasks): Proponer plan de acción y tareas con fechas estimadas.
+- RAX-06 (synthesize_session): Sintetizar acuerdos y compromisos tras reuniones.
+- RAX-05 (generate_mentor_briefing): Preparar briefing previo con puntos ciegos para el mentor.
+- RAX-09 (diagnose_task_delays): Diagnosticar causas de bloqueos o retrasos sin formular juicios morales.
+- RAX-11 (recommend_resources): Recomendar plantillas o recursos metodológicos según la fase.
+- RAX-14 (evaluate_mentorship_cycle): Evaluar ciclo y madurez de la iniciativa.
+- RAX-15 (query_project_metrics): Consultar métricas del proyecto (tareas, hipótesis, experimentos, sesiones).
+Cuando tu respuesta requiera estructurar una acción en el proyecto, invoca la herramienta correspondiente para que el usuario pueda revisarla y aplicarla con un clic.
+</platform_workflows>
+
 <artifact_instructions>
 Cuando se te pida diseñar interfaces, componentes de UI, dashboards, diagramas de arquitectura, tablas complejas o scripts:
 1. Emite un artefacto estructurado utilizando exactamente la etiqueta <antArtifact>:
@@ -121,6 +139,10 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
       body: JSON.stringify({
         model,
         messages,
+        tools: RAX_WORKFLOW_TOOLS.map((tool) => ({
+          type: "function",
+          function: tool,
+        })),
         max_tokens: 4000,
         temperature: 0.3,
       }),
@@ -134,18 +156,42 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
     }
 
     const json = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        message?: {
+          content?: string;
+          tool_calls?: Array<{ function: { name: string; arguments: string } }>;
+        };
+      }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
 
-    const rawReply = json.choices?.[0]?.message?.content ?? "";
+    const choice = json.choices?.[0]?.message;
+    const rawReply = choice?.content ?? "";
     const { cleanText, artifacts } = extractArtifacts(rawReply);
 
+    const proposals: AiProposalItem[] = [];
+    let toolExecutionNotes = "";
+
+    if (choice?.tool_calls && choice.tool_calls.length > 0 && input.deps) {
+      for (const call of choice.tool_calls) {
+        try {
+          const args = JSON.parse(call.function.arguments || "{}");
+          const toolResult = await executeWorkflowTool(input.deps, input.project.id, call.function.name, args);
+          if (toolResult.proposals.length > 0) {
+            proposals.push(...toolResult.proposals);
+          }
+          toolExecutionNotes += `\n\n📌 **${toolResult.summary}**`;
+        } catch (e) {
+          console.warn("[claude-orchestrator] Error ejecutando tool call:", e);
+        }
+      }
+    }
+
     return {
-      reply: cleanText || "He analizado tu solicitud basándome en el contexto del proyecto.",
+      reply: (cleanText || "He analizado tu solicitud basándome en el contexto del proyecto.") + toolExecutionNotes,
       artifacts,
       citations: input.knowledge.citations,
-      proposals: [],
+      proposals,
       mode: input.knowledge.mode,
       cachedPromptUsed: true,
     };
@@ -158,10 +204,42 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
 function generateSimulatedClaudeTurn(input: ClaudeTurnInput): ClaudeTurnResult {
   const query = input.userMessage.toLowerCase();
   const artifacts: AgentArtifact[] = [];
+  const proposals: AiProposalItem[] = [];
 
   let reply = "";
 
-  if (/interfaz|ui|calculadora|pantalla|dashboard|html/.test(query)) {
+  if (/tarea|plan de acci[oó]n|acciones|to[- ]?do/.test(query)) {
+    proposals.push(
+      makeProposal({ type: "task", title: "Definir guion de 10 entrevistas con clientes potenciales", description: "Enfocado en validar el problema real y la disposición a pagar", needsHumanApproval: true }),
+      makeProposal({ type: "task", title: "Elaborar propuesta de valor en una sola frase", description: "Para comprobar comprensión inmediata con mentores", needsHumanApproval: true }),
+    );
+    reply = `He analizado las prioridades de «${input.project.name}» e invocado la formulación de tareas (Workflow RAX-08). Te propongo ${proposals.length} acciones prioritarias para avanzar en la hoja de ruta.`;
+  } else if (/hip[oó]tesis|experimento|validar|probar/.test(query)) {
+    proposals.push(
+      makeProposal({ type: "hypothesis", title: "Los clientes B2B están dispuestos a pagar suscripción mensual por automatizar reportes", needsHumanApproval: true }),
+      makeProposal({ type: "experiment", title: "Preventa con 15 contactos directos", description: "Método: Entrevistas de solución y carta de intención. Éxito: >= 20%. Descarte: < 5%", needsHumanApproval: true }),
+    );
+    reply = `He estructurado la hipótesis y diseñado el experimento ex-ante (Workflow RAX-12). Los criterios ex-ante quedaron fijados para verificar resultados objetivamente.`;
+  } else if (/diagn[oó]stico|supuesto|problema|mercado/.test(query)) {
+    proposals.push(
+      makeProposal({ type: "diagnosis_item", title: "Dificultad de adopción por software legado", description: "Los prospectos mencionan resistencia al cambio de sus equipos", category: "operational", needsHumanApproval: true }),
+      makeProposal({ type: "diagnosis_item", title: "Falta de presupuesto asignado para nuevas herramientas", description: "Supuesto de riesgo financiero identificado en la conversación", category: "financial", needsHumanApproval: true }),
+    );
+    reply = `He extraído los elementos clave de la conversación para el diagnóstico estructurado del proyecto (Workflow RAX-04).`;
+  } else if (/m[eé]trica|estado del proyecto|avance|resumen/.test(query)) {
+    reply = `Consultando el estado operativo del proyecto (Workflow RAX-15): El proyecto «${input.project.name}» cuenta con sus registros sincronizados y activos en el entorno de trabajo.`;
+  } else if (/recurso|plantilla|gu[ií]a/.test(query)) {
+    proposals.push(
+      makeProposal({ type: "recommendation", title: "Plantilla de Entrevista de Descubrimiento de Clientes", description: "Guía paso a paso para evitar preguntas sesgadas", needsHumanApproval: false }),
+    );
+    reply = `He consultado el catálogo metodológico de RAX (Workflow RAX-11) y te recomiendo la siguiente plantilla de apoyo.`;
+  } else if (/sesi[oó]n|briefing|mentor/.test(query)) {
+    proposals.push(
+      makeProposal({ type: "agenda_topic", title: "Punto de agenda: Revisar definición de criterio de éxito del experimento", needsHumanApproval: true }),
+      makeProposal({ type: "agenda_topic", title: "Pregunta para mentor: ¿Qué métrica de retención considera mínima en esta etapa?", needsHumanApproval: true }),
+    );
+    reply = `He preparado el briefing y temas estratégicos para la sesión con tu mentor (Workflow RAX-05).`;
+  } else if (/interfaz|ui|calculadora|pantalla|dashboard|html/.test(query)) {
     artifacts.push({
       id: `art_sim_${Date.now()}`,
       identifier: "interactive-roi-calc",
@@ -231,7 +309,7 @@ function generateSimulatedClaudeTurn(input: ClaudeTurnInput): ClaudeTurnResult {
     reply,
     artifacts,
     citations: input.knowledge.citations,
-    proposals: [],
+    proposals,
     mode: input.knowledge.mode,
   };
 }

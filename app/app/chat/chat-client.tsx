@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { cx } from "@/shared/ui/primitives";
 import type { AgentArtifact, AgentThread, KnowledgeCitation } from "@/types/domain";
 import {
+  applyAiProposalAction,
   createProjectThreadAction,
   getProjectKnowledgeStatsAction,
   listProjectThreadsAction,
@@ -28,6 +29,7 @@ interface MessageView {
   chips?: string[];
   artifacts?: AgentArtifact[];
   citations?: KnowledgeCitation[];
+  proposals?: Array<Record<string, unknown>>;
 }
 
 export default function ChatClient({ projects }: { projects: Array<{ id: string; name: string }> }) {
@@ -36,6 +38,8 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageView[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [appliedProposals, setAppliedProposals] = useState<Set<string>>(new Set());
+  const [applyingProposalTitle, setApplyingProposalTitle] = useState<string | null>(null);
 
   // Claude Projects context & artifacts
   const [activeArtifact, setActiveArtifact] = useState<AgentArtifact | null>(null);
@@ -100,6 +104,7 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
             time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             artifacts: m.artifacts,
             citations: m.citations,
+            proposals: m.proposals,
           })),
         );
       }
@@ -131,6 +136,7 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
           time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           artifacts: m.artifacts,
           citations: m.citations,
+          proposals: m.proposals,
         })),
       );
     }
@@ -155,6 +161,21 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
     }
   };
 
+  const handleApplyProposal = async (proposal: Record<string, unknown>) => {
+    if (!projectId || typeof proposal.title !== "string") return;
+    setApplyingProposalTitle(proposal.title);
+    try {
+      const res = await applyAiProposalAction(projectId, proposal);
+      if (res.ok) {
+        setAppliedProposals((prev) => new Set(prev).add(String(proposal.title)));
+      } else {
+        alert(res.error);
+      }
+    } finally {
+      setApplyingProposalTitle(null);
+    }
+  };
+
   const sendMessageToAgent = async (textToSend: string) => {
     if (!textToSend.trim() || isLoading) return;
     if (!projectId) return;
@@ -169,7 +190,7 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
       });
 
       if (res.ok && res.data) {
-        const { userMessage, assistantMessage, artifacts, citations, threadId } = res.data;
+        const { userMessage, assistantMessage, artifacts, citations, proposals, threadId } = res.data;
 
         if (threadId !== activeThreadId) {
           setActiveThreadId(threadId);
@@ -193,6 +214,7 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
             time: new Date(assistantMessage.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             artifacts,
             citations,
+            proposals,
           },
         ]);
 
@@ -422,6 +444,51 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
                           📄 {c.filename}
                         </span>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Acciones propuestas para el proyecto (Workflows RAX-00..RAX-15) */}
+                  {m.proposals && m.proposals.length > 0 && (
+                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                      <div className="text-[0.6875rem] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                        <span>⚡ Acciones propuestas para el proyecto:</span>
+                      </div>
+                      {m.proposals.map((prop, idx) => {
+                        const title = typeof prop.title === "string" ? prop.title : `Propuesta ${idx + 1}`;
+                        const desc = typeof prop.description === "string" ? prop.description : undefined;
+                        const rawType = typeof prop.type === "string" ? prop.type : "acción";
+                        const isApplied = appliedProposals.has(title);
+                        const isApplying = applyingProposalTitle === title;
+
+                        return (
+                          <div
+                            key={idx}
+                            className="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[0.625rem] font-bold uppercase px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-800">
+                                  {rawType.replace("_", " ")}
+                                </span>
+                                <span className="font-semibold text-slate-800 truncate">{title}</span>
+                              </div>
+                              {desc && <p className="text-[0.6875rem] text-slate-500 mt-1 leading-snug">{desc}</p>}
+                            </div>
+
+                            <button
+                              onClick={() => handleApplyProposal(prop)}
+                              disabled={isApplied || isApplying}
+                              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                                isApplied
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+                                  : "bg-orange-600 hover:bg-orange-700 text-white shadow-2xs cursor-pointer"
+                              }`}
+                            >
+                              {isApplied ? "✓ Aplicado" : isApplying ? "Aplicando..." : "Aplicar al Proyecto"}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

@@ -7,6 +7,7 @@ import type {
   Comment,
   DiagnosisCategory,
   EvidenceKind,
+  Experiment,
   InfoType,
   InitiativeNature,
   MentorDecision,
@@ -115,6 +116,7 @@ import {
 } from "@/lib/services/project-knowledge";
 import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
 import { executeClaudeAgentTurn } from "@/lib/ai/claude-orchestrator";
+import { AiProposalItemSchema } from "@/lib/n8n/contracts";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 import { canUseCapability, invokeMainAgent, MainAgentChatInputSchema, selectRaxCapability } from "@/lib/n8n/main-agent";
 import type { MentorIntervention } from "@/types/domain";
@@ -1018,6 +1020,7 @@ export async function sendClaudeAgentMessageAction(input: {
       history,
       knowledge,
       role: d.actor.role,
+      deps: d,
     });
 
     const assistantMessage = await appendAgentAssistantMessage(d, thread.id, {
@@ -1034,7 +1037,93 @@ export async function sendClaudeAgentMessageAction(input: {
       reply: assistantMessage.content,
       artifacts: result.artifacts,
       citations: result.citations,
+      proposals: result.proposals,
       mode: result.mode,
     };
+  });
+}
+
+/** Aplica una propuesta generada por el agente o workflow directamente en el proyecto con confirmación humana. */
+export async function applyAiProposalAction(projectId: string, proposal: unknown) {
+  const parsed = AiProposalItemSchema.safeParse(proposal);
+  if (!parsed.success) return { ok: false as const, error: "La propuesta no tiene un formato válido." };
+
+  return run(projectId, async (d) => {
+    const item = parsed.data;
+
+    if (item.type === "task") {
+      const task = await createTask(d, projectId, {
+        title: item.title,
+        dueDate: undefined,
+        actionType: "operational_task",
+      });
+      return { ok: true as const, type: "task" as const, id: task.id, title: task.title };
+    }
+
+    if (item.type === "hypothesis") {
+      const hyp = await proposeHypothesis(d, projectId, {
+        statement: item.title,
+        segment: "General",
+        whyItMatters: item.description || "Hipótesis sugerida para validación",
+        currentEvidence: "Por verificar",
+        costOfBeingWrong: "Riesgo de dedicar tiempo y recursos a un supuesto no comprobado",
+        evaluationCriterion: "Validación ex-ante con clientes",
+        uncertainty: "high",
+      });
+      return { ok: true as const, type: "hypothesis" as const, id: hyp.id, title: hyp.statement };
+    }
+
+    if (item.type === "experiment") {
+      const existingHyps = await d.repo.hypotheses.list({ projectId });
+      let hyp = existingHyps.find((h) => ["approved", "testing", "inconclusive", "supported", "weakened"].includes(h.status)) ?? existingHyps[0];
+      if (!hyp) {
+        hyp = await proposeHypothesis(d, projectId, {
+          statement: item.title,
+          segment: "General",
+          whyItMatters: item.description || "Hipótesis sugerida para experimentación",
+          currentEvidence: "Por comprobar",
+          costOfBeingWrong: "Riesgo de dedicar tiempo y recursos a un supuesto no comprobado",
+          evaluationCriterion: "Validación ex-ante con clientes",
+          uncertainty: "high",
+        });
+      }
+      const now = d.now();
+      const expRow: Experiment = {
+        id: d.newId("exp"),
+        projectId,
+        hypothesisId: hyp.id,
+        question: item.title.slice(0, 500),
+        method: (item.description || "Entrevistas de solución y preventa").slice(0, 500),
+        participants: "15 prospectos calificados",
+        activities: ["Contactar clientes potenciales", "Realizar entrevistas de validación", "Documentar cartas de intención"],
+        resources: "Tiempo de fundadores",
+        budget: 0,
+        durationDays: 14,
+        metric: "Tasa de conversión / intención de compra",
+        successCriterion: ">= 20% de cartas de intención",
+        rejectionCriterion: "< 5% de interés",
+        risks: "Baja tasa de respuesta en frío",
+        evidencePlan: "Citas textuales y cartas de intención firmadas",
+        ownerId: d.actor.id,
+        status: "design",
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await d.repo.experiments.insert(expRow);
+      return { ok: true as const, type: "experiment" as const, id: expRow.id, title: expRow.question };
+    }
+
+    if (item.type === "diagnosis_item") {
+      const diag = await addItem(d, projectId, {
+        category: (item.category as DiagnosisCategory) || "problem",
+        title: item.title,
+        content: item.description || item.title,
+        uncertainty: "medium",
+      });
+      return { ok: true as const, type: "diagnosis_item" as const, id: diag.id, title: diag.title };
+    }
+
+    return { ok: true as const, type: item.type, title: item.title };
   });
 }
