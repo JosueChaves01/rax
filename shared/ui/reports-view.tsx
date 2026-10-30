@@ -8,35 +8,31 @@ export type MetricTab = "general" | "mentor" | "emprendedor" | "operativo";
 export interface ReportMetricsData {
   responseTime: {
     value: string;
-    change: string;
     detail: string;
   };
   completionRate: {
     value: string;
-    change: string;
     detail: string;
   };
-  aiAdoption: {
+  aiInvocations: {
     value: string;
-    change: string;
     detail: string;
   };
   satisfaction: {
     value: string;
-    change: string;
     detail: string;
   };
   timeline: {
     labels: string[];
-    documents: number[];
+    resources: number[];
     tasks: number[];
-    chat: number[];
+    aiInvocations: number[];
     evaluations: number[];
   };
   tabBreakdowns: {
     mentor: { sessionsCount: number; activeProjects: number; interventionsCount: number };
-    entrepreneur: { completedTasks: number; totalTasks: number; exercisesEvaluated: number };
-    operations: { totalAudits: number; aiInvocations: number; errorRate: string };
+    entrepreneur: { completedTasks: number; totalTasks: number; aiInvocations: number };
+    operations: { totalAudits: number; aiInvocations: number; errorEvents: number };
   };
 }
 
@@ -46,19 +42,23 @@ interface ReportsViewProps {
 
 export function ReportsView({ initialData }: ReportsViewProps) {
   const [tab, setTab] = useState<MetricTab>("general");
-  const [timeRange, setTimeRange] = useState("30d");
 
-  // Multiplier for display if range changes
-  const rangeMultiplier = timeRange === "7d" ? 0.3 : timeRange === "90d" ? 2.5 : 1.0;
+  const allTimelineValues = [
+    ...initialData.timeline.resources,
+    ...initialData.timeline.tasks,
+    ...initialData.timeline.aiInvocations,
+    ...initialData.timeline.evaluations,
+  ];
+  const timelineMax = Math.max(0, ...allTimelineValues);
+  const hasTimelineData = timelineMax > 0;
 
-  // Render SVG path from array of numbers [0..100] normalized to viewBox 600x200
+  // Show event counts, scaled against the largest observed bucket in this 30-day window.
   const buildSvgPath = (points: number[]) => {
-    if (!points || points.length === 0) return "M 0,150 L 600,150";
+    if (!points || points.length === 0) return "";
     const stepX = 600 / (points.length - 1);
-    // map 0..100 to y=180..30 (inverted for SVG coordinates)
     const coords = points.map((val, idx) => {
       const x = Math.round(idx * stepX);
-      const y = Math.round(180 - (Math.min(100, Math.max(10, val * rangeMultiplier)) / 100) * 140);
+      const y = Math.round(180 - (timelineMax > 0 ? val / timelineMax : 0) * 140);
       return { x, y };
     });
 
@@ -72,9 +72,9 @@ export function ReportsView({ initialData }: ReportsViewProps) {
     return path;
   };
 
-  const docPath = buildSvgPath(initialData.timeline.documents);
+  const resourcePath = buildSvgPath(initialData.timeline.resources);
   const taskPath = buildSvgPath(initialData.timeline.tasks);
-  const chatPath = buildSvgPath(initialData.timeline.chat);
+  const aiPath = buildSvgPath(initialData.timeline.aiInvocations);
   const evalPath = buildSvgPath(initialData.timeline.evaluations);
 
   return (
@@ -86,7 +86,7 @@ export function ReportsView({ initialData }: ReportsViewProps) {
             Seguimiento de métricas y reportes
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Indicadores consolidados, evolución temporal, satisfacción y adopción de IA con datos reales.
+            Recuento de tareas, eventos de IA y actividad registrada. Las métricas sin fuente aparecen como «—».
           </p>
         </div>
 
@@ -117,16 +117,6 @@ export function ReportsView({ initialData }: ReportsViewProps) {
             ))}
           </div>
 
-          {/* Selector de Rango */}
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl font-medium text-slate-700 shadow-2xs focus:outline-none focus:border-blue-600"
-          >
-            <option value="7d">Últimos 7 días</option>
-            <option value="30d">Últimos 30 días</option>
-            <option value="90d">Últimos 90 días</option>
-          </select>
         </div>
       </div>
 
@@ -139,9 +129,6 @@ export function ReportsView({ initialData }: ReportsViewProps) {
             <span className="text-3xl font-black text-slate-900 font-mono">
               {tab === "operativo" ? initialData.responseTime.value : initialData.responseTime.value}
             </span>
-            <span className="text-xs font-bold text-emerald-600">
-              {initialData.responseTime.change}
-            </span>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">{initialData.responseTime.detail}</p>
         </div>
@@ -152,11 +139,10 @@ export function ReportsView({ initialData }: ReportsViewProps) {
           <div className="flex items-baseline gap-2 mt-2">
             <span className="text-3xl font-black text-slate-900 font-mono">
               {tab === "emprendedor"
-                ? `${Math.round((initialData.tabBreakdowns.entrepreneur.completedTasks / Math.max(1, initialData.tabBreakdowns.entrepreneur.totalTasks)) * 100)}%`
+                ? initialData.tabBreakdowns.entrepreneur.totalTasks > 0
+                  ? `${Math.round((initialData.tabBreakdowns.entrepreneur.completedTasks / initialData.tabBreakdowns.entrepreneur.totalTasks) * 100)}%`
+                  : "—"
                 : initialData.completionRate.value}
-            </span>
-            <span className="text-xs font-bold text-emerald-600">
-              {initialData.completionRate.change}
             </span>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">
@@ -166,18 +152,15 @@ export function ReportsView({ initialData }: ReportsViewProps) {
           </p>
         </div>
 
-        {/* KPI 3: Uso de IA */}
+        {/* KPI 3: Invocaciones de IA registradas */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition-colors">
-          <p className="text-xs text-slate-500 font-medium">Uso de IA</p>
+          <p className="text-xs text-slate-500 font-medium">Invocaciones de IA</p>
           <div className="flex items-baseline gap-2 mt-2">
             <span className="text-3xl font-black text-slate-900 font-mono">
-              {initialData.aiAdoption.value}
-            </span>
-            <span className="text-xs font-bold text-emerald-600">
-              {initialData.aiAdoption.change}
+              {initialData.aiInvocations.value}
             </span>
           </div>
-          <p className="text-[10px] text-slate-500 mt-1">{initialData.aiAdoption.detail}</p>
+          <p className="text-[10px] text-slate-500 mt-1">{initialData.aiInvocations.detail}</p>
         </div>
 
         {/* KPI 4: Satisfacción */}
@@ -186,9 +169,6 @@ export function ReportsView({ initialData }: ReportsViewProps) {
           <div className="flex items-baseline gap-2 mt-2">
             <span className="text-3xl font-black text-slate-900 font-mono">
               {initialData.satisfaction.value}
-            </span>
-            <span className="text-xs font-bold text-emerald-600">
-              {initialData.satisfaction.change}
             </span>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">{initialData.satisfaction.detail}</p>
@@ -208,36 +188,35 @@ export function ReportsView({ initialData }: ReportsViewProps) {
           {tab === "emprendedor" && (
             <div className="flex gap-6">
               <span><strong>{initialData.tabBreakdowns.entrepreneur.completedTasks}</strong> tareas completadas</span>
-              <span><strong>{initialData.tabBreakdowns.entrepreneur.exercisesEvaluated}</strong> ejercicios evaluados por IA</span>
+              <span><strong>{initialData.tabBreakdowns.entrepreneur.aiInvocations}</strong> invocaciones de IA registradas</span>
             </div>
           )}
           {tab === "operativo" && (
             <div className="flex gap-6">
               <span><strong>{initialData.tabBreakdowns.operations.totalAudits}</strong> eventos auditados</span>
-              <span><strong>{initialData.tabBreakdowns.operations.aiInvocations}</strong> llamadas a n8n / OpenRouter</span>
-              <span>Tasa de error: <strong>{initialData.tabBreakdowns.operations.errorRate}</strong></span>
+              <span><strong>{initialData.tabBreakdowns.operations.aiInvocations}</strong> invocaciones de IA registradas</span>
+              <span><strong>{initialData.tabBreakdowns.operations.errorEvents}</strong> errores o accesos denegados registrados</span>
             </div>
           )}
         </div>
       )}
 
-      {/* 3. Gráfico Interactivo de Evolución de Uso (Panel 13 del Mock) */}
+      {/* 3. Conteos reales por período */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-base font-bold text-slate-900">
-              Evolución de uso
+              Actividad registrada en los últimos 30 días
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Volumen de interacciones por canal durante el ciclo (datos dinámicos de auditoría)
+              Recuento en cinco períodos de seis días. El eje vertical muestra eventos, no porcentajes.
             </p>
           </div>
 
-          {/* Leyenda */}
-          <div className="flex flex-wrap items-center gap-4 text-xs font-medium">
+          {hasTimelineData && <div className="flex flex-wrap items-center gap-4 text-xs font-medium">
             <span className="flex items-center gap-1.5 text-slate-600">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-              Documentos
+              Recursos
             </span>
             <span className="flex items-center gap-1.5 text-slate-600">
               <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
@@ -245,17 +224,22 @@ export function ReportsView({ initialData }: ReportsViewProps) {
             </span>
             <span className="flex items-center gap-1.5 text-slate-600">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-              Chat
+              Invocaciones de IA
             </span>
             <span className="flex items-center gap-1.5 text-slate-600">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
               Evaluaciones
             </span>
-          </div>
+          </div>}
         </div>
 
-        {/* Gráfico SVG de Curvas Onduladas Fluídas como en el Mock */}
-        <div className="w-full h-64 pt-4">
+        {hasTimelineData ? <div className="w-full h-64 pt-4 flex gap-3">
+          <div className="flex flex-col justify-between text-[10px] text-slate-500 font-mono pb-7">
+            <span>{timelineMax}</span>
+            <span>{Math.ceil(timelineMax / 2)}</span>
+            <span>0</span>
+          </div>
+          <div className="flex-1 min-w-0">
           <svg
             className="w-full h-full overflow-visible"
             viewBox="0 0 600 200"
@@ -267,9 +251,9 @@ export function ReportsView({ initialData }: ReportsViewProps) {
             <line x1="0" y1="140" x2="600" y2="140" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
             <line x1="0" y1="190" x2="600" y2="190" stroke="#e2e8f0" strokeWidth="1" />
 
-            {/* Curva 1: Documentos (Azul) */}
+            {/* Recursos */}
             <path
-              d={docPath}
+              d={resourcePath}
               fill="none"
               stroke="#3b82f6"
               strokeWidth="2.5"
@@ -281,9 +265,9 @@ export function ReportsView({ initialData }: ReportsViewProps) {
               stroke="#8b5cf6"
               strokeWidth="2.5"
             />
-            {/* Curva 3: Chat (Verde) */}
+            {/* Invocaciones de IA */}
             <path
-              d={chatPath}
+              d={aiPath}
               fill="none"
               stroke="#10b981"
               strokeWidth="2.5"
@@ -303,7 +287,12 @@ export function ReportsView({ initialData }: ReportsViewProps) {
               <span key={idx}>{lbl}</span>
             ))}
           </div>
-        </div>
+          </div>
+        </div> : (
+          <div className="p-10 text-center text-sm text-slate-500 border border-dashed border-slate-200 rounded-xl">
+            No hay actividad registrada en este período.
+          </div>
+        )}
       </div>
     </div>
   );

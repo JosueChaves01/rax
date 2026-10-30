@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { closeWorlds, world } from "./helpers";
 import { createProject, getWorkspace } from "@/lib/services/projects";
 import { assignMentor } from "@/lib/services/admin";
@@ -11,6 +11,8 @@ import {
 } from "@/lib/services/mentorship-relation";
 import { createMilestone, diagnoseTaskDelay } from "@/lib/services/roadmap";
 import { createTask, setTaskStatus } from "@/lib/services/validation";
+import { sendMessage } from "@/lib/services/conversation";
+import { SimulatedProvider } from "@/lib/ai/simulated";
 import {
   addNote,
   adoptPostSessionCommitments,
@@ -153,6 +155,14 @@ describe("Fase 4: Ciclo de Sesiones, Briefing 4-Capas y Privacidad Dual (Princip
       true,
     );
     expect(privateNote.isPrivate).toBe(true);
+
+    // The entrepreneur interview must never send private session notes to the AI,
+    // including in the in-memory test repository where RLS is not present.
+    const ai = new SimulatedProvider();
+    const interpret = vi.spyOn(ai, "interpret");
+    await sendMessage(as("ent1", ai), p.id, "Quiero revisar el siguiente paso del proyecto.");
+    expect(interpret).toHaveBeenCalledOnce();
+    expect(interpret.mock.calls[0][0].mentorNotes).not.toContain(privateNote.body);
 
     // 3. Emprendedor consulta el workspace: NO debe ver la nota privada
     const wsEntrepreneur = await getWorkspace(ent, p.id);

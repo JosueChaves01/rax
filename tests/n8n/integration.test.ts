@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateHmacSignature, verifyHmacSignature } from "@/lib/n8n/security";
+import { generateHmacSignature, getN8nSharedSecret, verifyHmacSignature } from "@/lib/n8n/security";
 import { RaxEventSchema, N8nCallbackPayloadSchema, ChatSyncRequestSchema } from "@/lib/n8n/contracts";
 
 describe("Integración RAX ↔ n8n: Seguridad y Contratos", () => {
@@ -14,6 +14,22 @@ describe("Integración RAX ↔ n8n: Seguridad y Contratos", () => {
 
     const result = verifyHmacSignature(body, signature, timestamp, secret);
     expect(result.valid).toBe(true);
+  });
+
+  it("falla cerrado si falta el secreto dedicado aunque exista otro secreto de servidor", () => {
+    const previousShared = process.env.RAX_N8N_SHARED_SECRET;
+    const previousSupabase = process.env.SUPABASE_SECRET_KEY;
+    delete process.env.RAX_N8N_SHARED_SECRET;
+    process.env.SUPABASE_SECRET_KEY = "supabase-secret-must-not-be-reused";
+
+    try {
+      expect(() => getN8nSharedSecret()).toThrow("RAX_N8N_SHARED_SECRET no está configurado");
+    } finally {
+      if (previousShared === undefined) delete process.env.RAX_N8N_SHARED_SECRET;
+      else process.env.RAX_N8N_SHARED_SECRET = previousShared;
+      if (previousSupabase === undefined) delete process.env.SUPABASE_SECRET_KEY;
+      else process.env.SUPABASE_SECRET_KEY = previousSupabase;
+    }
   });
 
   it("rechaza peticiones con timestamp caducado (> 300 segundos)", () => {

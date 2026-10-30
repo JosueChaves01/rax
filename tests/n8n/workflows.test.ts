@@ -65,7 +65,35 @@ describe("Validación Estructural de Workflows de n8n (v1+)", () => {
       // No debe contener valores de API keys reales (sk-or-..., eyJ...)
       expect(content).not.toMatch(/sk-or-v1-[a-zA-Z0-9]{32,}/);
       expect(content).not.toMatch(/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_-]{20,}/);
+      expect(content).not.toContain("test-shared-secret-rax-n8n");
     }
+  });
+
+  it("no reporta eventos como aceptados si RAX-01 no tiene rutas ejecutables", () => {
+    const workflow = JSON.parse(fs.readFileSync(path.join(workflowsDir, "RAX-01-event-ingress.json"), "utf-8"));
+    const response = workflow.nodes.find((node: { id: string }) => node.id === "node-respond-accepted");
+
+    expect(response.parameters.options.responseCode).toBe(503);
+    expect(response.parameters.responseBody).toContain("event was not queued");
+    expect(workflow.nodes.some((node: { id: string }) => node.id === "node-switch-event-router")).toBe(false);
+  });
+
+  it("RAX-91 no declara que reprocesó un evento sin ejecutar un workflow", () => {
+    const workflow = JSON.parse(fs.readFileSync(path.join(workflowsDir, "RAX-91-controlled-reprocessing.json"), "utf-8"));
+    const response = workflow.nodes.find((node: { id: string }) => node.id === "node-respond-reprocess-accepted");
+
+    expect(response.parameters.options.responseCode).toBe(501);
+    expect(response.parameters.responseBody).toContain("nothing was reprocessed");
+  });
+
+  it("RAX-99 identifica sus casos como no ejecutados en vez de falsos aprobados", () => {
+    const workflow = JSON.parse(fs.readFileSync(path.join(workflowsDir, "RAX-99-ai-evaluation.json"), "utf-8"));
+    const code = workflow.nodes.find((node: { id: string }) => node.id === "node-code-execute-suite").parameters.jsCode;
+
+    expect(code).toContain("status: 'not_run'");
+    expect(code).toContain("passed: 0");
+    expect(code).toContain("notRun: results.length");
+    expect(code).not.toContain("status: 'passed'");
   });
 });
 

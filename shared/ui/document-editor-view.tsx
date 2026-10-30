@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { cx } from "@/shared/ui/primitives";
 import { improveDocumentWithAIAction } from "@/app/actions";
 import type { MentorResource } from "@/types/domain";
 
@@ -11,10 +10,7 @@ interface DocumentEditorViewProps {
   initialDoc?: MentorResource;
 }
 
-type EditorTab = "editar" | "vista-previa" | "historial" | "comentarios";
-
 export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProps) {
-  const [tab, setTab] = useState<EditorTab>("editar");
 
   // Secciones del documento
   const [conclusion, setConclusion] = useState(
@@ -33,10 +29,12 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
   ]);
 
   const [aiGenerating, setAiGenerating] = useState(false);
-  const [reviewRequested, setReviewRequested] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [suggestionApplied, setSuggestionApplied] = useState(false);
 
   const handleImproveWithAI = async () => {
     setAiGenerating(true);
+    setAiError(null);
     try {
       const res = await improveDocumentWithAIAction({
         title: initialDoc?.title || "Documento",
@@ -44,12 +42,15 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
         argumentsText: argumentos,
         dataText: datos,
       });
-      if (res?.ok && res.reply) {
-        setConclusion(res.reply);
-        setSuggestions((prev) =>
-          prev.map((s) => ({ ...s, checked: true }))
-        );
+      if (!res.ok) {
+        setAiError(res.error);
+        return;
       }
+      setConclusion(res.reply);
+      setSuggestionApplied(true);
+      setSuggestions((prev) => prev.map((s) => ({ ...s, checked: true })));
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : "No se pudo generar una sugerencia.");
     } finally {
       setAiGenerating(false);
     }
@@ -76,42 +77,13 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-slate-900">
-                {initialDoc?.title || "Propuesta de valor"} — Borrador
+                {initialDoc?.title || "Propuesta de valor"} — Edición temporal
               </h1>
-              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">
-                v1.0
-              </span>
             </div>
             <p className="text-xs text-slate-500">
-              Documento generado con IA • Guardado automáticamente • ID: {docId}
+              Plantilla {docId}. Los cambios de esta pantalla no se guardan ni se versionan.
             </p>
           </div>
-        </div>
-
-        {/* Pestañas: [Editar] | [Vista previa] | [Historial] | [Comentarios] */}
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0">
-          {(
-            [
-              ["editar", "Editar"],
-              ["vista-previa", "Vista previa"],
-              ["historial", "Historial"],
-              ["comentarios", "Comentarios"],
-            ] as const
-          ).map(([t, label]) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={cx(
-                "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
-                tab === t
-                  ? "bg-white text-slate-900 shadow-2xs"
-                  : "text-slate-500 hover:text-slate-900"
-              )}
-            >
-              {label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -124,7 +96,7 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
               {initialDoc?.title || "Propuesta de Valor"}
             </h2>
             <p className="text-xs text-slate-500 mt-1 font-mono">
-              Estructura piramidal de Minto
+              Plantilla: Pirámide de Minto
             </p>
           </div>
 
@@ -170,9 +142,11 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
           {/* Botón Añadir sección */}
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+            disabled
+            title="La edición de secciones todavía no está disponible."
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 cursor-not-allowed"
           >
-            + Añadir sección personalizada
+            + Añadir sección (no disponible)
           </button>
         </div>
 
@@ -216,45 +190,45 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
             {/* Resumen analítico */}
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
               <p className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
-                Resumen de coherencia
+                Revisión orientativa
               </p>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                El documento sigue la estructura de la pirámide de Minto, con una conclusión clara y argumentos relevantes respaldados por datos tempranos.
+                Revisa que la conclusión sea breve y que los argumentos y cifras se respalden con evidencia registrada. Esta pantalla aún no valida coherencia automáticamente.
               </p>
             </div>
 
-            {/* Botón Generar versión mejorada */}
+            {/* Esta acción solo ofrece una sugerencia temporal; no guarda una versión. */}
             <button
               type="button"
               disabled={aiGenerating}
               onClick={handleImproveWithAI}
               className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
-              {aiGenerating ? "Optimizando con IA…" : "Generar versión mejorada"}
+              {aiGenerating ? "Preparando sugerencia…" : "Sugerir reformulación"}
             </button>
 
-            {/* Botones al pie: Descartar / Solicitar revisión */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                className="text-xs text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
-              >
-                Descartar borrador
-              </button>
-              <button
-                type="button"
-                onClick={() => setReviewRequested(true)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs transition-colors cursor-pointer"
-              >
-                {reviewRequested ? "✓ Revisión solicitada" : "Solicitar revisión"}
-              </button>
-            </div>
-
-            {reviewRequested && (
-              <div className="p-2.5 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg">
-                Notificación enviada a tu mentor para su retroalimentación.
+            {aiError && (
+              <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                {aiError}
               </div>
             )}
+            {suggestionApplied && (
+              <div role="status" className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                Sugerencia aplicada solo en esta sesión; aún no está guardada.
+              </div>
+            )}
+
+            {/* El modelo de documentos aún no tiene guardado/revisión persistentes. */}
+            <div className="pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                disabled
+                title="El guardado y la solicitud de revisión todavía no están disponibles."
+                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-100 text-xs font-semibold text-slate-500 cursor-not-allowed"
+              >
+                Guardar y solicitar revisión (no disponible)
+              </button>
+            </div>
           </div>
         </div>
       </div>

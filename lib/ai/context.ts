@@ -53,7 +53,10 @@ export function buildInterviewContext(input: {
       .map((i) => ({ id: i.id, title: i.title, content: i.content })),
     coveredDimensions: [...covered],
     pendingDimensions: DIMENSIONS.filter((d) => !covered.has(d)),
-    mentorNotes: [...input.mentorNotes]
+    // Privacy is enforced here too, even when the caller uses the in-memory repository
+    // (which has no RLS) or another data source returns a wider set of notes.
+    mentorNotes: input.mentorNotes
+      .filter((n) => !n.isPrivate)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .slice(-CONTEXT_LIMITS.mentorNotes)
       .map((n) => n.body),

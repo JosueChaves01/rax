@@ -32,3 +32,7 @@ Este documento lista las restricciones técnicas, límites de cuota y dependenci
 - No se detectó una instancia de n8n ni Docker en el host de desarrollo local.
 - Por tanto, la instalación en un servidor de n8n queda catalogada como **pendiente de importación** por el operador, siguiendo los pasos de [setup.md](setup.md) utilizando los 19 archivos JSON provistos en `workflows/n8n/`.
 
+## 4. Bloqueo del contrato de callback
+
+`POST /api/n8n/callback` exige `x-rax-signature` y `x-rax-timestamp` HMAC válidos. Los nodos HTTP de callback de los workflows exportados actualmente no generan esas cabeceras, por lo que el endpoint los rechazará con `401`. No se debe quitar esta autenticación para hacerlos funcionar: antes de activar los workflows, cada callback debe firmar exactamente el cuerpo enviado con `RAX_N8N_SHARED_SECRET`. Además, el endpoint aún registra metadatos de auditoría, no persiste propuestas para revisión; hasta implementar esa persistencia, no se debe anunciar que el resultado quedó procesado.
+

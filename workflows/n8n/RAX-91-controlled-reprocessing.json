@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst headers = $input.first().json.headers || {};\nconst body = $input.first().json.body || {};\n\nconst signatureHeader = headers['x-rax-signature'];\nconst timestampHeader = headers['x-rax-timestamp'];\nconst rawBodyStr = JSON.stringify(body);\n\n// 1. Verificación de seguridad HMAC estricta\nconst secret = $env.RAX_N8N_SHARED_SECRET || 'test-shared-secret-rax-n8n';\nconst hmac = crypto.createHmac('sha256', secret);\nconst expectedSig = 'sha256=' + hmac.update(`${timestampHeader}.${rawBodyStr}`).digest('hex');\n\nif (signatureHeader !== expectedSig) {\n  return [{\n    json: {\n      authorized: false,\n      error: 'Invalid HMAC signature'\n    }\n  }];\n}\n\n// 2. Comprobar rol administrativo o de servicio\nif (body.actor?.role !== 'admin' && body.actor?.role !== 'system') {\n  return [{\n    json: {\n      authorized: false,\n      error: 'Reprocessing requires admin or system role'\n    }\n  }];\n}\n\nconst originalEvent = body.originalEvent || {};\nconst originalCorrelationId = originalEvent.correlationId || body.correlationId;\nconst reprocessCorrelationId = `${originalCorrelationId}_re_${Date.now()}`;\n\nreturn [{\n  json: {\n    authorized: true,\n    reprocessCorrelationId,\n    originalCorrelationId,\n    targetWorkflow: body.targetWorkflow,\n    reprocessReason: body.reason || 'manual_admin_retry',\n    event: {\n      ...originalEvent,\n      correlationId: reprocessCorrelationId,\n      reprocessingOf: originalCorrelationId\n    }\n  }\n}];"
+        "jsCode": "const crypto = require('crypto');\n\nconst headers = $input.first().json.headers || {};\nconst body = $input.first().json.body || {};\n\nconst signatureHeader = headers['x-rax-signature'];\nconst timestampHeader = headers['x-rax-timestamp'];\nconst rawBodyStr = JSON.stringify(body);\n\n// 1. Verificación de seguridad HMAC estricta\nconst secret = $env.RAX_N8N_SHARED_SECRET;\nif (!secret) { return [{ json: { valid: false, authorized: false, statusCode: 503, error: 'RAX_N8N_SHARED_SECRET is not configured' } }]; }\nconst hmac = crypto.createHmac('sha256', secret);\nconst expectedSig = 'sha256=' + hmac.update(`${timestampHeader}.${rawBodyStr}`).digest('hex');\n\nif (signatureHeader !== expectedSig) {\n  return [{\n    json: {\n      authorized: false,\n      error: 'Invalid HMAC signature'\n    }\n  }];\n}\n\n// 2. Comprobar rol administrativo o de servicio\nif (body.actor?.role !== 'admin' && body.actor?.role !== 'system') {\n  return [{\n    json: {\n      authorized: false,\n      error: 'Reprocessing requires admin or system role'\n    }\n  }];\n}\n\nconst originalEvent = body.originalEvent || {};\nconst originalCorrelationId = originalEvent.correlationId || body.correlationId;\nconst reprocessCorrelationId = `${originalCorrelationId}_re_${Date.now()}`;\n\nreturn [{\n  json: {\n    authorized: true,\n    reprocessCorrelationId,\n    originalCorrelationId,\n    targetWorkflow: body.targetWorkflow,\n    reprocessReason: body.reason || 'manual_admin_retry',\n    event: {\n      ...originalEvent,\n      correlationId: reprocessCorrelationId,\n      reprocessingOf: originalCorrelationId\n    }\n  }\n}];"
       },
       "id": "node-code-verify-admin-reprocess",
       "name": "Verify Admin Authorization",
@@ -54,13 +54,13 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ reprocessAccepted: true, originalCorrelationId: $json.originalCorrelationId, newCorrelationId: $json.reprocessCorrelationId, queuedAt: new Date().toISOString() }) }}",
+        "responseBody": "={{ JSON.stringify({ reprocessAccepted: false, error: \"Controlled reprocessing is not connected to an execution store; nothing was reprocessed.\" }) }}",
         "options": {
-          "responseCode": 202
+          "responseCode": 501
         }
       },
       "id": "node-respond-reprocess-accepted",
-      "name": "Respond 202 Reprocess Queued",
+      "name": "Report Reprocessing Unavailable",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -113,7 +113,7 @@
       "main": [
         [
           {
-            "node": "Respond 202 Reprocess Queued",
+            "node": "Report Reprocessing Unavailable",
             "type": "main",
             "index": 0
           }

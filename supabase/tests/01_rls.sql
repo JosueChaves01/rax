@@ -110,6 +110,25 @@ insert into public.mentor_assignments (project_id, mentor_id, assigned_by)
 values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c',
         '00000000-0000-0000-0000-0000000000ad');
 
+-- Notas de sesión: el dueño ve las compartidas; solo el autor mentor ve las privadas.
+select pg_temp.act(null);
+insert into public.mentor_sessions (id, project_id, mentor_id, kind, status)
+values ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
+        '00000000-0000-0000-0000-00000000000c', 'follow_up', 'pending');
+insert into public.session_notes (id, session_id, project_id, author_id, kind, body, is_private)
+values
+  ('51000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001',
+   '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'observation', 'Compartida', false),
+  ('51000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000001',
+   '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'observation', 'Privada', true);
+select pg_temp.act('00000000-0000-0000-0000-00000000000a');
+select pg_temp.expect('Ana ve la nota compartida, no la privada',
+  (select count(*) filter (where not is_private) = 1 and count(*) filter (where is_private) = 0
+   from public.session_notes where session_id = '50000000-0000-0000-0000-000000000001'));
+select pg_temp.act('00000000-0000-0000-0000-00000000000c');
+select pg_temp.expect('Carla autora ve sus notas compartidas y privadas',
+  (select count(*) = 2 from public.session_notes where session_id = '50000000-0000-0000-0000-000000000001'));
+
 select pg_temp.act('00000000-0000-0000-0000-00000000000c');
 select pg_temp.expect('Carla asignada ve el proyecto y el diagnóstico',
   (select count(*) from public.projects) = 1 and (select count(*) from public.diagnosis_items) = 1);

@@ -20,11 +20,9 @@ export default function ChatPage() {
     {
       id: "m1",
       sender: "ai",
-      senderName: "RAX IA Assistant",
-      text: "¡Hola! Estoy conectado con el workflow de n8n (RAX-02) y tengo acceso al contexto de tu proyecto. ¿En qué objetivo o bloqueo deseas que trabajemos hoy?",
-      time: "En línea",
-      chips: ["Estructurar mi propuesta de valor", "Resolver bloqueo con clientes", "Preparar la próxima reunión"],
-      provider: "n8n",
+      senderName: "RAX",
+      text: "Este chat no está vinculado a un proyecto y el historial no se guarda. Puedes enviar una consulta general mientras el servicio esté disponible.",
+      time: "Aviso",
     },
   ]);
 
@@ -47,15 +45,23 @@ export default function ChatPage() {
 
     try {
       const res = await sendN8nChatAction(textToSend, messages);
-      const aiMsg: Message = {
-        id: String(Date.now() + 1),
-        sender: "ai",
-        senderName: "RAX IA Assistant",
-        text: res.reply,
-        time: "Ahora",
-        chips: res.chips,
-        provider: res.provider,
-      };
+      const aiMsg: Message = res.ok
+        ? {
+            id: String(Date.now() + 1),
+            sender: "ai",
+            senderName: "RAX",
+            text: res.reply,
+            time: "Ahora",
+            chips: res.chips,
+            provider: res.provider,
+          }
+        : {
+            id: String(Date.now() + 1),
+            sender: "ai",
+            senderName: "RAX",
+            text: res.error,
+            time: "Ahora",
+          };
       setMessages((prev) => [...prev, aiMsg]);
     } catch (err: unknown) {
       const errorMsg: Message = {
@@ -86,7 +92,7 @@ export default function ChatPage() {
 
   return (
     <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-slate-200/80 shadow-xs flex flex-col h-[650px] overflow-hidden">
-      {/* 1. Cabecera del Chat Conectado a n8n */}
+      {/* Chat general; el historial vive solo en esta sesión del navegador. */}
       <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs uppercase">
@@ -94,14 +100,10 @@ export default function ChatPage() {
           </div>
           <div>
             <h1 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <span>Chat de Mentoría Contextual</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 font-mono">
-                Workflow RAX-02 Activo
-              </span>
+              <span>Chat general</span>
             </h1>
             <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Sincronizado vía túnel con webhook /rax-chat
+              Sin contexto de proyecto · Historial no persistente
             </p>
           </div>
         </div>
@@ -167,7 +169,7 @@ export default function ChatPage() {
         {isLoading && (
           <div className="flex flex-col items-start space-y-1">
             <span className="text-[10px] text-slate-500 font-mono px-1">
-              RAX IA Assistant • procesando con n8n…
+            RAX • consultando el servicio de chat…
             </span>
             <div className="bg-slate-100 text-slate-500 border border-slate-200/60 rounded-2xl p-4 text-xs flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />

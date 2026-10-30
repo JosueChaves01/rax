@@ -12,11 +12,8 @@ export interface SignatureValidationResult {
  * Obtiene el secreto compartido para firmar solicitudes entre RAX y n8n.
  */
 export function getN8nSharedSecret(): string {
-  const secret = process.env.RAX_N8N_SHARED_SECRET || process.env.SUPABASE_SECRET_KEY;
+  const secret = process.env.RAX_N8N_SHARED_SECRET;
   if (!secret) {
-    if (process.env.NODE_ENV === "test") {
-      return "test-shared-secret-rax-n8n";
-    }
     throw new Error("RAX_N8N_SHARED_SECRET no está configurado en el entorno.");
   }
   return secret;

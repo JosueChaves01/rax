@@ -14,13 +14,13 @@ export default function LearningPage() {
   const [chatMessages, setChatMessages] = useState<Array<{ sender: "ai" | "user"; text: string; provider?: string }>>([
     {
       sender: "ai",
-      text: "Hola. Estoy conectado con el flujo de n8n para resolver dudas sobre el método PREP y evaluar tu ejercicio. ¿En qué te ayudo?",
-      provider: "n8n",
+      text: "Puedes preguntar sobre PREP cuando el servicio esté disponible. Esta conversación no se guarda.",
     },
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
 
   const promptChips = [
     "Dar un ejercicio similar",
@@ -40,15 +40,16 @@ export default function LearningPage() {
       const res = await sendN8nChatAction(prompt, chatMessages);
       setChatMessages((prev) => [
         ...prev,
-        { sender: "ai" as const, text: res.reply, provider: res.provider },
+        res.ok
+          ? { sender: "ai" as const, text: res.reply, provider: res.provider }
+          : { sender: "ai" as const, text: res.error },
       ]);
-    } catch {
+    } catch (error) {
       setChatMessages((prev) => [
         ...prev,
         {
           sender: "ai" as const,
-          text: `En el marco PREP: Punto (conclusión), Razón (por qué), Ejemplo (prueba o caso real) y Punto (cierre contundente). Aplícalo para responder objeciones comerciales sin titubeos.`,
-          provider: "openrouter",
+          text: error instanceof Error ? error.message : "No se pudo conectar con el servicio de chat.",
         },
       ]);
     } finally {
@@ -67,12 +68,17 @@ export default function LearningPage() {
   const handleEvaluate = async () => {
     if (!exerciseText.trim() || isEvaluating) return;
     setIsEvaluating(true);
+    setEvaluationError(null);
     try {
       const res = await evaluateExerciseAction(exerciseText);
       if (res.ok) {
         setEvaluation({ score: res.score, feedback: res.feedback });
         setShowAiModal(true);
+      } else {
+        setEvaluationError(res.error);
       }
+    } catch (error) {
+      setEvaluationError(error instanceof Error ? error.message : "No se pudo evaluar el ejercicio.");
     } finally {
       setIsEvaluating(false);
     }
@@ -87,7 +93,7 @@ export default function LearningPage() {
             Aprendizaje aplicado
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Micro-módulos y ejercicios prácticos asignados con evaluación en tiempo real mediante workflows de n8n.
+            Práctica PREP. Las asignaciones, el historial y el progreso todavía no se guardan.
           </p>
         </div>
 
@@ -176,7 +182,7 @@ export default function LearningPage() {
                   onClick={handleEvaluate}
                   className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  {isEvaluating ? "Evaluando con n8n…" : "✨ Evaluar mi respuesta con n8n"}
+                  {isEvaluating ? "Evaluando…" : "✨ Evaluar mi respuesta"}
                 </button>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
@@ -189,6 +195,9 @@ export default function LearningPage() {
                 placeholder="Escribe aquí tu respuesta aplicando el método PREP (Punto, Razón, Ejemplo, Punto)..."
                 className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-white leading-relaxed focus:outline-none focus:border-blue-600"
               />
+              {evaluationError && (
+                <p role="alert" className="text-xs text-rose-700">{evaluationError}</p>
+              )}
             </div>
 
             {/* Estado Evaluación de IA */}

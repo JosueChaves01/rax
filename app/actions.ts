@@ -153,26 +153,11 @@ export async function signInAction(_: AuthState, form: FormData): Promise<AuthSt
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
   if (!email || !password) return { error: "Completá correo y contraseña.", email };
-  const origin = await resolveRequestOrigin();
   const supabase = await createUserClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: authMessage(error.code, "No pudimos iniciar sesión. Probá de nuevo."), email };
   const d = await getDeps();
   redirect(safeNext(form.get("next")) ?? (d ? homeFor(d.actor) : "/bienvenida"));
-}
-
-async function resolveRequestOrigin(): Promise<string> {
-  try {
-    const list = await headers();
-    const forwardedHost = list.get("x-forwarded-host") ?? list.get("host");
-    const forwardedProto = list.get("x-forwarded-proto") ?? "https";
-    if (forwardedHost && !forwardedHost.includes("localhost")) {
-      return `${forwardedProto}://${forwardedHost}`;
-    }
-  } catch {
-    // Fuera de un contexto HTTP (ej. pruebas unitarias)
-  }
-  return appUrl();
 }
 
 export async function signUpAction(_: AuthState, form: FormData): Promise<AuthState> {
@@ -183,7 +168,6 @@ export async function signUpAction(_: AuthState, form: FormData): Promise<AuthSt
   if (name.length < 2) return { error: "Contanos cómo te llamás.", name, email };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Revisá el correo.", name, email };
   if (password.length < 8) return { error: "La contraseña necesita al menos 8 caracteres.", name, email };
-  const origin = await resolveRequestOrigin();
   const supabase = await createUserClient();
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -218,7 +202,6 @@ export async function googleSignInAction(_: AuthState, form: FormData): Promise<
 
 export async function signOutAction() {
   if (!missingConfig().length) {
-    const origin = await resolveRequestOrigin();
     const supabase = await createUserClient();
     await supabase.auth.signOut();
   }
@@ -525,15 +508,18 @@ export const improveDocumentWithAIAction = async (input: {
   argumentsText: string;
   dataText: string;
 }) => {
-  const prompt = `Aplica el Principio de la Pirámide de Minto para optimizar este documento:\nTítulo: ${input.title}\nConclusión actual: ${input.conclusion}\nArgumentos actuales: ${input.argumentsText}\nDatos y evidencia: ${input.dataText}\n\nDevuelve una versión reformulada estructurada con:\n1. Conclusión principal contundente y directa.\n2. Tres argumentos de apoyo concisos y mutuamente excluyentes.\n3. Datos y próximos pasos de validación.`;
+  const d = await getDeps();
+  if (!d) return { ok: false as const, error: "Inicia sesión para pedir una sugerencia de IA." };
+
+  const prompt = `Sugiere una reformulación breve de la conclusión usando el Principio de la Pirámide de Minto.\nTítulo: ${input.title}\nConclusión actual: ${input.conclusion}\nArgumentos actuales: ${input.argumentsText}\nDatos y evidencia aportados: ${input.dataText}\n\nNo inventes cifras, clientes, resultados, fuentes ni evidencia. Si faltan datos, no los completes. Devuelve solo la conclusión sugerida y cualquier incertidumbre relevante.`;
 
   try {
     const chatRes = await invokeSyncChatN8n({
-      correlationId: `doc_opt_${Date.now()}`,
+      correlationId: d.newId("doc_opt"),
       projectId: "doc_preview",
-      messageId: `msg_${Date.now()}`,
+      messageId: d.newId("msg"),
       message: prompt,
-      actor: { id: "doc_editor", role: "entrepreneur", verified: true },
+      actor: { id: d.actor.id, role: d.actor.role, verified: true },
       context: {
         projectName: "Documentos",
         projectSummary: "Optimización de documento con pirámide de Minto",
@@ -544,25 +530,30 @@ export const improveDocumentWithAIAction = async (input: {
         mentorNotes: [],
       },
     });
-    return { ok: true as const, reply: chatRes.response?.reply || "" };
+    const reply = chatRes.response?.reply?.trim();
+    if (!chatRes.ok || !reply) {
+      return { ok: false as const, error: chatRes.error || "La IA no devolvió una sugerencia válida." };
+    }
+    return { ok: true as const, reply };
   } catch {
-    return {
-      ok: true as const,
-      reply: `**Conclusión Principal:**\nTransformamos la gestión de pequeñas empresas mediante una solución ágil, accesible y asistida por IA que multiplica sus ventas y reduce en un tercio su carga operativa.\n\n**Argumentos de Apoyo:**\n1. Despliegue en menos de 24 horas sin costos de implementación.\n2. Mentoría contextualizada y enfocada en métricas comerciales.\n3. Integración nativa con herramientas existentes.\n\n**Datos de Validación:**\nRespaldado por 3 pilotos completados y 30% de ahorro comprobado.`,
-    };
+    return { ok: false as const, error: "No se pudo conectar con el servicio de IA." };
   }
 };
 
 export const evaluateExerciseAction = async (exerciseText: string) => {
-  const prompt = `Evalúa la siguiente respuesta de un emprendedor al ejercicio de comunicación comercial con el marco PREP:\nObjeción: «Tu servicio parece caro frente a alternativas de software gratuitas».\nRespuesta del emprendedor:\n"${exerciseText}"\n\nAnaliza:\n1. P (Punto): ¿Formula una afirmación clara y directa?\n2. R (Razón): ¿Explica el porqué del precio/valor sin ponerse a la defensiva?\n3. E (Ejemplo): ¿Aporta un caso real o métrica cuantificable?\n4. P (Punto final): ¿Reitera el beneficio y hace un llamado a la acción?\n\nCalifica sobre 10 (ej: 9/10) y ofrece una retroalimentación constructiva de máximo 3 frases.`;
+  const d = await getDeps();
+  if (!d) return { ok: false as const, error: "Inicia sesión para evaluar tu ejercicio." };
+  const validatedExercise = V.parse(V.Text(4000), exerciseText.trim());
+  if (!validatedExercise) return { ok: false as const, error: "Escribe una respuesta antes de evaluarla." };
+  const prompt = `Evalúa esta respuesta usando el marco PREP:\nObjeción: «Tu servicio parece caro frente a alternativas de software gratuitas».\nRespuesta del emprendedor:\n"${validatedExercise}"\n\nAnaliza el Punto, la Razón, el Ejemplo y el Punto final. No asumas que las cifras o casos son ciertos: señala que no puedes verificarlos. Devuelve una calificación explícita sobre 10 y hasta tres frases de retroalimentación constructiva.`;
 
   try {
     const chatRes = await invokeSyncChatN8n({
-      correlationId: `eval_prep_${Date.now()}`,
+      correlationId: d.newId("eval_prep"),
       projectId: "prep_eval",
-      messageId: `msg_${Date.now()}`,
+      messageId: d.newId("msg"),
       message: prompt,
-      actor: { id: "learner", role: "entrepreneur", verified: true },
+      actor: { id: d.actor.id, role: d.actor.role, verified: true },
       context: {
         projectName: "Aprendizaje Aplicado",
         projectSummary: "Evaluación de ejercicio PREP de objeciones comerciales",
@@ -576,20 +567,17 @@ export const evaluateExerciseAction = async (exerciseText: string) => {
 
     const reply = chatRes.response?.reply || "";
     const scoreMatch = reply.match(/(\d+)\s*\/\s*10/);
-    const score = scoreMatch ? `${scoreMatch[1]}/10` : "9/10";
+    if (!chatRes.ok || !scoreMatch) {
+      return { ok: false as const, error: chatRes.error || "La IA no devolvió una evaluación con puntaje válido." };
+    }
 
     return {
       ok: true as const,
-      score,
+      score: `${scoreMatch[1]}/10`,
       feedback: reply,
     };
   } catch {
-    return {
-      ok: true as const,
-      score: "9/10",
-      feedback:
-        "Excelente estructura PREP. Comienzas validando la objeción, justificas el diferencial de ahorro de 15 horas y aportas el dato concreto de $800 con tu cliente Beta. El cierre es contundente.",
-    };
+    return { ok: false as const, error: "No se pudo conectar con el servicio de IA." };
   }
 };
 
@@ -808,15 +796,12 @@ export const recordCycleEvaluationAction = async (
 export async function sendN8nChatAction(
   message: string,
   history: Array<{ sender: "user" | "ai" | "mentor"; text: string }> = []
-): Promise<{
-  ok: boolean;
-  reply: string;
-  chips: string[];
-  provider: "n8n" | "openrouter" | "simulated";
-  error?: string;
-}> {
+): Promise<
+  | { ok: true; reply: string; chips: string[]; provider: "n8n" }
+  | { ok: false; error: string }
+> {
   const d = await getDeps();
-  if (!d) return { ok: false, reply: "", chips: [], provider: "simulated", error: "No autenticado" };
+  if (!d) return { ok: false, error: "Inicia sesión para usar el chat." };
 
   const correlationId = d.newId("corr");
   const recentMessages = history.slice(-6).map((m) => ({
@@ -848,7 +833,7 @@ export async function sendN8nChatAction(
       },
     });
 
-    if (n8nRes.ok && n8nRes.response?.reply) {
+    if (n8nRes.ok && n8nRes.response?.reply?.trim()) {
       const reply = n8nRes.response.reply;
       const chips =
         n8nRes.response.proposals && n8nRes.response.proposals.length > 0
@@ -857,18 +842,9 @@ export async function sendN8nChatAction(
 
       return { ok: true, reply, chips, provider: "n8n" };
     }
+    return { ok: false, error: n8nRes.error || "El servicio de chat no devolvió una respuesta." };
   } catch (err: unknown) {
-    console.warn("[n8n-chat] Fallback activado:", err);
+    console.warn("[n8n-chat] Falló la solicitud:", err);
+    return { ok: false, error: "No se pudo conectar con el servicio de chat." };
   }
-
-  // 2. Fallback resiliente si n8n no está disponible
-  const fallbackReply = `Para responder a "${message.trim()}", te sugiero aplicar el marco de la Pirámide de Minto:
-1. Conclusión principal: Define tu valor en una frase inequívoca.
-2. Argumentos de soporte: 3 razones fundamentales que mitigan el riesgo del cliente.
-3. Evidencia concreta: Cifras o testimonios reales obtenidos en tus entrevistas.
-
-¿Quieres que elaboremos un borrador personalizado en el Centro de Documentos?`;
-
-  const fallbackChips = ["Generar plantilla con IA", "Ver ejemplo práctico", "Agendar revisión"];
-  return { ok: true, reply: fallbackReply, chips: fallbackChips, provider: "openrouter" };
 }
