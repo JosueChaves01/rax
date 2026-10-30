@@ -162,7 +162,7 @@ export function EntrepreneurDashboard({
                   ? "bg-blue-50 border-blue-200 ring-2 ring-blue-500/20"
                   : step.done
                     ? "bg-emerald-50/50 border-emerald-200 text-emerald-900"
-                    : "bg-slate-50 border-slate-200 text-slate-400"
+                    : "bg-slate-50 border-slate-200 text-slate-600"
               }`}
             >
               <div
@@ -171,7 +171,7 @@ export function EntrepreneurDashboard({
                     ? "bg-blue-600 text-white"
                     : step.done
                       ? "bg-emerald-600 text-white"
-                      : "bg-slate-200 text-slate-600"
+                      : "bg-slate-200 text-slate-700"
                 }`}
               >
                 {step.done ? "✓" : step.num}
@@ -200,7 +200,7 @@ export function EntrepreneurDashboard({
                 Tu próximo paso
               </span>
               {nextTask?.dueDate && (
-                <span className="text-xs text-slate-400 font-medium">
+                <span className="text-xs text-slate-500 font-medium">
                   Vence: {formatDate(nextTask.dueDate)}
                 </span>
               )}
@@ -264,7 +264,7 @@ export function EntrepreneurDashboard({
               <h2 className="text-base font-bold text-slate-900">
                 Actividad reciente
               </h2>
-              <span className="text-xs text-slate-400 font-mono">Últimas 48 h</span>
+              <span className="text-xs text-slate-500 font-mono">Últimas 48 h</span>
             </div>
 
             {recentActivities.length > 0 ? (
@@ -280,18 +280,18 @@ export function EntrepreneurDashboard({
                       <p className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
                         {act.title}
                       </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
+                      <p className="text-[11px] text-slate-500 mt-0.5 font-mono">
                         {act.time}
                       </p>
                     </div>
-                    <span className="text-slate-300 group-hover:text-slate-600 text-xs transition-colors">
+                    <span className="text-slate-400 group-hover:text-slate-600 text-xs transition-colors">
                       →
                     </span>
                   </Link>
                 ))}
               </div>
             ) : (
-              <div className="mt-8 text-center text-slate-400 text-xs py-8">
+              <div className="mt-8 text-center text-slate-500 text-xs py-8">
                 Sin actividad reciente registrada en las últimas 48 horas.
               </div>
             )}

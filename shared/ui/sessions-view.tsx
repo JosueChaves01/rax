@@ -27,7 +27,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
   const activeProject = projects.find((p) => p.id === activeSession?.projectId);
   const activeGoals = goals.filter((g) => g.status !== "discarded");
 
-  // Si tiene briefing generado previamente o los timeboxes del flujo
+  // Agenda basada en el briefing generado por n8n
   const agendaList = activeSession?.preSessionBriefing?.suggestedAgenda?.length
     ? activeSession.preSessionBriefing.suggestedAgenda.map((item, idx) => ({
         id: idx + 1,
@@ -35,12 +35,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
         duration: idx === 0 ? "15 min" : idx === 1 ? "20 min" : idx === 2 ? "15 min" : "10 min",
         desc: "Punto estratégico estructurado para el encuentro.",
       }))
-    : [
-        { id: 1, title: "1. Revisión de avances", duration: "15 min", desc: "Verificación de tareas completadas y hallazgos en entrevistas con clientes." },
-        { id: 2, title: "2. Discusión de bloqueos", duration: "20 min", desc: "Análisis del obstáculo principal y causas de retraso reportadas." },
-        { id: 3, title: "3. Plan de acción", duration: "15 min", desc: "Definición del nuevo experimento de validación comercial." },
-        { id: 4, title: "4. Cierre y próximos pasos", duration: "10 min", desc: "Acuerdos rubricados y asignación de responsables." },
-      ];
+    : [];
 
   const handleGenerateAgendaWithN8n = () => {
     if (!activeSession) return;
@@ -73,7 +68,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
               {activeSession ? (activeSession.status === "completed" ? "Completada" : "Encuentro activo") : "Sin sesiones"}
             </span>
-            <span className="text-xs text-slate-400 font-mono">
+            <span className="text-xs text-slate-500 font-mono">
               {activeSession?.scheduledAt ? formatDate(activeSession.scheduledAt) : "Programación flexible"}
             </span>
           </div>
@@ -147,7 +142,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
                 <h2 className="text-base font-bold text-slate-900">
                   Agenda propuesta por IA (Workflow RAX-05)
                 </h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-[11px] text-slate-500 mt-0.5">
                   Estructurada en bloques de tiempo (timeboxes)
                 </p>
               </div>
@@ -162,24 +157,32 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
             </div>
 
             <div className="space-y-3">
-              {agendaList.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-start justify-between gap-3"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-900">
-                      {item.title}
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                      {item.desc}
-                    </p>
+              {agendaList.length > 0 ? (
+                agendaList.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-start justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900">
+                        {item.title}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        {item.desc}
+                      </p>
+                    </div>
+                    <span className="px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-mono font-semibold text-slate-700 shrink-0">
+                      {item.duration}
+                    </span>
                   </div>
-                  <span className="px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-mono font-semibold text-slate-700 shrink-0">
-                    {item.duration}
-                  </span>
+                ))
+              ) : (
+                <div className="p-8 text-center text-slate-500 text-xs border border-dashed border-slate-200 rounded-xl">
+                  {activeSession
+                    ? "No se ha generado una agenda automática aún. Pulsa «Regenerar con n8n» para crear una agenda a partir del contexto del proyecto."
+                    : "No hay una sesión activa seleccionada."}
                 </div>
-              ))}
+              )}
             </div>
 
             <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-xs text-blue-800">
@@ -196,7 +199,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
                 Abrir sala de notas del proyecto →
               </Link>
             ) : (
-              <span className="text-xs text-slate-400">Selecciona un proyecto para abrir notas</span>
+              <span className="text-xs text-slate-500">Selecciona un proyecto para abrir notas</span>
             )}
           </div>
         </div>
@@ -208,48 +211,58 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
               <h2 className="text-base font-bold text-slate-900">
                 Contexto relevante
               </h2>
-              <span className="text-xs text-slate-400 font-mono">En vivo</span>
+              <span className="text-xs text-slate-500 font-mono">En vivo</span>
             </div>
 
             <div className="space-y-4">
               <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Objetivo principal activo
                 </p>
                 <p className="text-xs font-bold text-slate-900 mt-1">
-                  {activeGoals[0]?.title || "Validar propuesta de valor con clientes tempranos"}
+                  {activeGoals[0]?.title || "Sin objetivos registrados aún"}
                 </p>
               </div>
 
               <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60">
                 <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
                   <span>Progreso del ciclo</span>
-                  <span className="font-mono text-emerald-600 font-bold">
+                  <span className="font-mono text-emerald-700 font-bold">
                     {activeGoals.length > 0
                       ? `${Math.round(
                           (activeGoals.filter((g) => g.status === "achieved").length / activeGoals.length) * 100
                         )}%`
-                      : "75%"}
+                      : "0%"}
                   </span>
                 </div>
                 <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full w-3/4" />
+                  <div
+                    className="h-full bg-emerald-600 rounded-full transition-all"
+                    style={{
+                      width:
+                        activeGoals.length > 0
+                          ? `${Math.round(
+                              (activeGoals.filter((g) => g.status === "achieved").length / activeGoals.length) * 100
+                            )}%`
+                          : "0%",
+                    }}
+                  />
                 </div>
               </div>
 
               <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Diagnóstico y bloqueos
                 </p>
                 <p className="text-xs font-semibold text-slate-700 mt-1">
                   {activeSession?.preSessionBriefing?.pendingTopicsSummary
                     ? `⚠️ ${activeSession.preSessionBriefing.pendingTopicsSummary}`
-                    : "⚠️ Comunicación con clientes en fase de prospección comercial"}
+                    : "Sin bloqueos pendientes reportados"}
                 </p>
               </div>
 
               <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Compromisos pactados
                 </p>
                 <p className="text-xs font-bold text-slate-800 mt-1">

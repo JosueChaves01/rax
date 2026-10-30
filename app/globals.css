@@ -89,6 +89,50 @@ body {
   color: var(--color-canvas-muted);
 }
 
+.ambient .eyebrow,
+.bg-panel .eyebrow,
+.bg-raised .eyebrow {
+  color: #94a3b8;
+}
+
+/* Manejo adaptativo de contraste para tokens semánticos */
+.text-highlight {
+  color: #b45309; /* En lienzo claro: ámbar-700 con contraste accesible (4.6:1 sobre blanco) */
+}
+
+.ambient .text-highlight,
+.bg-panel .text-highlight,
+.bg-raised .text-highlight,
+[class*="bg-[#0b"] .text-highlight {
+  color: #ffd21f; /* En fondo oscuro: amarillo brillante con contraste >11:1 */
+}
+
+.text-muted {
+  color: #64748b; /* slate-500 en lienzo claro (contraste 4.77:1) */
+}
+
+.ambient .text-muted,
+.bg-panel .text-muted,
+.bg-raised .text-muted {
+  color: #a6a7ad; /* gris claro sobre fondo oscuro (contraste >7:1) */
+}
+
+.text-faint {
+  color: #475569; /* slate-600 en lienzo claro (contraste 7:1) */
+}
+
+.ambient .text-faint,
+.bg-panel .text-faint,
+.bg-raised .text-faint {
+  color: #94a3b8; /* slate-400 en fondo oscuro (contraste 7.2:1) */
+}
+
+/* Tarjetas y paneles oscuros conservan texto claro por defecto */
+.bg-panel,
+.bg-raised {
+  color: #f8fafc;
+}
+
 /* Lienzo de la aplicación moderna */
 .app-workspace {
   background-color: #f8fafc;
@@ -106,6 +150,7 @@ body {
 
 /* Luz ambiental cian + líneas LED del techo (decoración contenida en hero/encabezados) */
 .ambient {
+  color: #ffffff;
   background:
     radial-gradient(60% 50% at 50% 0%, rgb(37 99 235 / 0.18), transparent 70%),
     radial-gradient(40% 35% at 85% 100%, rgb(15 23 42 / 0.9), transparent 70%),

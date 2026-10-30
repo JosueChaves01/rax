@@ -143,7 +143,7 @@ export function ReportsView({ initialData }: ReportsViewProps) {
               {initialData.responseTime.change}
             </span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-1">{initialData.responseTime.detail}</p>
+          <p className="text-[10px] text-slate-500 mt-1">{initialData.responseTime.detail}</p>
         </div>
 
         {/* KPI 2: Tasa de Finalización */}
@@ -159,7 +159,7 @@ export function ReportsView({ initialData }: ReportsViewProps) {
               {initialData.completionRate.change}
             </span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-1">
+          <p className="text-[10px] text-slate-500 mt-1">
             {tab === "emprendedor"
               ? `${initialData.tabBreakdowns.entrepreneur.completedTasks} de ${initialData.tabBreakdowns.entrepreneur.totalTasks} tareas`
               : initialData.completionRate.detail}
@@ -177,7 +177,7 @@ export function ReportsView({ initialData }: ReportsViewProps) {
               {initialData.aiAdoption.change}
             </span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-1">{initialData.aiAdoption.detail}</p>
+          <p className="text-[10px] text-slate-500 mt-1">{initialData.aiAdoption.detail}</p>
         </div>
 
         {/* KPI 4: Satisfacción */}
@@ -191,7 +191,7 @@ export function ReportsView({ initialData }: ReportsViewProps) {
               {initialData.satisfaction.change}
             </span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-1">{initialData.satisfaction.detail}</p>
+          <p className="text-[10px] text-slate-500 mt-1">{initialData.satisfaction.detail}</p>
         </div>
       </div>
 
@@ -228,7 +228,7 @@ export function ReportsView({ initialData }: ReportsViewProps) {
             <h2 className="text-base font-bold text-slate-900">
               Evolución de uso
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               Volumen de interacciones por canal durante el ciclo (datos dinámicos de auditoría)
             </p>
           </div>
@@ -298,7 +298,7 @@ export function ReportsView({ initialData }: ReportsViewProps) {
           </svg>
 
           {/* Eje de Fechas (X) */}
-          <div className="flex justify-between text-[11px] text-slate-400 font-mono mt-2 pt-2 border-t border-slate-100">
+          <div className="flex justify-between text-[11px] text-slate-500 font-mono mt-2 pt-2 border-t border-slate-100">
             {initialData.timeline.labels.map((lbl, idx) => (
               <span key={idx}>{lbl}</span>
             ))}

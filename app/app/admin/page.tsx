@@ -119,7 +119,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       {tab === "solicitudes" && (
         <section aria-labelledby="apps-title" className="space-y-4">
-          <h2 id="apps-title" className="text-xs uppercase font-mono tracking-wider text-slate-400">
+          <h2 id="apps-title" className="text-xs uppercase font-mono tracking-wider text-slate-500">
             Solicitudes de mentoría ({o.pendingMentors.length})
           </h2>
           {o.pendingMentors.length === 0 ? (
@@ -133,7 +133,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 return (
                   <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
                     <p className="text-lg font-bold text-slate-900">{p.name}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-500">
                       {p.email} · desde {formatDate(p.onboardedAt ?? p.createdAt)}
                     </p>
                     {info && (
@@ -145,10 +145,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                         </div>
                         <p className="mt-3 text-xs text-slate-600">{info.bio}</p>
                         <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500 border-t border-slate-100 pt-3">
-                          <div><dt className="text-slate-400">Experiencia</dt><dd className="font-medium text-slate-800">{EXPERIENCE_LABEL[info.yearsExperience]}</dd></div>
-                          <div><dt className="text-slate-400">Rubros</dt><dd className="font-medium text-slate-800">{info.sectors || "—"}</dd></div>
-                          <div><dt className="text-slate-400">Disponibilidad</dt><dd className="font-medium text-slate-800">{info.monthlyHours} h/mes</dd></div>
-                          <div><dt className="text-slate-400">Cupos</dt><dd className="font-medium text-slate-800">hasta {info.maxProjects}</dd></div>
+                          <div><dt className="text-slate-500">Experiencia</dt><dd className="font-medium text-slate-800">{EXPERIENCE_LABEL[info.yearsExperience]}</dd></div>
+                          <div><dt className="text-slate-500">Rubros</dt><dd className="font-medium text-slate-800">{info.sectors || "—"}</dd></div>
+                          <div><dt className="text-slate-500">Disponibilidad</dt><dd className="font-medium text-slate-800">{info.monthlyHours} h/mes</dd></div>
+                          <div><dt className="text-slate-500">Cupos</dt><dd className="font-medium text-slate-800">hasta {info.maxProjects}</dd></div>
                         </dl>
                         {info.linkedinUrl && (
                           <a href={info.linkedinUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-xs text-blue-600 underline">
@@ -170,7 +170,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       {tab === "asignaciones" && (
         <section aria-labelledby="proj-title" className="space-y-4">
-          <h2 id="proj-title" className="text-xs uppercase font-mono tracking-wider text-slate-400">
+          <h2 id="proj-title" className="text-xs uppercase font-mono tracking-wider text-slate-500">
             Proyectos y mentores asignados
           </h2>
           {o.projects.length === 0 ? (
@@ -185,7 +185,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-base font-bold text-slate-900">{p.name}</p>
                       {waits && <Tag color="#f59e0b">Esperando mentor</Tag>}
-                      <span className="ml-auto text-xs text-slate-400">
+                      <span className="ml-auto text-xs text-slate-500">
                         Dueño: {name(p.ownerId)} · {PROJECT_STATUS_LABEL[p.status]}
                       </span>
                     </div>
@@ -215,7 +215,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       {tab === "personas" && (
         <section aria-labelledby="people-title" className="space-y-4">
-          <h2 id="people-title" className="text-xs uppercase font-mono tracking-wider text-slate-400">
+          <h2 id="people-title" className="text-xs uppercase font-mono tracking-wider text-slate-500">
             Personas registradas
           </h2>
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-xs">
@@ -238,7 +238,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     <td className="px-4 py-3 text-slate-500">
                       {p.role === "mentor" ? `${o.mentorLoad[p.id]?.active ?? 0}/${o.mentorLoad[p.id]?.max ?? "?"} cupos` : MENTOR_STATUS_LABEL[p.mentorStatus]}
                     </td>
-                    <td className="px-4 py-3 text-slate-400 font-mono">{p.onboardedAt ? formatDate(p.onboardedAt) : "Pendiente"}</td>
+                    <td className="px-4 py-3 text-slate-500 font-mono">{p.onboardedAt ? formatDate(p.onboardedAt) : "Pendiente"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -249,11 +249,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       {tab === "auditoria" && (
         <section aria-labelledby="audit-title" className="space-y-4">
-          <h2 id="audit-title" className="text-xs uppercase font-mono tracking-wider text-slate-400">
+          <h2 id="audit-title" className="text-xs uppercase font-mono tracking-wider text-slate-500">
             Auditoría de eventos y seguridad
           </h2>
           {o.audit.length === 0 ? (
-            <p className="text-xs text-slate-400">Sin eventos todavía.</p>
+            <p className="text-xs text-slate-500">Sin eventos todavía.</p>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs divide-y divide-slate-100 p-2">
               {o.audit.map((e) => (

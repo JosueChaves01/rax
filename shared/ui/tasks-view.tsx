@@ -203,7 +203,7 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
                             className={cx(
                               "font-semibold",
                               isDone
-                                ? "line-through text-slate-400"
+                                ? "line-through text-slate-500"
                                 : "text-slate-900"
                             )}
                           >
@@ -264,7 +264,7 @@ export function TasksView({ initialTasks, projectId, projectName }: TasksViewPro
               <p
                 className={cx(
                   "text-xs font-semibold mt-1",
-                  urgentTasks.length > 0 ? "text-rose-600" : "text-emerald-600"
+                  urgentTasks.length > 0 ? "text-rose-700" : "text-emerald-700"
                 )}
               >
                 {urgentTasks.length > 0

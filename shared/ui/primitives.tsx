@@ -66,10 +66,10 @@ export function Heading({ children, highlight, level = 2, className }: { childre
 
 export function Notice({ tone = "info", children }: { tone?: "info" | "error" | "success" | "warn"; children: ReactNode }) {
   const tones = {
-    info: "border-cyan/30 bg-cyan/5 text-ink",
-    error: "border-danger/40 bg-danger/10 text-ink",
-    success: "border-ok/40 bg-ok/10 text-ink",
-    warn: "border-highlight/40 bg-highlight/10 text-ink",
+    info: "border-sky-200 bg-sky-50 text-sky-950 dark:border-cyan/30 dark:bg-cyan/5 dark:text-ink",
+    error: "border-rose-200 bg-rose-50 text-rose-950 dark:border-danger/40 dark:bg-danger/10 dark:text-ink",
+    success: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-ok/40 dark:bg-ok/10 dark:text-ink",
+    warn: "border-amber-200 bg-amber-50 text-amber-950 dark:border-highlight/40 dark:bg-highlight/10 dark:text-ink",
   };
   return (
     <div role={tone === "error" ? "alert" : "status"} className={cx("rounded-xl border px-4 py-3 text-sm", tones[tone])}>

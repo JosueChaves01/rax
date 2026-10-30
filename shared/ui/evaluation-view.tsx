@@ -88,7 +88,7 @@ export function EvaluationView({
                 key={s.num}
                 className={cx(
                   "flex flex-col sm:flex-row items-center gap-2 p-2 rounded-xl text-center sm:text-left transition-colors",
-                  isCurrent ? "bg-blue-50 border border-blue-200" : isDone ? "text-slate-700" : "text-slate-400"
+                  isCurrent ? "bg-blue-50 border border-blue-200" : isDone ? "text-slate-700" : "text-slate-500"
                 )}
               >
                 <div
@@ -102,7 +102,7 @@ export function EvaluationView({
                 <span
                   className={cx(
                     "text-xs font-bold truncate",
-                    isCurrent ? "text-blue-700" : isDone ? "text-slate-800" : "text-slate-400"
+                    isCurrent ? "text-blue-700" : isDone ? "text-slate-800" : "text-slate-500"
                   )}
                 >
                   {s.label}

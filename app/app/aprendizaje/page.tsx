@@ -126,7 +126,7 @@ export default function LearningPage() {
               <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-100 text-blue-700">
                 {evaluation ? "Evaluado" : "En progreso"}
               </span>
-              <span className="text-xs text-slate-400 font-mono">
+              <span className="text-xs text-slate-500 font-mono">
                 Práctica activa
               </span>
             </div>
@@ -135,7 +135,7 @@ export default function LearningPage() {
               <h2 className="text-xl font-bold text-slate-900">
                 PREP — Respuesta a objeciones
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 Módulo de comunicación comercial y defensa de valor
               </p>
             </div>
@@ -254,7 +254,7 @@ export default function LearningPage() {
                 )}
               >
                 {msg.provider && (
-                  <span className="text-[9px] text-slate-400 font-mono mb-0.5 px-1">
+                  <span className="text-[9px] text-slate-500 font-mono mb-0.5 px-1">
                     vía {msg.provider}
                   </span>
                 )}
@@ -272,7 +272,7 @@ export default function LearningPage() {
             ))}
 
             {isLoading && (
-              <div className="flex items-center gap-2 text-xs text-slate-400 p-2">
+              <div className="flex items-center gap-2 text-xs text-slate-500 p-2">
                 <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
                 <span>Consultando con n8n...</span>
               </div>
@@ -281,7 +281,7 @@ export default function LearningPage() {
 
           {/* Chips de sugerencias interactivas (Panel 5 del Mock) */}
           <div className="py-2 border-t border-slate-100">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
               Acciones rápidas de IA
             </p>
             <div className="flex flex-wrap gap-1.5">

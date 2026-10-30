@@ -220,7 +220,7 @@ export default function ExplorationPage() {
               >
                 Cuéntanos más sobre tu situación actual
               </label>
-              <span className="text-[10px] text-slate-400 font-mono">
+              <span className="text-[10px] text-slate-500 font-mono">
                 {description.length}/500
               </span>
             </div>

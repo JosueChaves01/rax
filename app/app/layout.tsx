@@ -60,16 +60,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           href: a.action === "ai.proposal_applied" ? "/app/aprendizaje" : "/app/sugerencias",
         });
       }
-
-      // 4. Material de aprendizaje
-      notifications.push({
-        id: "notif-mat-std",
-        title: "Nuevo material asignado",
-        detail: "Tienes disponible la guía de formulación y ejercicios PREP.",
-        timeAgo: "Disponible",
-        kind: "material",
-        href: "/app/aprendizaje",
-      });
     } catch {
       // Silencioso ante fallos transitorios en SSR
     }

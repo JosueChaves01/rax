@@ -58,7 +58,7 @@ export default async function CalendarPage() {
         </h2>
 
         {sessionItems.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-xs">
+          <div className="p-12 text-center text-slate-500 text-xs">
             No tienes sesiones programadas en este momento.
           </div>
         ) : (

@@ -17,7 +17,7 @@ export function DocumentsView({ initialResources }: DocumentsViewProps) {
   const [filterKind, setFilterKind] = useState<FilterKind>("Todos");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDocId, setSelectedDocId] = useState<string>(
-    initialResources[0]?.id || "minto"
+    initialResources[0]?.id || ""
   );
   const [downloadNotice, setDownloadNotice] = useState(false);
 
@@ -114,7 +114,7 @@ export function DocumentsView({ initialResources }: DocumentsViewProps) {
             placeholder="Buscar documentos, frameworks, guías…"
             className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+          <span className="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
         </div>
 
         {/* Píldoras de Filtro: [Todos] [Métodos] [Plantillas] [Guías] [Ejercicios] */}
@@ -166,8 +166,8 @@ export function DocumentsView({ initialResources }: DocumentsViewProps) {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
                         {kindLabel}
                       </span>
-                      <span className="text-slate-300">•</span>
-                      <span className="text-[11px] text-slate-400 font-mono">
+                      <span className="text-slate-400">•</span>
+                      <span className="text-[11px] text-slate-500 font-mono">
                         {doc.tags[0] || "Metodología"}
                       </span>
                     </div>
@@ -223,7 +223,7 @@ export function DocumentsView({ initialResources }: DocumentsViewProps) {
 
               {/* Contenido / Estructura */}
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Estructura metodológica
                 </p>
                 <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed max-h-48 overflow-y-auto">
@@ -249,7 +249,7 @@ export function DocumentsView({ initialResources }: DocumentsViewProps) {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center text-slate-400 text-xs">
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center text-slate-500 text-xs">
               Selecciona un documento para ver detalles.
             </div>
           )}

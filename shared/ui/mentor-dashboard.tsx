@@ -173,7 +173,7 @@ export function MentorDashboard({
                 ))}
               </div>
             ) : (
-              <div className="mt-8 text-center text-slate-400 text-xs py-8">
+              <div className="mt-8 text-center text-slate-500 text-xs py-8">
                 No tienes sesiones programadas próximamente.
               </div>
             )}
@@ -221,7 +221,7 @@ export function MentorDashboard({
                             {mentee.name}
                           </p>
                           <p className="text-[11px] text-slate-500">
-                            {mentee.sector} · <span className="text-slate-400">{mentee.stage}</span>
+                            {mentee.sector} · <span className="text-slate-500">{mentee.stage}</span>
                           </p>
                         </div>
                       </div>
@@ -241,7 +241,7 @@ export function MentorDashboard({
                 ))}
               </div>
             ) : (
-              <div className="mt-8 text-center text-slate-400 text-xs py-8">
+              <div className="mt-8 text-center text-slate-500 text-xs py-8">
                 No tienes emprendedores asignados en tu cartera aún.
               </div>
             )}

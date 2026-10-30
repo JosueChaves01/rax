@@ -12,48 +12,7 @@ export interface NotificationItem {
   href: string;
 }
 
-export const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: "notif-1",
-    title: "Nuevo material asignado",
-    detail: "Tu mentor te ha asignado un ejercicio PREP.",
-    timeAgo: "Hace 2 h",
-    kind: "material",
-    href: "/app/aprendizaje",
-  },
-  {
-    id: "notif-2",
-    title: "Revisión de IA completada",
-    detail: "Tu entrega ha sido evaluada. Revisa los comentarios.",
-    timeAgo: "Hace 4 h",
-    kind: "review",
-    href: "/app/aprendizaje",
-  },
-  {
-    id: "notif-3",
-    title: "Recordatorio de tarea",
-    detail: "Tu tarea «Reunión con cliente» vence en 2 días.",
-    timeAgo: "Hace 1 d",
-    kind: "task",
-    href: "/app/tareas",
-  },
-  {
-    id: "notif-4",
-    title: "Sesión programada",
-    detail: "Tienes una sesión de mentoría agendada para el 14 de junio.",
-    timeAgo: "Hace 1 d",
-    kind: "session",
-    href: "/app/sesiones",
-  },
-  {
-    id: "notif-5",
-    title: "Sugerencia de IA",
-    detail: "Revisa el plan de acción actualizado con nuevos experimentos.",
-    timeAgo: "Hace 2 d",
-    kind: "ai",
-    href: "/app/sugerencias",
-  },
-];
+export const DEFAULT_NOTIFICATIONS: NotificationItem[] = [];
 
 interface NotificationDrawerProps {
   isOpen: boolean;
@@ -62,7 +21,7 @@ interface NotificationDrawerProps {
 }
 
 export function NotificationDrawer({ isOpen, onClose, notifications }: NotificationDrawerProps) {
-  const items = notifications && notifications.length > 0 ? notifications : DEFAULT_NOTIFICATIONS;
+  const items = notifications || [];
   // Cerrar con Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -87,7 +46,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
   const KIND_COLOR = {
     material: "bg-blue-50 text-blue-600 border-blue-200",
     review: "bg-purple-50 text-purple-600 border-purple-200",
-    task: "bg-amber-50 text-amber-600 border-amber-200",
+    task: "bg-amber-50 text-amber-800 border-amber-200",
     session: "bg-emerald-50 text-emerald-600 border-emerald-200",
     ai: "bg-indigo-50 text-indigo-600 border-indigo-200",
   };
@@ -116,7 +75,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+              className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
               aria-label="Cerrar notificaciones"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -128,33 +87,39 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
 
           {/* Lista de Notificaciones */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-            {items.map((n) => (
-              <Link
-                key={n.id}
-                href={n.href}
-                onClick={onClose}
-                className="p-4 sm:p-5 flex items-start gap-3 hover:bg-slate-50 transition-colors group block"
-              >
-                <div
-                  className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 text-base ${KIND_COLOR[n.kind]}`}
+            {items.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-xs">
+                No tienes notificaciones pendientes.
+              </div>
+            ) : (
+              items.map((n) => (
+                <Link
+                  key={n.id}
+                  href={n.href}
+                  onClick={onClose}
+                  className="p-4 sm:p-5 flex items-start gap-3 hover:bg-slate-50 transition-colors group block"
                 >
-                  {KIND_ICON[n.kind]}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
-                      {n.title}
-                    </p>
-                    <span className="text-[10px] text-slate-400 shrink-0 font-mono">
-                      {n.timeAgo}
-                    </span>
+                  <div
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 text-base ${KIND_COLOR[n.kind]}`}
+                  >
+                    {KIND_ICON[n.kind]}
                   </div>
-                  <p className="mt-1 text-xs text-slate-600 line-clamp-2">
-                    {n.detail}
-                  </p>
-                </div>
-              </Link>
-            ))}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
+                        {n.title}
+                      </p>
+                      <span className="text-[10px] text-slate-500 shrink-0 font-mono">
+                        {n.timeAgo}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600 line-clamp-2">
+                      {n.detail}
+                    </p>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
 
           {/* Pie de panel */}

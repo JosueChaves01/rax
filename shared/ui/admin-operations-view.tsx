@@ -166,7 +166,7 @@ export function AdminOperationsView({
           <h2 className="text-base font-bold text-slate-900">
             Ejecuciones recientes
           </h2>
-          <span className="text-xs text-slate-400 font-mono">Últimas 24 horas</span>
+          <span className="text-xs text-slate-500 font-mono">Últimas 24 horas</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -182,7 +182,7 @@ export function AdminOperationsView({
             <tbody className="divide-y divide-slate-100">
               {recentRuns.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-400 font-medium">
+                  <td colSpan={4} className="px-4 py-8 text-center text-slate-500 font-medium">
                     Sin ejecuciones registradas en las últimas 24 horas.
                   </td>
                 </tr>
@@ -223,7 +223,7 @@ export function AdminOperationsView({
       {/* 4. Barra de Métricas Inferiores */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs text-center">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
             Latencia promedio
           </p>
           <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
@@ -232,7 +232,7 @@ export function AdminOperationsView({
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs text-center">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
             Total ejecuciones
           </p>
           <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
@@ -241,7 +241,7 @@ export function AdminOperationsView({
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs text-center">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
             Costo estimado
           </p>
           <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
@@ -250,7 +250,7 @@ export function AdminOperationsView({
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs text-center">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
             Tasa de éxito
           </p>
           <p className="text-2xl font-bold font-mono text-emerald-600 mt-1">

@@ -5,7 +5,7 @@ import { getWorkspace, listMyProjects } from "@/lib/services/projects";
 import { getMentorPortfolio } from "@/lib/services/portfolio";
 import { EXPERIENCE_LABEL, EXPERTISE_LABEL } from "@/features/labels";
 import type { MentorOnboarding } from "@/types/domain";
-import { Empty, Heading, Notice, Tag } from "@/shared/ui/primitives";
+import { Empty, Heading, Notice, Tag, formatDate } from "@/shared/ui/primitives";
 import { MentorDashboard } from "@/shared/ui/mentor-dashboard";
 import { EntrepreneurDashboard } from "@/shared/ui/entrepreneur-dashboard";
 import { NewProjectForm } from "./new-project-form";
@@ -87,7 +87,7 @@ export default async function ProjectsPage() {
                   <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
                     {w.project.description || "Sin descripción proporcionada"}
                   </p>
-                  <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-100 pt-2 font-mono">
+                  <div className="mt-3 flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-100 pt-2 font-mono">
                     <span>Etapa: {w.phase}</span>
                     <span className="text-blue-600 font-semibold group-hover:underline">Abrir →</span>
                   </div>
@@ -156,7 +156,7 @@ function MentorApplication({
 }) {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <p className="text-xs uppercase font-mono tracking-wider text-slate-400">
+      <p className="text-xs uppercase font-mono tracking-wider text-slate-500">
         Hola, {name.split(" ")[0]}
       </p>
       <Heading
@@ -178,7 +178,7 @@ function MentorApplication({
         )}
       </div>
       <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-        <h2 className="text-xs uppercase font-mono tracking-wider text-slate-400">
+        <h2 className="text-xs uppercase font-mono tracking-wider text-slate-500">
           Lo que enviaste
         </h2>
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -191,19 +191,19 @@ function MentorApplication({
         <p className="mt-3 text-sm text-slate-700">{a.bio}</p>
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 border-t border-slate-100 pt-4">
           <div>
-            <dt className="text-xs text-slate-400">Experiencia</dt>
+            <dt className="text-xs text-slate-500">Experiencia</dt>
             <dd className="font-medium text-slate-800">{EXPERIENCE_LABEL[a.yearsExperience]}</dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-400">Rubros</dt>
+            <dt className="text-xs text-slate-500">Rubros</dt>
             <dd className="font-medium text-slate-800">{a.sectors || "—"}</dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-400">Disponibilidad</dt>
+            <dt className="text-xs text-slate-500">Disponibilidad</dt>
             <dd className="font-medium text-slate-800">{a.monthlyHours} h/mes</dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-400">Cupos</dt>
+            <dt className="text-xs text-slate-500">Cupos</dt>
             <dd className="font-medium text-slate-800">hasta {a.maxProjects}</dd>
           </div>
         </dl>

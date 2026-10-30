@@ -156,7 +156,7 @@ export function SuggestionsView({ initialSuggestions }: SuggestionsViewProps) {
                 </div>
               </div>
             ) : (
-              <div className="p-8 text-center text-xs text-slate-400">
+              <div className="p-8 text-center text-xs text-slate-500">
                 Selecciona una sugerencia para ver el detalle.
               </div>
             )}

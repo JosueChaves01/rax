@@ -123,7 +123,7 @@ export default function ChatPage() {
             key={m.id}
             className={cx("flex flex-col", m.sender === "user" ? "items-end" : "items-start")}
           >
-            <div className="flex items-center gap-1.5 mb-1 px-1 text-[10px] text-slate-400 font-mono">
+            <div className="flex items-center gap-1.5 mb-1 px-1 text-[10px] text-slate-500 font-mono">
               <span>{m.senderName}</span>
               <span>•</span>
               <span>{m.time}</span>
@@ -166,7 +166,7 @@ export default function ChatPage() {
 
         {isLoading && (
           <div className="flex flex-col items-start space-y-1">
-            <span className="text-[10px] text-slate-400 font-mono px-1">
+            <span className="text-[10px] text-slate-500 font-mono px-1">
               RAX IA Assistant • procesando con n8n…
             </span>
             <div className="bg-slate-100 text-slate-500 border border-slate-200/60 rounded-2xl p-4 text-xs flex items-center gap-2">
@@ -182,7 +182,7 @@ export default function ChatPage() {
         <button
           type="button"
           title="Adjuntar archivo o evidencia"
-          className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
+          className="p-2 text-slate-500 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors"
         >
           📎
         </button>

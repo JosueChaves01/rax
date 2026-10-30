@@ -22,19 +22,19 @@ export default async function ReportsPage() {
   // 1. Cálculo de Métricas Reales
   const doneTasks = tasks.filter((t) => t.status === "done").length;
   const totalTasks = tasks.length;
-  const completionRateVal = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 92;
+  const completionRateVal = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   const aiAudits = audits.filter(
     (a) => a.action.startsWith("ai.") || a.action.includes("proposal") || a.action.includes("document")
   ).length;
   const totalAudits = audits.length;
-  const aiAdoptionVal = totalAudits > 0 ? Math.min(100, Math.max(25, Math.round((aiAudits / totalAudits) * 100))) : 78;
+  const aiAdoptionVal = totalAudits > 0 ? Math.round((aiAudits / totalAudits) * 100) : 0;
 
-  const measuredLatency = health.latencyMs > 0 ? (health.latencyMs / 1000).toFixed(1) : "1.8";
+  const measuredLatency = health.latencyMs > 0 ? `${(health.latencyMs / 1000).toFixed(1)}s` : health.ok ? "<0.1s" : "—";
   const errorAudits = audits.filter((a) => a.action.includes("failed") || a.action.includes("denied")).length;
   const errorRateStr = totalAudits > 0 ? `${((errorAudits / totalAudits) * 100).toFixed(1)}%` : "0.0%";
 
-  // 2. Generación dinámica de 5 puntos temporales para el gráfico
+  // 2. Generación dinámica de 5 puntos temporales para el gráfico basados en eventos reales
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
   const bucketWindows = [
@@ -58,14 +58,14 @@ export default async function ReportsPage() {
         new Date(a.createdAt).getTime() < w.end &&
         (a.action.includes("resource") || a.action.includes("document"))
     ).length;
-    return Math.min(95, 20 + count * 15);
+    return count > 0 ? Math.min(100, count * 20) : 0;
   });
 
   const timelineTasks = bucketWindows.map((w) => {
     const count = tasks.filter(
       (t) => new Date(t.createdAt).getTime() >= w.start && new Date(t.createdAt).getTime() < w.end
     ).length;
-    return Math.min(95, 25 + count * 12);
+    return count > 0 ? Math.min(100, count * 20) : 0;
   });
 
   const timelineChat = bucketWindows.map((w) => {
@@ -75,36 +75,44 @@ export default async function ReportsPage() {
         new Date(a.createdAt).getTime() < w.end &&
         (a.action.includes("chat") || a.action === "ai.invoked")
     ).length;
-    return Math.min(95, 30 + count * 10);
+    return count > 0 ? Math.min(100, count * 20) : 0;
   });
 
   const timelineEvaluations = bucketWindows.map((w) => {
     const count = evaluations.filter(
       (e) => new Date(e.evaluatedAt).getTime() >= w.start && new Date(e.evaluatedAt).getTime() < w.end
     ).length;
-    return Math.min(95, 15 + count * 20);
+    return count > 0 ? Math.min(100, count * 25) : 0;
   });
+
+  const ratingMap: Record<string, number> = { nascent: 3.5, developing: 4.2, autonomous: 5.0 };
+  let totalRating = 0;
+  for (const e of evaluations) {
+    totalRating += (e.autonomyAssessment?.rating && ratingMap[e.autonomyAssessment.rating]) || 4.5;
+  }
+  const avgSatisfaction =
+    evaluations.length > 0 ? (totalRating / evaluations.length).toFixed(1) : null;
 
   const initialData: ReportMetricsData = {
     responseTime: {
-      value: `${measuredLatency}s`,
-      change: "-2.5%",
+      value: measuredLatency,
+      change: "—",
       detail: health.ok ? "túnel n8n activo" : "procesamiento local",
     },
     completionRate: {
       value: `${completionRateVal}%`,
-      change: "+5%",
-      detail: `${doneTasks} de ${totalTasks} hitos resueltos`,
+      change: "—",
+      detail: `${doneTasks} de ${totalTasks} tareas resueltas`,
     },
     aiAdoption: {
       value: `${aiAdoptionVal}%`,
-      change: "+14%",
-      detail: "adopción activa del copiloto",
+      change: "—",
+      detail: `${aiAudits} eventos de copiloto registrados`,
     },
     satisfaction: {
-      value: "4.8/5",
-      change: "+0.2",
-      detail: "promedio encuestas de ciclo",
+      value: avgSatisfaction ? `${avgSatisfaction}/5` : "—",
+      change: "—",
+      detail: evaluations.length > 0 ? `${evaluations.length} evaluaciones de ciclo` : "Sin evaluaciones aún",
     },
     timeline: {
       labels: timelineLabels,
@@ -116,7 +124,7 @@ export default async function ReportsPage() {
     tabBreakdowns: {
       mentor: {
         sessionsCount: sessions.length,
-        activeProjects: Math.max(1, new Set(sessions.map((s) => s.projectId)).size),
+        activeProjects: new Set(sessions.map((s) => s.projectId)).size,
         interventionsCount: interventions.length,
       },
       entrepreneur: {

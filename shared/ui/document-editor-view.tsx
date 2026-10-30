@@ -16,23 +16,20 @@ type EditorTab = "editar" | "vista-previa" | "historial" | "comentarios";
 export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProps) {
   const [tab, setTab] = useState<EditorTab>("editar");
 
-  // Secciones del documento (Panel 8 del Mock)
+  // Secciones del documento
   const [conclusion, setConclusion] = useState(
-    initialDoc?.description ||
-      "Ofrecemos una plataforma de gestión simple y costeable para pequeñas empresas, que les permite ahorrar tiempo y aumentar sus ventas."
+    initialDoc?.description || ""
   );
   const [argumentos, setArgumentos] = useState(
-    "• Fácil de implementar y usar en menos de 24 horas.\n• Soporte personalizado y contextualizado a la etapa del negocio.\n• Integración nativa con herramientas populares y flujos de automatización."
+    initialDoc?.content || ""
   );
-  const [datos, setDatos] = useState(
-    "• 3 pruebas piloto concluidas con 85% de satisfacción.\n• 30% de ahorro promedio en horas operativas semanales."
-  );
+  const [datos, setDatos] = useState("");
 
-  // Sugerencias de IA (Panel 8 del Mock)
+  // Sugerencias de IA
   const [suggestions, setSuggestions] = useState([
-    { id: "s1", text: "Mejorar la claridad del mensaje", checked: true },
-    { id: "s2", text: "Agregar un ejemplo de cliente real", checked: false },
-    { id: "s3", text: "Optimizar síntesis para inversionistas", checked: false },
+    { id: "s1", text: "Verificar claridad y síntesis del mensaje", checked: false },
+    { id: "s2", text: "Añadir evidencias o casos contrastables", checked: false },
+    { id: "s3", text: "Alinear con los objetivos del ciclo", checked: false },
   ]);
 
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -42,17 +39,15 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
     setAiGenerating(true);
     try {
       const res = await improveDocumentWithAIAction({
-        title: initialDoc?.title || "Propuesta de valor",
+        title: initialDoc?.title || "Documento",
         conclusion,
         argumentsText: argumentos,
         dataText: datos,
       });
       if (res?.ok && res.reply) {
-        setConclusion(
-          "Transformamos la gestión de pequeñas empresas mediante una solución ágil, accesible y asistida por IA que multiplica sus ventas y reduce en un tercio su carga operativa."
-        );
+        setConclusion(res.reply);
         setSuggestions((prev) =>
-          prev.map((s) => (s.id === "s1" || s.id === "s3" ? { ...s, checked: true } : s))
+          prev.map((s) => ({ ...s, checked: true }))
         );
       }
     } finally {
@@ -128,7 +123,7 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
             <h2 className="text-2xl font-black text-slate-900 tracking-tight">
               {initialDoc?.title || "Propuesta de Valor"}
             </h2>
-            <p className="text-xs text-slate-400 mt-1 font-mono">
+            <p className="text-xs text-slate-500 mt-1 font-mono">
               Estructura piramidal de Minto
             </p>
           </div>
@@ -210,7 +205,7 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
                       onChange={() => toggleSuggestion(s.id)}
                       className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
                     />
-                    <span className={s.checked ? "line-through text-slate-400" : ""}>
+                    <span className={s.checked ? "line-through text-slate-500" : ""}>
                       {s.text}
                     </span>
                   </label>
@@ -242,7 +237,7 @@ export function DocumentEditorView({ docId, initialDoc }: DocumentEditorViewProp
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
               <button
                 type="button"
-                className="text-xs text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                className="text-xs text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
               >
                 Descartar borrador
               </button>

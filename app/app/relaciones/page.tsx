@@ -28,12 +28,11 @@ export default async function RelationsPage() {
 
       const stageLabels: Record<string, string> = {
         exploration: "Exploración",
-        matching: "Calce / Compatibilidad",
-        agreement_draft: "Acuerdo en borrador",
-        active: "Mentoría activa",
-        cycle_evaluation: "Evaluación de ciclo",
-        renewal_negotiation: "Renovación",
-        completed: "Ciclo finalizado",
+        diagnosis: "Diagnóstico",
+        agreement: "Acuerdo preliminar",
+        active_mentoring: "Mentoría activa",
+        evaluation: "Evaluación de ciclo",
+        renewed: "Ciclo renovado",
         closed: "Cerrada",
       };
 
@@ -42,8 +41,8 @@ export default async function RelationsPage() {
         name: counterpart?.name || (isMentor ? "Emprendedor" : "Mentor"),
         project: proj?.name || "Proyecto",
         stage: stageLabels[rel.stage] || rel.stage,
-        status: rel.stage === "active" ? "Activa" : rel.stage === "closed" ? "Cerrada" : "En proceso",
-        cycleNumber: rel.cycleNumber,
+        status: rel.stage === "active_mentoring" ? "Activa" : rel.stage === "closed" ? "Cerrada" : "En proceso",
+        version: rel.version,
         projectId: rel.projectId,
       };
     })
@@ -104,7 +103,7 @@ export default async function RelationsPage() {
                     {rel.status}
                   </span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700 font-mono">
-                    Ciclo {rel.cycleNumber}
+                    v{rel.version}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">
