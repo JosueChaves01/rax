@@ -22,13 +22,18 @@ import type {
   GoalStatus,
   MentorshipStage,
   Uncertainty,
+  AgreementFrequency,
+  MentorAssignment,
+  MentorshipAgreement,
+  MentorshipRelation,
+  Project,
 } from "@/types/domain";
 import { getDeps, homeFor } from "@/lib/runtime";
 import { createUserClient } from "@/lib/supabase/server";
 import { appUrl, missingConfig } from "@/lib/supabase/config";
 import { completeOnboarding } from "@/lib/services/onboarding";
 import { isDomainError } from "@/lib/errors";
-import { guard, type ServiceDeps } from "@/lib/services/base";
+import { audit, guard, type ServiceDeps } from "@/lib/services/base";
 import type { ItemChange } from "@/features/diagnosis/rules";
 import { createProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
 import { addComment, addItem, changeItem, confirmSummary, editSummary } from "@/lib/services/diagnosis";
@@ -118,6 +123,7 @@ import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
 import { executeClaudeAgentTurn } from "@/lib/ai/claude-orchestrator";
 import { AiProposalItemSchema } from "@/lib/n8n/contracts";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
+import { generateMentorshipExplorationData, type MentorshipExplorationAiResult } from "@/lib/ai/exploration-ai";
 import { canUseCapability, invokeMainAgent, MainAgentChatInputSchema, selectRaxCapability } from "@/lib/n8n/main-agent";
 import type { MentorIntervention } from "@/types/domain";
 import * as V from "@/lib/validation/inputs";
@@ -599,6 +605,218 @@ export const completeExplorationAction = async (input: {
   };
 };
 
+export interface ExplorationCreateProjectInput {
+  initiativeName: string;
+  sector: string;
+  nature?: InitiativeNature;
+  summary?: string;
+  motivation: string;
+  description: string;
+  mentorId?: string;
+  entrepreneurId?: string;
+  compatibilityRationale?: string;
+  agreement: {
+    frequency: AgreementFrequency;
+    sessionDurationMinutes?: number;
+    expectedDurationWeeks?: number;
+    cycleGoals?: string;
+    scope?: string;
+    mentorCommitments?: string;
+    entrepreneurCommitments?: string;
+    confidentialityTerms?: string;
+    authorizedChannels?: string[];
+  };
+}
+
+export const completeExplorationAndCreateProjectAction = async (input: ExplorationCreateProjectInput) => {
+  const d = await getDeps();
+  if (!d) return { ok: false as const, error: "Tu sesión terminó. Volvé a entrar.", code: "unauthenticated" };
+
+  try {
+    const allProfiles = await d.repo.profiles.list().catch(() => []);
+    const isMentor = d.actor.role === "mentor";
+
+    // Determinar quién es el emprendedor y quién es el mentor
+    let mentorId = input.mentorId;
+    let entrepreneurId = input.entrepreneurId;
+
+    if (isMentor) {
+      mentorId = d.actor.id;
+      if (!entrepreneurId) {
+        const entProfile = allProfiles.find((p) => p.role === "entrepreneur");
+        entrepreneurId = entProfile?.id || d.actor.id;
+      }
+    } else {
+      entrepreneurId = d.actor.id;
+      if (!mentorId) {
+        const mentorProfile =
+          allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved") ||
+          allProfiles.find((p) => p.role === "mentor");
+        mentorId = mentorProfile?.id || "men1";
+      }
+    }
+
+    const now = d.now();
+    const projectId = d.newId("prj");
+    const projectName = (input.initiativeName?.trim() || "Iniciativa de Mentoría").slice(0, 80);
+    const projectDesc = (
+      input.summary?.trim() ||
+      input.description?.trim() ||
+      "Proyecto creado desde el flujo de exploración y mentoría."
+    ).slice(0, 1000);
+
+    const project: Project = {
+      id: projectId,
+      name: projectName,
+      description: projectDesc,
+      nature: input.nature || "exploring_idea",
+      ownerId: entrepreneurId,
+      status: "active",
+      customInstructions: `Proyecto de mentoría enfocado en ${projectName} (${input.sector || "General"}). Objetivos del ciclo: ${input.agreement?.cycleGoals || input.agreement?.scope || "Validación y acompañamiento"}.`,
+      shareConversationWithMentor: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await d.repo.projects.insert(project);
+    await audit(d, "project.created", { projectId, targetId: project.id });
+
+    // Asignar mentor al proyecto
+    const assignment: MentorAssignment = {
+      id: d.newId("asg"),
+      projectId,
+      mentorId,
+      status: "active",
+      assignedBy: d.actor.id,
+      createdAt: now,
+    };
+    await d.repo.mentorAssignments.insert(assignment);
+    await audit(d, "mentor.assigned", { projectId, targetId: assignment.id, meta: { mentorId } });
+
+    // Crear relación de mentoría
+    const relation: MentorshipRelation = {
+      id: d.newId("rel"),
+      projectId,
+      entrepreneurId,
+      mentorId,
+      stage: "agreement",
+      compatibilityStatus: "proceed",
+      compatibilityRationale: (
+        input.compatibilityRationale ||
+        `Motivación: ${input.motivation}. Descripción: ${input.description}`
+      ).slice(0, 2000),
+      compatibilityDecidedAt: now,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await d.repo.mentorshipRelations.insert(relation);
+    await audit(d, "mentorship.relation_created", {
+      projectId,
+      targetId: relation.id,
+      meta: { mentorId, entrepreneurId },
+    });
+
+    // Guardar acuerdo formal
+    const agr = input.agreement;
+    const agreement: MentorshipAgreement = {
+      id: d.newId("agr"),
+      relationId: relation.id,
+      version: 1,
+      frequency: agr?.frequency || "biweekly",
+      sessionDurationMinutes: Math.max(15, Math.min(240, agr?.sessionDurationMinutes || 60)),
+      authorizedChannels: agr?.authorizedChannels || ["virtual", "email", "whatsapp"],
+      scope: (agr?.scope || agr?.cycleGoals || "Acompañamiento en validación y crecimiento").trim().slice(0, 4000),
+      mentorCommitments: (agr?.mentorCommitments || "Revisión quincenal de avances y feedback constructivo")
+        .trim()
+        .slice(0, 4000),
+      entrepreneurCommitments: (
+        agr?.entrepreneurCommitments || "Ejecución disciplinada de experimentos y reporte transparente"
+      )
+        .trim()
+        .slice(0, 4000),
+      confidentialityTerms: (
+        agr?.confidentialityTerms || "Toda la información operativa se maneja bajo confidencialidad estricta"
+      )
+        .trim()
+        .slice(0, 4000),
+      expectedDurationWeeks: Math.max(1, Math.min(104, agr?.expectedDurationWeeks || 12)),
+      status: "confirmed_by_entrepreneur",
+      createdAt: now,
+    };
+    await d.repo.mentorshipAgreements.insert(agreement);
+    await audit(d, "mentorship.agreement_updated", { projectId, targetId: agreement.id });
+
+    // Notificar a n8n si está configurado
+    dispatchEventToN8n({
+      eventId: d.newId("evt"),
+      eventType: "onboarding.completed",
+      occurredAt: now,
+      schemaVersion: "1.0.0",
+      correlationId: `expl_${projectId}`,
+      actor: { id: d.actor.id, role: d.actor.role, verified: true },
+      relationshipId: relation.id,
+      projectId,
+      entityType: "project",
+      entityId: projectId,
+      payload: { motivation: input.motivation, description: input.description, initiativeName: projectName },
+    }).catch(() => {});
+
+    revalidatePath(`/app/p/${projectId}`, "layout");
+    revalidatePath("/app/relaciones", "layout");
+    revalidatePath("/app", "layout");
+
+    return {
+      ok: true as const,
+      projectId,
+      relationId: relation.id,
+      notice: "Proyecto creado y acuerdo de mentoría formalizado con éxito.",
+    };
+  } catch (e) {
+    if (isDomainError(e)) return { ok: false as const, error: e.message, code: e.code };
+    console.error("[rax] error creando proyecto desde exploración:", e);
+    return { ok: false as const, error: "No se pudo crear el proyecto. Intentá nuevamente." };
+  }
+};
+
+export const loadExplorationContextAction = async () => {
+  const d = await getDeps();
+  if (!d) return { ok: false as const, error: "No autenticado" };
+
+  try {
+    const allProfiles = await d.repo.profiles.list().catch(() => []);
+    const approvedMentors = allProfiles.filter((p) => p.role === "mentor" && p.mentorStatus === "approved");
+    const mentors = approvedMentors.length > 0 ? approvedMentors : allProfiles.filter((p) => p.role === "mentor");
+
+    return {
+      ok: true as const,
+      actor: { id: d.actor.id, name: d.actor.name, role: d.actor.role },
+      mentors: mentors.map((m) => ({ id: m.id, name: m.name, email: m.email })),
+    };
+  } catch (e) {
+    if (isDomainError(e)) return { ok: false as const, error: e.message };
+    return { ok: false as const, error: "Error al cargar contexto" };
+  }
+};
+
+export const generateMentorshipExplorationWithAiAction = async (prompt?: string) => {
+  const d = await getDeps();
+  if (!d) return { ok: false as const, error: "No autenticado" };
+
+  try {
+    const allProfiles = await d.repo.profiles.list().catch(() => []);
+    const firstMentor =
+      allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved") ||
+      allProfiles.find((p) => p.role === "mentor");
+    const preferredMentorName = firstMentor?.name || "Mentora Asignada (Lean & Estrategia)";
+
+    const data: MentorshipExplorationAiResult = await generateMentorshipExplorationData(prompt, preferredMentorName);
+    return { ok: true as const, data, mentorId: firstMentor?.id };
+  } catch (e) {
+    if (isDomainError(e)) return { ok: false as const, error: e.message };
+    return { ok: false as const, error: "No se pudo generar la propuesta con IA." };
+  }
+};
+
 export const diagnoseTaskDelayAction = async (
   projectId: string,
   taskId: string,
@@ -1039,6 +1257,9 @@ export async function sendClaudeAgentMessageAction(input: {
       citations: result.citations,
       proposals: result.proposals,
       mode: result.mode,
+      cachedPromptUsed: result.cachedPromptUsed ?? false,
+      cacheStatus: result.cacheStatus ?? "simulated",
+      cachedTokens: result.cachedTokens ?? 0,
     };
   });
 }
@@ -1055,7 +1276,7 @@ export async function applyAiProposalAction(projectId: string, proposal: unknown
       const task = await createTask(d, projectId, {
         title: item.title,
         dueDate: undefined,
-        actionType: "operational_task",
+        actionType: item.actionType || "operational_task",
       });
       return { ok: true as const, type: "task" as const, id: task.id, title: task.title };
     }
@@ -1122,6 +1343,15 @@ export async function applyAiProposalAction(projectId: string, proposal: unknown
         uncertainty: "medium",
       });
       return { ok: true as const, type: "diagnosis_item" as const, id: diag.id, title: diag.title };
+    }
+
+    if (item.type === "goal") {
+      const task = await createTask(d, projectId, {
+        title: item.title,
+        dueDate: undefined,
+        actionType: "operational_task",
+      });
+      return { ok: true as const, type: "goal" as const, id: task.id, title: task.title };
     }
 
     return { ok: true as const, type: item.type, title: item.title };

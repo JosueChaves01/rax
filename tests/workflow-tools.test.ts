@@ -14,7 +14,7 @@ import { applyAiProposalAction } from "@/app/actions";
 afterAll(closeWorlds);
 
 describe("despachador de herramientas y workflows de RAX (RAX-00..RAX-15)", () => {
-  it("expone el catálogo completo de 9 herramientas estructuradas para el agente", () => {
+  it("expone el catálogo completo de herramientas estructuradas para el agente", () => {
     const toolNames = RAX_WORKFLOW_TOOLS.map((t) => t.name);
     expect(toolNames).toContain("extract_diagnosis_items");
     expect(toolNames).toContain("design_experiment");
@@ -25,6 +25,7 @@ describe("despachador de herramientas y workflows de RAX (RAX-00..RAX-15)", () =
     expect(toolNames).toContain("recommend_resources");
     expect(toolNames).toContain("evaluate_mentorship_cycle");
     expect(toolNames).toContain("query_project_metrics");
+    expect(toolNames).toContain("setup_mentorship_project");
   });
 
   it("ejecuta el workflow RAX-12 (diseño de experimentos e hipótesis)", async () => {

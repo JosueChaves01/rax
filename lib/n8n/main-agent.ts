@@ -89,6 +89,7 @@ export function selectRaxCapability(turn: MainAgentTurn): CapabilitySelection {
   const text = turn.message.toLocaleLowerCase();
   let primary: RaxCapabilityId = turn.flowId ?? "RAX-02";
   if (!turn.flowId && turn.stage === "session") primary = "RAX-05";
+  else if (!turn.flowId && turn.stage === "learning") primary = "RAX-02";
   else if (!turn.flowId && (turn.stage === "experiments_preparing" || turn.stage === "hypotheses" || /hip[oó]tesis|experimento|probar/.test(text))) primary = "RAX-12";
   else if (!turn.flowId && (turn.stage === "results_review" || /evidencia|resultado|m[eé]trica/.test(text))) primary = "RAX-13";
   else if (!turn.flowId && (turn.stage === "decided" || /evaluar ciclo|cierre de ciclo/.test(text))) primary = "RAX-14";

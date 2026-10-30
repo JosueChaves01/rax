@@ -71,7 +71,7 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
   },
   {
     name: "propose_tasks",
-    description: "Workflow RAX-08: Sugiere tareas prioritarias y plan de acción para el proyecto con fecha límite estimada.",
+    description: "Workflow RAX-08: Sugiere tareas prioritarias y plan de acción para el proyecto (tareas operativas, aprendizaje de habilidades o investigación) con fecha límite estimada.",
     parameters: {
       type: "object",
       properties: {
@@ -82,7 +82,11 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
             type: "object",
             properties: {
               title: { type: "string", description: "Título de la tarea" },
-              actionType: { type: "string", enum: ["experiment", "operational_task"], description: "Tipo de tarea" },
+              actionType: {
+                type: "string",
+                enum: ["experiment", "operational_task", "skill_learning", "research"],
+                description: "Tipo de tarea (operativa, aprendizaje/habilidad, investigación, experimento)",
+              },
               dueDate: { type: "string", description: "Fecha estimada YYYY-MM-DD" },
               blockedReason: { type: "string", description: "Motivo si requiere desbloqueo previo" },
             },
@@ -95,7 +99,7 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
   },
   {
     name: "synthesize_session",
-    description: "Workflow RAX-06: Sintetiza los acuerdos y compromisos tomados en una sesión de mentoría.",
+    description: "Workflow RAX-06: Sintetiza los acuerdos y compromisos tomados en una sesión de mentoría o tutoría.",
     parameters: {
       type: "object",
       properties: {
@@ -119,13 +123,13 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
   },
   {
     name: "generate_mentor_briefing",
-    description: "Workflow RAX-05: Prepara el briefing de la próxima sesión de mentoría con preguntas clave y puntos ciegos.",
+    description: "Workflow RAX-05: Prepara el briefing de la próxima sesión de mentoría o tutoría con temas clave, vacíos conceptuales o puntos ciegos.",
     parameters: {
       type: "object",
       properties: {
-        focusAreas: { type: "array", items: { type: "string" }, description: "Temas centrales de la sesión" },
-        blindSpots: { type: "array", items: { type: "string" }, description: "Puntos ciegos identificados" },
-        suggestedQuestions: { type: "array", items: { type: "string" }, description: "Preguntas sugeridas para el mentor" },
+        focusAreas: { type: "array", items: { type: "string" }, description: "Temas centrales de la sesión o tutoría" },
+        blindSpots: { type: "array", items: { type: "string" }, description: "Puntos ciegos o dificultades conceptuales identificadas" },
+        suggestedQuestions: { type: "array", items: { type: "string" }, description: "Preguntas sugeridas para el mentor o tutor" },
       },
       required: ["focusAreas", "suggestedQuestions"],
     },
@@ -149,7 +153,7 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
   },
   {
     name: "recommend_resources",
-    description: "Workflow RAX-11: Recomienda recursos metodológicos y plantillas de RAX según la etapa del proyecto.",
+    description: "Workflow RAX-11: Recomienda recursos de aprendizaje, guías pedagógicas y plantillas metodológicas de RAX según la etapa del proyecto o necesidad formativa.",
     parameters: {
       type: "object",
       properties: {
@@ -179,6 +183,25 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
     parameters: {
       type: "object",
       properties: {},
+    },
+  },
+  {
+    name: "setup_mentorship_project",
+    description: "Workflow de Exploración y Vinculación: Estructura la creación de un nuevo proyecto y relación de mentoría para que un mentor trabaje con un cliente (perfil, diagnóstico, compatibilidad y acuerdo preliminar).",
+    parameters: {
+      type: "object",
+      properties: {
+        initiativeName: { type: "string", description: "Nombre de la iniciativa o startup del cliente" },
+        sector: { type: "string", description: "Industria o sector de actividad" },
+        nature: { type: "string", enum: ["exploring_idea", "designing_solution", "operating_business", "unknown"], description: "Etapa de la iniciativa" },
+        motivation: { type: "string", enum: ["scale", "skills", "validate", "network", "blocker", "other"], description: "Motivación principal del cliente" },
+        description: { type: "string", description: "Situación actual y desafíos prioritarios" },
+        compatibilityRationale: { type: "string", description: "Justificación de compatibilidad y valor del mentor" },
+        frequency: { type: "string", enum: ["weekly", "biweekly", "monthly"], description: "Frecuencia sugerida de sesiones" },
+        cycleGoals: { type: "string", description: "Objetivos principales del ciclo de mentoría" },
+        scope: { type: "string", description: "Alcance del acompañamiento" },
+      },
+      required: ["initiativeName", "sector", "description", "cycleGoals"],
     },
   },
 ];
@@ -276,6 +299,7 @@ export async function executeWorkflowTool(
           type: "task",
           title: String(t.title || "Nueva tarea"),
           description: t.dueDate ? `Fecha límite propuesta: ${String(t.dueDate)}` : undefined,
+          actionType: t.actionType ? (String(t.actionType) as AiProposalItem["actionType"]) : undefined,
           needsHumanApproval: true,
         }),
       );
@@ -428,6 +452,43 @@ export async function executeWorkflowTool(
         summary: `Métricas del proyecto (Workflow RAX-15): ${data.completedTasks}/${data.totalTasks} tareas completadas, ${data.approvedHypotheses}/${data.totalHypotheses} hipótesis aprobadas, ${data.totalExperiments} experimentos diseñados y ${data.completedSessions} sesiones realizadas.`,
         proposals: [],
         data,
+      };
+    }
+
+    case "setup_mentorship_project": {
+      const initiativeName = String(args.initiativeName || "Nueva Iniciativa");
+      const sector = String(args.sector || "General");
+      const desc = String(args.description || "");
+      const frequency = String(args.frequency || "biweekly");
+      const scope = String(args.scope || args.cycleGoals || "Acompañamiento en validación y crecimiento");
+      const rationale = String(args.compatibilityRationale || "Alineación de objetivos y experiencia sectorial");
+
+      const proposals: AiProposalItem[] = [
+        makeProposal({
+          type: "goal",
+          title: `Acuerdo de mentoría para «${initiativeName}»`,
+          description: `Sector: ${sector}. Frecuencia: ${frequency}. Alcance: ${scope}. Justificación: ${rationale}`,
+          needsHumanApproval: true,
+        }),
+        makeProposal({
+          type: "task",
+          title: `Formalizar relación de mentoría y primer sesión de diagnóstico para ${initiativeName}`,
+          description: desc,
+          needsHumanApproval: true,
+        }),
+      ];
+
+      return {
+        ok: true,
+        toolName,
+        summary: `Estructuración del proyecto mentor-cliente para «${initiativeName}» completada con éxito.`,
+        proposals,
+        data: {
+          initiativeName,
+          sector,
+          frequency,
+          scope,
+        },
       };
     }
 

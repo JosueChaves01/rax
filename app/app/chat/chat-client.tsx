@@ -30,6 +30,9 @@ interface MessageView {
   artifacts?: AgentArtifact[];
   citations?: KnowledgeCitation[];
   proposals?: Array<Record<string, unknown>>;
+  cachedPromptUsed?: boolean;
+  cacheStatus?: string;
+  cachedTokens?: number;
 }
 
 export default function ChatClient({ projects }: { projects: Array<{ id: string; name: string }> }) {
@@ -215,6 +218,9 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
             artifacts,
             citations,
             proposals,
+            cachedPromptUsed: res.data?.cachedPromptUsed,
+            cacheStatus: res.data?.cacheStatus,
+            cachedTokens: res.data?.cachedTokens,
           },
         ]);
 
@@ -302,11 +308,10 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
               <h1 className="text-xs sm:text-sm font-bold text-slate-900 truncate flex items-center gap-2">
                 <span>{activeThread?.title || "Conversación"}</span>
                 <span
-                  className={`hidden sm:inline-flex text-[0.625rem] font-bold px-2 py-0.5 rounded-full ${
-                    knowledgeStats?.evaluation.mode === "rag"
+                  className={`hidden sm:inline-flex text-[0.625rem] font-bold px-2 py-0.5 rounded-full ${knowledgeStats?.evaluation.mode === "rag"
                       ? "bg-purple-100 text-purple-800"
                       : "bg-emerald-100 text-emerald-800"
-                  }`}
+                    }`}
                 >
                   {knowledgeStats?.evaluation.mode === "rag"
                     ? "Modo RAG Activo"
@@ -390,6 +395,21 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
                   <span>{m.senderName}</span>
                   <span>•</span>
                   <span>{m.time}</span>
+                  {m.cacheStatus === "hit" && (
+                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded font-sans font-semibold inline-flex items-center gap-1">
+                      ⚡ Prompt Cache Hit ({m.cachedTokens ? `${m.cachedTokens.toLocaleString()} tokens` : "activo"})
+                    </span>
+                  )}
+                  {m.cacheStatus === "write" && (
+                    <span className="text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded font-sans font-semibold inline-flex items-center gap-1">
+                      💾 Prompt Cache Escrito
+                    </span>
+                  )}
+                  {m.cacheStatus === "simulated" && (
+                    <span className="text-slate-500 bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 rounded font-sans font-medium inline-flex items-center gap-1">
+                      🧪 Simulado
+                    </span>
+                  )}
                 </div>
 
                 <div
@@ -478,11 +498,10 @@ export default function ChatClient({ projects }: { projects: Array<{ id: string;
                             <button
                               onClick={() => handleApplyProposal(prop)}
                               disabled={isApplied || isApplying}
-                              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                                isApplied
+                              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isApplied
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
                                   : "bg-orange-600 hover:bg-orange-700 text-white shadow-2xs cursor-pointer"
-                              }`}
+                                }`}
                             >
                               {isApplied ? "✓ Aplicado" : isApplying ? "Aplicando..." : "Aplicar al Proyecto"}
                             </button>

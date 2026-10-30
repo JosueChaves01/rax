@@ -15,6 +15,8 @@ export interface ClaudeTurnInput {
   deps?: ServiceDeps;
 }
 
+export type CacheStatus = "hit" | "write" | "unsupported" | "simulated" | "miss";
+
 export interface ClaudeTurnResult {
   reply: string;
   artifacts: AgentArtifact[];
@@ -22,6 +24,8 @@ export interface ClaudeTurnResult {
   proposals: Array<Record<string, unknown>>;
   mode: "in_context" | "rag";
   cachedPromptUsed?: boolean;
+  cacheStatus?: CacheStatus;
+  cachedTokens?: number;
 }
 
 export function buildSystemPrompt(project: Project, knowledge: KnowledgeContextResult): string {
@@ -57,15 +61,25 @@ ${chunksXml}
 
   const customInstructions = project.customInstructions?.trim()
     ? project.customInstructions.trim()
-    : "Sin instrucciones adicionales. Mantén un tono honesto, riguroso, empático y orientado a validación.";
+    : "Sin instrucciones adicionales. Mantén un tono honesto, empático y pedagógico, adaptándote activamente según el usuario sea un estudiante/aprendiz guiado por un mentor o tutor, o alguien estructurando una iniciativa de negocio.";
 
   return `Eres el Agente Inteligente de RAX, diseñado bajo la arquitectura de Claude Projects.
 Operas como un orquestador de contexto persistente, herramientas y conocimiento compartido para el proyecto actual.
+
+Tu rol es dual y se adapta a las necesidades y objetivos de la persona:
+- Como copiloto para **mentores, tutores y estudiantes**: apoyas procesos de aprendizaje, comprensión conceptual profunda, resolución de dudas académicas y formativas, desarrollo de habilidades y preparación de sesiones de tutoría.
+- Como copiloto para **asesores y emprendedores**: apoyas la estructuración de iniciativas de negocio, diagnóstico metodológico riguroso y contraste empírico cuando corresponda.
 
 Reglas fundamentales:
 1. Honestidad visible: separa lo confirmado de las suposiciones y no inventes cifras, hechos ni aprobaciones.
 2. Si te preguntan por información contenida en el conocimiento del proyecto, cíñete a los documentos y cita el nombre del archivo.
 3. No compartes información con otros proyectos ni mezclas historiales de otros hilos.
+4. **Regla de oro contra el sesgo de validación comercial**:
+   Si el usuario final es un estudiante o la consulta versa sobre un proceso de aprendizaje, comprensión de un concepto, estudio, un ejercicio o preparación de una tutoría:
+   - **NO envíes a la persona a validar una idea en el mercado**, ni asumas que tiene una empresa o startup, ni hables de entrevistas a clientes, disposición a pagar, tracción ni ventas.
+   - En su lugar, actúa como un **tutor pedagógico con IA**: explica didácticamente los conceptos con ejemplos claros, utiliza preguntas socráticas para estimular su razonamiento, propone ejercicios de práctica formativa y ayúdale a formular preguntas estratégicas para su mentor o tutor humano.
+5. **Acompañamiento a Mentores y Tutores**:
+   Cuando el usuario interactúe con el rol de mentor o tutor, ayúdale a diagnosticar vacíos conceptuales del estudiante, estructurar dinámicas de clase o sesión, diseñar ejercicios formativos y sintetizar compromisos de aprendizaje.
 
 <project_instructions>
 ${customInstructions}
@@ -109,13 +123,23 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
     return generateSimulatedClaudeTurn(input);
   }
 
-  const model = process.env.OPENROUTER_MODEL || "anthropic/claude-3.5-sonnet";
-  const messages: Array<{ role: "system" | "user" | "assistant"; content: string; [key: string]: unknown }> = [
+  const model =
+    process.env.CLAUDE_PROJECTS_MODEL ||
+    process.env.CLAUDE_MODEL ||
+    (process.env.OPENROUTER_MODEL && process.env.OPENROUTER_MODEL.includes("claude")
+      ? process.env.OPENROUTER_MODEL
+      : "anthropic/claude-sonnet-4.5");
+
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: unknown; [key: string]: unknown }> = [
     {
       role: "system",
-      content: systemPrompt,
-      // OpenRouter / Anthropic cache hint for prompt caching
-      cache_control: { type: "ephemeral" },
+      content: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
     },
     ...input.history.slice(-14).map((m) => ({
       role: m.author === "assistant" ? ("assistant" as const) : ("user" as const),
@@ -139,6 +163,7 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
       body: JSON.stringify({
         model,
         messages,
+        cache_control: { type: "ephemeral" },
         tools: RAX_WORKFLOW_TOOLS.map((tool) => ({
           type: "function",
           function: tool,
@@ -162,7 +187,15 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
           tool_calls?: Array<{ function: { name: string; arguments: string } }>;
         };
       }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+        prompt_tokens_details?: {
+          cached_tokens?: number;
+          cache_write_tokens?: number;
+        };
+      };
     };
 
     const choice = json.choices?.[0]?.message;
@@ -187,13 +220,28 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
       }
     }
 
+    const cachedTokens = json.usage?.prompt_tokens_details?.cached_tokens ?? 0;
+    const writeTokens = json.usage?.prompt_tokens_details?.cache_write_tokens ?? 0;
+    const cacheHit = cachedTokens > 0;
+
+    let cacheStatus: CacheStatus = "miss";
+    if (cacheHit) {
+      cacheStatus = "hit";
+    } else if (writeTokens > 0) {
+      cacheStatus = "write";
+    } else if (!model.toLowerCase().includes("claude") && !model.toLowerCase().includes("anthropic")) {
+      cacheStatus = "unsupported";
+    }
+
     return {
       reply: (cleanText || "He analizado tu solicitud basándome en el contexto del proyecto.") + toolExecutionNotes,
       artifacts,
       citations: input.knowledge.citations,
       proposals,
       mode: input.knowledge.mode,
-      cachedPromptUsed: true,
+      cachedPromptUsed: cacheHit,
+      cacheStatus,
+      cachedTokens,
     };
   } catch (e) {
     console.warn(`[claude-orchestrator] Error conectando con LLM:`, e);
@@ -207,8 +255,40 @@ function generateSimulatedClaudeTurn(input: ClaudeTurnInput): ClaudeTurnResult {
   const proposals: AiProposalItem[] = [];
 
   let reply = "";
+  const isLearningContext = /aprend|estudi|tutor|ejercicio|concepto|duda|clase|materia|estudiante|alumno|aprendiz|explicar|pedag[oó]g/.test(query);
 
-  if (/tarea|plan de acci[oó]n|acciones|to[- ]?do/.test(query)) {
+  if (isLearningContext) {
+    if (/tarea|plan de acci[oó]n|acciones|to[- ]?do/.test(query)) {
+      proposals.push(
+        makeProposal({ type: "task", title: "Repasar conceptos fundamentales y elaborar un mapa de ideas", description: "Enfocado en consolidar la comprensión teórica antes de avanzar a la práctica", needsHumanApproval: true }),
+        makeProposal({ type: "task", title: "Resolver 2 ejercicios prácticos de aplicación autónoma", description: "Identificar dudas puntuales y verificar comprensión", needsHumanApproval: true }),
+        makeProposal({ type: "task", title: "Preparar 3 preguntas específicas para la sesión con el mentor/tutor", description: "Llegar a la tutoría con los puntos de bloqueo claramente identificados", needsHumanApproval: true }),
+      );
+      reply = `Como tu tutor y copiloto de aprendizaje con IA, he estructurado un plan de estudio y práctica (Workflow RAX-08) adaptado a tu proceso formativo. Te sugiero estas ${proposals.length} actividades para avanzar a tu propio ritmo con el apoyo de tu mentor o tutor.`;
+    } else if (/hip[oó]tesis|experimento|validar|probar/.test(query)) {
+      proposals.push(
+        makeProposal({ type: "task", title: "Ejercicio de autoevaluación: explicar el concepto en tus palabras con un ejemplo", description: "Técnica Feynman para comprobar que no quedan lagunas conceptuales", needsHumanApproval: true }),
+        makeProposal({ type: "task", title: "Revisar aplicación práctica con el mentor/tutor", description: "Validar tu razonamiento y recibir retroalimentación formativa", needsHumanApproval: true }),
+      );
+      reply = `En lugar de una validación comercial, hemos diseñado un ejercicio de autoevaluación y verificación de comprensión formativa. Esto te permitirá comprobar tu dominio del tema y discutirlo con tu tutor.`;
+    } else if (/sesi[oó]n|briefing|mentor|tutor/.test(query)) {
+      proposals.push(
+        makeProposal({ type: "agenda_topic", title: "Punto de tutoría: Revisar dudas conceptuales identificadas durante el estudio", needsHumanApproval: true }),
+        makeProposal({ type: "agenda_topic", title: "Pregunta para mentor/tutor: ¿Cuál es el error más frecuente al aplicar este concepto?", needsHumanApproval: true }),
+      );
+      reply = `He preparado el temario y las preguntas formativas para tu próxima sesión de tutoría con tu mentor o tutor (Workflow RAX-05).`;
+    } else if (/recurso|plantilla|gu[ií]a/.test(query)) {
+      proposals.push(
+        makeProposal({ type: "recommendation", title: "Guía de estudio estructurada y marco conceptual", description: "Material didáctico para profundizar en el tema con ejemplos paso a paso", needsHumanApproval: false }),
+      );
+      reply = `He consultado el catálogo de recursos formativos de RAX (Workflow RAX-11) y te recomiendo este material de apoyo pedagógico.`;
+    } else {
+      proposals.push(
+        makeProposal({ type: "task", title: "Anotar dudas clave para la próxima tutoría", description: "Registrar preguntas concretas surgidas durante el estudio", needsHumanApproval: true }),
+      );
+      reply = `Entendido. Como copiloto pedagógico con IA, estoy aquí para guiarte en tu proceso de aprendizaje paso a paso. Recuerda que no necesitas validar ningún modelo comercial: el objetivo es comprender el tema, desarrollar tus habilidades y apoyarte en tu mentor o tutor para resolver cualquier inquietud. ¿Hay algún concepto específico en el que te gustaría que profundicemos?`;
+    }
+  } else if (/tarea|plan de acci[oó]n|acciones|to[- ]?do/.test(query)) {
     proposals.push(
       makeProposal({ type: "task", title: "Definir guion de 10 entrevistas con clientes potenciales", description: "Enfocado en validar el problema real y la disposición a pagar", needsHumanApproval: true }),
       makeProposal({ type: "task", title: "Elaborar propuesta de valor en una sola frase", description: "Para comprobar comprensión inmediata con mentores", needsHumanApproval: true }),
@@ -311,5 +391,8 @@ function generateSimulatedClaudeTurn(input: ClaudeTurnInput): ClaudeTurnResult {
     citations: input.knowledge.citations,
     proposals,
     mode: input.knowledge.mode,
+    cachedPromptUsed: false,
+    cacheStatus: "simulated",
+    cachedTokens: 0,
   };
 }

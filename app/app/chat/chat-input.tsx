@@ -13,6 +13,50 @@ interface ChatInputProps {
 
 const TEMPLATES = [
   {
+    id: "learning-query",
+    title: "🎓 Consulta de Aprendizaje y Tutoría",
+    description: "Duda conceptual, explicación didáctica y preguntas para el tutor",
+    content: `### Tema o Concepto
+Describe el concepto, tema o materia que estás estudiando...
+
+### Mi duda o punto de bloqueo
+¿Qué parte te resulta confusa o difícil de entender?
+
+### Solicitud al tutor con IA
+- 1. Explícame este concepto con una analogía o ejemplo sencillo paso a paso.
+- 2. ¿Qué ejercicio de autoevaluación me sugieres para comprobar si lo entendí?
+- 3. ¿Qué preguntas clave debería llevarle a mi mentor o tutor en la próxima sesión?`,
+  },
+  {
+    id: "study-plan",
+    title: "📚 Plan de Estudio y Práctica",
+    description: "Organizar temas, ejercicios prácticos y autoevaluación",
+    content: `### Objetivo de Aprendizaje
+¿Qué habilidad o competencia deseas dominar en las próximas semanas?
+
+### Nivel actual y recursos disponibles
+- Nivel de partida: [Principiante / Intermedio / Avanzado]
+- Horas semanales disponibles: 
+- Materiales o lecturas de base: 
+
+### Solicitud al tutor con IA
+Estructura una ruta de estudio progresiva dividida en 3 etapas prácticas, con actividades concretas y criterios para verificar mi avance antes de reunirme con mi tutor.`,
+  },
+  {
+    id: "tutoring-prep",
+    title: "🤝 Preparar Sesión con Mentor/Tutor",
+    description: "Resumen de avances, dudas y agenda de tutoría",
+    content: `### Avances desde la última sesión
+- Temas o lecturas revisadas: 
+- Ejercicios o entregas completadas: 
+
+### Dificultades identificadas
+- ¿En qué punto sentí mayor dificultad o atasco? 
+
+### Agenda para la tutoría
+Ayúdame a formular entre 3 y 4 preguntas reflexivas para aprovechar al máximo los minutos de reunión con mi mentor/tutor.`,
+  },
+  {
     id: "structured-query",
     title: "📋 Consulta estructurada",
     description: "Contexto, desafío y pregunta concreta",
