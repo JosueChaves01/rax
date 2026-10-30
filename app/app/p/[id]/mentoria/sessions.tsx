@@ -57,18 +57,18 @@ const STATUS_TAG = {
 export function SharingToggle({ projectId, shared }: { projectId: string; shared: boolean }) {
   const { run, pending, error } = useAction();
   return (
-    <div className="mt-4 border-t border-line pt-4">
-      <label className="flex items-start gap-3 text-sm">
+    <div className="mt-4 border-t border-slate-200 dark:border-slate-800 pt-4">
+      <label className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300">
         <input
           type="checkbox"
-          className="mt-1 h-4 w-4 accent-[var(--color-accent)]"
+          className="mt-1 h-4 w-4 rounded accent-blue-600"
           checked={shared}
           disabled={pending}
           onChange={(e) => run(() => setSharingAction(projectId, e.target.checked))}
         />
         <span>
           Compartir la conversación completa con el mentor
-          <span className="block text-xs text-muted">
+          <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Si no la compartís, el mentor ve el resumen preparado y el diagnóstico, no tus mensajes privados.
           </span>
         </span>
@@ -116,9 +116,9 @@ export function ReviewRequests({
   };
 
   return (
-    <div className="rounded-2xl border border-line bg-panel p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-        <p className="eyebrow">Sesiones y Revisiones</p>
+    <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-6 shadow-xs space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-3">
+        <p className="eyebrow text-slate-500 dark:text-slate-400">Sesiones y Revisiones</p>
         <Button
           size="sm"
           variant="secondary"
@@ -129,8 +129,8 @@ export function ReviewRequests({
       </div>
 
       {showScheduleModal && (
-        <form onSubmit={handleScheduleSubmit} className="rounded-xl border border-line bg-bg p-4 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-cyan">
+        <form onSubmit={handleScheduleSubmit} className="rounded-xl border border-blue-200/90 bg-blue-50/50 dark:bg-slate-800/80 dark:border-blue-900/40 p-4 space-y-3.5 shadow-2xs">
+          <p className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
             Nueva sesión de mentoría
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -173,11 +173,11 @@ export function ReviewRequests({
 
       <div className="space-y-3 text-sm">
         {only !== "second_review" && (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>
-              Primera revisión
-              {!summaryConfirmed && <span className="block text-xs text-muted">Disponible al confirmar el resumen inicial.</span>}
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/60 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800">
+            <div>
+              <span className="font-semibold text-slate-900 dark:text-white">Primera revisión</span>
+              {!summaryConfirmed && <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Disponible al confirmar el resumen inicial.</span>}
+            </div>
             <Button
               size="sm"
               variant="primary"
@@ -190,11 +190,11 @@ export function ReviewRequests({
         )}
 
         {only !== "first_review" && (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>
-              Segunda revisión
-              {!hasResults && <span className="block text-xs text-muted">Disponible cuando registres al menos un resultado.</span>}
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/60 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800">
+            <div>
+              <span className="font-semibold text-slate-900 dark:text-white">Segunda revisión</span>
+              {!hasResults && <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Disponible cuando registres al menos un resultado.</span>}
+            </div>
             <Button
               size="sm"
               variant="primary"
@@ -272,13 +272,16 @@ function SessionCopilotBar({
   };
 
   return (
-    <div className="rounded-xl border border-cyan-500/30 bg-cyan-50/60 dark:bg-cyan-950/20 p-4 space-y-3">
+    <div className="rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-white dark:from-slate-900 dark:via-blue-950/25 dark:to-slate-900 dark:border-blue-900/50 p-5 space-y-3.5 shadow-xs">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400 flex items-center gap-1.5">
-            <span>✨</span> Copiloto metodológico de sesiones
-          </p>
-          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600 text-white text-xs shadow-2xs">✨</span>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-300">
+              Copiloto Metodológico de Sesiones
+            </p>
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl">
             Prepará la reunión con 4 capas de memoria o redactá la síntesis ejecutiva con compromisos en borrador en base al diagnóstico actual.
           </p>
         </div>
@@ -287,6 +290,7 @@ function SessionCopilotBar({
             size="sm"
             variant="secondary"
             type="button"
+            className="border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-200 hover:bg-blue-50/80 font-semibold"
             disabled={isAiLoading || disabled}
             onClick={handleGenerateBriefing}
           >
@@ -296,6 +300,7 @@ function SessionCopilotBar({
             size="sm"
             variant="secondary"
             type="button"
+            className="border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-200 hover:bg-blue-50/80 font-semibold"
             disabled={isAiLoading || disabled}
             onClick={handleGenerateSynthesis}
           >
@@ -303,10 +308,16 @@ function SessionCopilotBar({
           </Button>
         </div>
       </div>
-      {aiNotice && <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">✓ {aiNotice}</p>}
+      {aiNotice && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/90 dark:bg-emerald-950/40 dark:border-emerald-800 px-3.5 py-2 text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+          <span>✓</span>
+          <span>{aiNotice}</span>
+        </div>
+      )}
       {aiError && (
-        <div role="alert" className="rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/40 dark:border-rose-800 p-3 text-xs text-rose-800 dark:text-rose-200">
-          {aiError}
+        <div role="alert" className="flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/50 dark:border-rose-800 px-3.5 py-2.5 text-xs font-medium text-rose-800 dark:text-rose-200">
+          <span>⚠️</span>
+          <span className="flex-1">{aiError}</span>
         </div>
       )}
     </div>
@@ -359,16 +370,16 @@ export function SessionCard(props: {
   };
 
   return (
-    <Card as="li" className="p-5 space-y-5 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 shadow-2xs">
+    <Card as="li" className="p-6 space-y-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs">
       {/* Cabecera de la tarjeta de sesión */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-zinc-800 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 dark:border-slate-800 pb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="display text-2xl">
+          <h3 className="display text-2xl text-slate-900 dark:text-white">
             {title} <span className="text-highlight">{hi}</span>
           </h3>
           <Tag color={statusColor}>{statusLabel}</Tag>
           {s.scheduledAt && (
-            <span className="text-xs text-cyan font-mono bg-panel px-2 py-0.5 rounded border border-line">
+            <span className="inline-flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-300 font-medium bg-blue-50 dark:bg-blue-950/50 px-2.5 py-1 rounded-full border border-blue-200 dark:border-blue-800 font-mono">
               📅 {formatDate(s.scheduledAt)}
             </span>
           )}
@@ -401,60 +412,62 @@ export function SessionCard(props: {
       {/* 1. BRIEFING PRE-SESIÓN (4 CAPAS DE MEMORIA)                   */}
       {/* ───────────────────────────────────────────────────────────── */}
       {preBrief && (
-        <details className="rounded-xl border border-cyan-500/30 bg-cyan-50/40 dark:bg-cyan-950/20 p-4" open={true}>
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400 flex items-center justify-between">
+        <details className="rounded-2xl border border-blue-200/80 bg-blue-50/30 dark:bg-blue-950/20 dark:border-blue-900/40 p-5 shadow-xs" open={true}>
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-300 flex items-center justify-between">
             <span>✨ Briefing Pre-Sesión (4 Capas de Memoria) · {formatDate(preBrief.generatedAt)}</span>
-            <span className="text-[0.6875rem] text-slate-500 dark:text-slate-400 normal-case font-normal">Preparación en &lt; 3 minutos</span>
+            <span className="text-[0.6875rem] text-blue-700 dark:text-blue-300 bg-blue-100/70 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-800 px-2.5 py-0.5 rounded-full font-semibold normal-case">
+              Preparación en &lt; 3 minutos
+            </span>
           </summary>
-          <div className="mt-3 space-y-3.5 text-sm pt-3 border-t border-cyan-200 dark:border-cyan-800">
+          <div className="mt-3.5 space-y-3.5 text-sm pt-3 border-t border-blue-200/70 dark:border-blue-900/40">
             {/* Capa 1: Acuerdos y Objetivos vigentes */}
-            <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
+            <div className="rounded-xl bg-white dark:bg-slate-900 p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+              <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
                 Capa 1: Acuerdos y Objetivos vigentes
               </p>
-              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 dark:text-slate-100 leading-relaxed">
+              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
                 {preBrief.activeAgreementsAndGoalsSummary}
               </p>
             </div>
 
             {/* Capa 2: Progreso y Ejecución reciente */}
-            <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
+            <div className="rounded-xl bg-white dark:bg-slate-900 p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+              <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
                 Capa 2: Progreso reciente, problemas diagnósticos y bloqueos
               </p>
-              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 dark:text-slate-100 leading-relaxed">
+              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
                 {preBrief.recentProgressSummary}
               </p>
             </div>
 
             {/* Capa 3: Temas pendientes y conversaciones recientes */}
-            <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
+            <div className="rounded-xl bg-white dark:bg-slate-900 p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+              <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
                 Capa 3: Temas pendientes de sesiones previas y chat del asistente
               </p>
-              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 dark:text-slate-100 leading-relaxed">
+              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
                 {preBrief.pendingTopicsSummary}
               </p>
             </div>
 
             {/* Capa 4: Propuesta de agenda y preguntas estratégicas */}
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
+              <div className="rounded-xl bg-white dark:bg-slate-900 p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
                   Capa 4: Propuesta de Agenda
                 </p>
-                <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-800 dark:text-slate-100">
+                <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-800 dark:text-slate-200">
                   {preBrief.suggestedAgenda.map((item, idx) => (
                     <li key={idx}>{item}</li>
                   ))}
                 </ul>
               </div>
 
-              <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
+              <div className="rounded-xl bg-white dark:bg-slate-900 p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
                   Capa 4: Preguntas estratégicas sugeridas
                 </p>
-                <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-600 dark:text-slate-300">
+                <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-600 dark:text-slate-400 italic">
                   {preBrief.suggestedQuestions.map((q, idx) => (
                     <li key={idx}>«{q}»</li>
                   ))}
@@ -467,11 +480,11 @@ export function SessionCard(props: {
 
       {/* Briefing determinista clásico si no hay preBriefing generado */}
       {!preBrief && b && (
-        <details className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-4" open={canAct}>
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-slate-400">
+        <details className="rounded-2xl border border-slate-200/80 bg-slate-50/50 dark:bg-slate-900/40 dark:border-slate-800 p-5 shadow-2xs" open={canAct}>
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">
             Resumen estructurado para el mentor · {formatDate(b.generatedAt)}
           </summary>
-          <dl className="mt-3 grid gap-4 text-sm md:grid-cols-2">
+          <dl className="mt-3.5 grid gap-4 text-sm md:grid-cols-2">
             <Brief label="Qué intenta desarrollar" value={b.whatTheyBuild} />
             <Brief label="Etapa" value={b.stage} />
             <Brief label="Problema principal" value={b.mainProblem} />
@@ -493,28 +506,29 @@ export function SessionCard(props: {
       {props.notes.length > 0 && (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="eyebrow">Notas y acuerdos de la sesión ({displayedNotes.length})</p>
+            <p className="eyebrow text-slate-500 dark:text-slate-400">Notas y acuerdos de la sesión ({displayedNotes.length})</p>
             {props.isSessionMentor && props.notes.some((n) => n.isPrivate) && (
               <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={onlySharedNotes}
                   onChange={(e) => setOnlySharedNotes(e.target.checked)}
-                  className="accent-[var(--color-accent)]"
+                  className="rounded accent-blue-600"
                 />
                 <span>Ocultar notas privadas (vista del emprendedor)</span>
               </label>
             )}
           </div>
 
-          <ul className="space-y-2">
+          <ul className="space-y-2.5">
             {displayedNotes.map((n) => (
               <li
                 key={n.id}
-                className={`rounded-xl border px-4 py-3 text-sm transition-colors ${n.isPrivate
-                    ? "border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20"
-                    : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 shadow-2xs"
-                  }`}
+                className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
+                  n.isPrivate
+                    ? "border-purple-200 bg-purple-50/60 dark:border-purple-900/50 dark:bg-purple-950/20"
+                    : "border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 shadow-2xs"
+                }`}
               >
                 <div className="flex flex-wrap items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
                   <Tag
@@ -533,14 +547,14 @@ export function SessionCard(props: {
                     {NOTE_KIND_LABEL[n.kind]}
                   </Tag>
                   {n.isPrivate && (
-                    <span className="rounded bg-purple-500/20 px-1.5 py-0.5 font-semibold text-purple-600 dark:text-purple-300">
+                    <span className="rounded bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 font-semibold text-[0.625rem]">
                       🔒 Privada del mentor
                     </span>
                   )}
                   <span>{props.people[n.authorId]?.name} · {formatDate(n.createdAt)}</span>
                   {n.relatedItemId && <span>· sobre «{itemTitle(n.relatedItemId) ?? "elemento"}»</span>}
                 </div>
-                <p className="mt-1.5 text-slate-800 dark:text-slate-100 whitespace-pre-wrap">{n.body}</p>
+                <p className="mt-1.5 text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">{n.body}</p>
               </li>
             ))}
           </ul>
@@ -551,13 +565,13 @@ export function SessionCard(props: {
       {/* 3. SÍNTESIS POS-SESIÓN Y ADOPCIÓN DE COMPROMISOS              */}
       {/* ───────────────────────────────────────────────────────────── */}
       {postSyn && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-950/20 p-4 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 dark:border-emerald-800 pb-2">
+        <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/30 dark:bg-emerald-950/20 dark:border-emerald-900/50 p-5 space-y-4 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 dark:border-emerald-800 pb-2.5">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
                 Síntesis Pos-Sesión · {formatDate(postSyn.generatedAt)}
               </p>
-              <h4 className="font-semibold text-slate-900 dark:text-white">Resumen ejecutivo y compromisos formalizados</h4>
+              <h4 className="font-bold text-slate-900 dark:text-white">Resumen ejecutivo y compromisos formalizados</h4>
             </div>
             {(props.isSessionMentor || props.isOwner) && postSyn.entrepreneurCommitments.length > 0 && (
               <Button
@@ -571,14 +585,14 @@ export function SessionCard(props: {
             )}
           </div>
 
-          <p className="text-sm text-slate-800 dark:text-slate-100 whitespace-pre-wrap leading-relaxed">{postSyn.summary}</p>
+          <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">{postSyn.summary}</p>
 
           {postSyn.agreedDecisions.length > 0 && (
-            <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+            <div className="rounded-xl bg-white dark:bg-slate-900 p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+              <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
                 Decisiones y Acuerdos
               </p>
-              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs text-slate-800 dark:text-slate-100">
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs text-slate-800 dark:text-slate-200">
                 {postSyn.agreedDecisions.map((d, idx) => (
                   <li key={idx}>{d}</li>
                 ))}
@@ -588,17 +602,17 @@ export function SessionCard(props: {
 
           <div className="grid gap-3 sm:grid-cols-2">
             {postSyn.entrepreneurCommitments.length > 0 && (
-              <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              <div className="rounded-xl bg-white dark:bg-slate-900 p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
                   Compromisos del Emprendedor ({postSyn.entrepreneurCommitments.length})
                 </p>
-                <ul className="mt-2 space-y-1.5 text-xs text-slate-800 dark:text-slate-100">
+                <ul className="mt-2 space-y-2 text-xs text-slate-800 dark:text-slate-200">
                   {postSyn.entrepreneurCommitments.map((c, idx) => (
                     <li key={idx} className="flex items-start gap-1.5">
                       <Tag color="var(--color-accent)">
                         {ACTION_TYPE_LABEL[c.actionType ?? "operational_task"]}
                       </Tag>
-                      <span className="flex-1">{c.title}</span>
+                      <span className="flex-1 font-medium">{c.title}</span>
                     </li>
                   ))}
                 </ul>
@@ -606,11 +620,11 @@ export function SessionCard(props: {
             )}
 
             {postSyn.mentorCommitments.length > 0 && (
-              <div className="rounded-lg bg-white dark:bg-slate-900 p-3.5 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              <div className="rounded-xl bg-white dark:bg-slate-900 p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
                   Compromisos del Mentor ({postSyn.mentorCommitments.length})
                 </p>
-                <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                <ul className="mt-2 space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
                   {postSyn.mentorCommitments.map((mc, idx) => (
                     <li key={idx}>• {mc.title}</li>
                   ))}
@@ -621,7 +635,7 @@ export function SessionCard(props: {
 
           {postSyn.nextSteps && (
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              <strong className="text-slate-800 dark:text-slate-200">Próximos pasos:</strong> {postSyn.nextSteps}
+              <strong className="text-slate-900 dark:text-white">Próximos pasos:</strong> {postSyn.nextSteps}
               {postSyn.suggestedNextSessionInDays && (
                 <span> · Encuentro sugerido en {postSyn.suggestedNextSessionInDays} días.</span>
               )}
@@ -632,11 +646,11 @@ export function SessionCard(props: {
 
       {/* Decisión del mentor (si aplica en segunda revisión) */}
       {s.decision && (
-        <div className="rounded-xl border border-accent/40 bg-accent/5 p-4">
-          <p className="eyebrow">Decisión formal del mentor</p>
-          <p className="display mt-1 text-2xl">{DECISION_LABEL[s.decision.value]}</p>
-          <p className="mt-1 text-sm">{s.decision.justification}</p>
-          <p className="mt-1 text-xs text-faint">
+        <div className="rounded-xl border border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800 p-4">
+          <p className="eyebrow text-blue-700 dark:text-blue-400">Decisión formal del mentor</p>
+          <p className="display mt-1 text-2xl text-slate-900 dark:text-white">{DECISION_LABEL[s.decision.value]}</p>
+          <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{s.decision.justification}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Sobre: {props.hypotheses.find((h) => h.id === s.decision!.hypothesisId)?.statement ?? "hipótesis"} · {formatDate(s.decision.decidedAt)}
           </p>
         </div>
@@ -657,17 +671,17 @@ export function SessionCard(props: {
 function Brief({ label, value, list, empty }: { label: string; value?: string; list?: string[]; empty?: string }) {
   return (
     <div>
-      <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">{label}</dt>
-      <dd className="mt-1 whitespace-pre-wrap">
+      <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">{label}</dt>
+      <dd className="mt-1 whitespace-pre-wrap text-slate-800 dark:text-slate-200">
         {value ??
           (list && list.length ? (
-            <ul className="list-disc space-y-0.5 pl-4">
+            <ul className="list-disc space-y-0.5 pl-4 text-slate-800 dark:text-slate-200">
               {list.map((x, i) => (
                 <li key={i}>{x}</li>
               ))}
             </ul>
           ) : (
-            <span className="text-muted">{empty}</span>
+            <span className="text-slate-500 dark:text-slate-400">{empty}</span>
           ))}
       </dd>
     </div>
@@ -679,29 +693,29 @@ function ResultsDigest({ hypotheses, experiments, results }: { hypotheses: Hypot
   if (!withResults.length) return null;
   return (
     <div className="space-y-3">
-      <p className="eyebrow">Qué se intentó y qué pasó</p>
+      <p className="eyebrow text-slate-500 dark:text-slate-400">Qué se intentó y qué pasó</p>
       {withResults.map((e) => {
         const h = hypotheses.find((x) => x.id === e.hypothesisId);
         return results
           .filter((r) => r.experimentId === e.id)
           .map((r) => (
-            <div key={r.id} className="grid gap-3 rounded-xl border border-line p-4 text-sm md:grid-cols-2">
+            <div key={r.id} className="grid gap-3 rounded-xl border border-slate-200/80 bg-slate-50/50 dark:bg-slate-900/60 dark:border-slate-800 p-4 text-sm md:grid-cols-2 shadow-2xs">
               <div>
-                <p className="text-[0.6875rem] uppercase tracking-[0.12em] text-faint">Hipótesis {h && `· ${HYPOTHESIS_STATUS_LABEL[h.status]}`}</p>
-                <p className="mt-1">{h?.statement}</p>
-                <p className="mt-2 text-[0.6875rem] uppercase tracking-[0.12em] text-faint">Criterios definidos antes</p>
-                <p className="mt-1 text-muted">Éxito: {e.successCriterion}</p>
-                <p className="text-muted">Rechazo: {e.rejectionCriterion}</p>
+                <p className="text-[0.6875rem] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Hipótesis {h && `· ${HYPOTHESIS_STATUS_LABEL[h.status]}`}</p>
+                <p className="mt-1 font-semibold text-slate-900 dark:text-white">{h?.statement}</p>
+                <p className="mt-2 text-[0.6875rem] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Criterios definidos antes</p>
+                <p className="mt-1 text-slate-600 dark:text-slate-300">Éxito: {e.successCriterion}</p>
+                <p className="text-slate-600 dark:text-slate-300">Rechazo: {e.rejectionCriterion}</p>
               </div>
               <div>
-                <p className="flex items-center gap-2 text-[0.6875rem] uppercase tracking-[0.12em] text-faint">
+                <p className="flex items-center gap-2 text-[0.6875rem] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                   Resultado <Tag color={r.outcome === "positive" ? "var(--color-ok)" : r.outcome === "negative" ? "var(--color-danger)" : "var(--color-highlight)"}>{OUTCOME_LABEL[r.outcome]}</Tag>
                 </p>
-                <p className="mt-1">{r.observed}</p>
-                <p className="mt-1 text-muted">Métrica: {r.metricValue}</p>
-                <p className="mt-1 text-muted">Aprendizaje: {r.learnings}</p>
-                <p className="mt-1 text-muted">Limitaciones: {r.limitations}</p>
-                <p className="mt-1 text-xs text-faint">{r.evidenceIds.length} evidencia(s) adjunta(s)</p>
+                <p className="mt-1 font-semibold text-slate-900 dark:text-white">{r.observed}</p>
+                <p className="mt-1 text-slate-600 dark:text-slate-300">Métrica: {r.metricValue}</p>
+                <p className="mt-1 text-slate-600 dark:text-slate-300">Aprendizaje: {r.learnings}</p>
+                <p className="mt-1 text-slate-600 dark:text-slate-300">Limitaciones: {r.limitations}</p>
+                <p className="mt-1 text-xs text-slate-400">{r.evidenceIds.length} evidencia(s) adjunta(s)</p>
               </div>
             </div>
           ));
@@ -734,10 +748,10 @@ function MentorTools({
   const fid = (x: string) => `${s.id}-${x}`;
 
   return (
-    <div className="space-y-6 border-t border-line pt-5">
+    <div className="space-y-5 border-t border-slate-200/80 dark:border-slate-800 pt-5">
       {/* Formulario de toma de notas en vivo con privacidad dual */}
       <form
-        className="space-y-4 rounded-xl border border-line bg-panel p-4"
+        className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 dark:bg-slate-900/60 dark:border-slate-800 p-5 shadow-xs"
         onSubmit={(e) => {
           e.preventDefault();
           run(
@@ -750,13 +764,13 @@ function MentorTools({
         }}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-ink">Tomar nota en vivo</p>
-          <label className="flex items-center gap-2 text-xs text-purple-600 dark:text-purple-300 cursor-pointer font-medium">
+          <p className="text-sm font-bold text-slate-900 dark:text-white">Tomar nota en vivo</p>
+          <label className="flex items-center gap-2 text-xs text-purple-700 dark:text-purple-300 cursor-pointer font-medium">
             <input
               type="checkbox"
               checked={isPrivate}
               onChange={(e) => setIsPrivate(e.target.checked)}
-              className="accent-purple-500"
+              className="rounded accent-purple-600"
             />
             <span>🔒 Nota privada (no visible para el emprendedor)</span>
           </label>
@@ -808,7 +822,7 @@ function MentorTools({
         </Field>
 
         <div className="flex justify-end">
-          <Button size="sm" type="submit" disabled={pending || !body.trim()}>
+          <Button size="sm" variant="primary" type="submit" disabled={pending || !body.trim()}>
             {pending ? "Guardando..." : "Guardar nota"}
           </Button>
         </div>
@@ -816,7 +830,7 @@ function MentorTools({
 
       {/* Cierre de sesión o registro de decisión */}
       <form
-        className="space-y-4 rounded-xl border border-line bg-panel p-4"
+        className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 dark:bg-slate-900/60 dark:border-slate-800 p-5 shadow-xs"
         onSubmit={(e) => {
           e.preventDefault();
           run(async () => {
@@ -831,7 +845,7 @@ function MentorTools({
           });
         }}
       >
-        <p className="text-sm font-semibold text-ink">
+        <p className="text-sm font-bold text-slate-900 dark:text-white">
           {s.kind === "first_review"
             ? "Cerrar primera revisión con un acuerdo"
             : s.kind === "second_review"
@@ -842,12 +856,12 @@ function MentorTools({
         {s.kind === "second_review" && (
           <>
             <fieldset>
-              <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted">Decisión</legend>
+              <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">Decisión</legend>
               <div className="flex flex-wrap gap-2">
                 {(Object.keys(DECISION_LABEL) as MentorDecision[]).map((k) => (
                   <label
                     key={k}
-                    className="cursor-pointer rounded-full border border-line-strong px-3 py-1 text-xs has-[:checked]:border-accent has-[:checked]:bg-accent has-[:checked]:text-white"
+                    className="cursor-pointer rounded-full border border-slate-300 dark:border-slate-700 px-3.5 py-1 text-xs font-medium has-[:checked]:border-blue-600 has-[:checked]:bg-blue-600 has-[:checked]:text-white transition-colors"
                   >
                     <input
                       type="radio"

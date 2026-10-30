@@ -43,19 +43,24 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
           return (
             <li
               key={s.id}
-              className={cx("min-w-0 rounded-xl border bg-panel px-2 py-2 sm:px-3 sm:py-2.5", state === "current" ? "border-accent" : "border-line")}
+              className={cx(
+                "min-w-0 rounded-xl border px-2 py-2 sm:px-3 sm:py-2.5 shadow-2xs transition-colors",
+                state === "current"
+                  ? "border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 dark:border-blue-500"
+                  : "border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800",
+              )}
               aria-current={state === "current" ? "step" : undefined}
             >
-              <p className="font-mono text-[0.625rem] text-faint">
+              <p className="font-mono text-[0.625rem] text-slate-400">
                 {s.n}
                 <span className="hidden sm:inline"> · {state === "done" ? "hecha" : state === "current" ? "en curso" : "por venir"}</span>
               </p>
-              <p className={cx("display mt-1 truncate text-base sm:text-xl", state === "done" ? "text-muted" : state === "upcoming" ? "text-faint" : "")}>{s.label}</p>
+              <p className={cx("display mt-1 truncate text-base sm:text-xl font-bold", state === "done" ? "text-slate-400" : state === "upcoming" ? "text-slate-400" : "text-slate-900 dark:text-white")}>{s.label}</p>
               <div className="mt-2 flex gap-[3px]" aria-hidden>
                 {s.phases.map((p, i) => (
                   <span
                     key={p}
-                    className={cx("h-[3px] flex-1 rounded", i < done ? "bg-ok" : state === "current" && i === done ? "bg-accent" : "bg-white/10")}
+                    className={cx("h-[3px] flex-1 rounded", i < done ? "bg-emerald-600" : state === "current" && i === done ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700")}
                   />
                 ))}
               </div>
@@ -65,15 +70,15 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
       </ol>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <section aria-labelledby="sigue" className="rounded-2xl border border-accent/45 bg-accent/5 p-6">
-          <p id="sigue" className="eyebrow text-accent">
+        <section aria-labelledby="sigue" className="rounded-2xl border border-blue-200/80 bg-blue-50/40 dark:bg-blue-950/20 dark:border-blue-900/40 p-6 shadow-xs">
+          <p id="sigue" className="eyebrow text-blue-700 dark:text-blue-400">
             Lo que sigue · {stage.label}
           </p>
-          <p className="mt-3 text-xl font-semibold leading-snug sm:text-2xl">{text}</p>
-          <p className="mt-3 text-sm text-muted">{PHASE_LABEL[w.phase]}</p>
+          <p className="mt-3 text-xl font-bold leading-snug sm:text-2xl text-slate-900 dark:text-white">{text}</p>
+          <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{PHASE_LABEL[w.phase]}</p>
           <Link
             href={`/app/p/${id}/${tab}`}
-            className="mt-5 inline-flex h-10 items-center rounded-full bg-accent px-5 text-xs font-semibold uppercase tracking-[0.08em] text-white hover:bg-accent-strong"
+            className="mt-5 inline-flex h-10 items-center rounded-full bg-blue-600 px-5 text-xs font-semibold uppercase tracking-[0.08em] text-white hover:bg-blue-700 shadow-xs"
           >
             {CTA[tab] ?? "Ir ahora"}
           </Link>
@@ -81,23 +86,23 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
         </section>
 
         <aside className="space-y-4">
-          <div className="rounded-2xl border border-line bg-panel p-5">
-            <p className="eyebrow">Pendientes</p>
+          <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-6 shadow-xs">
+            <p className="eyebrow text-slate-500 dark:text-slate-400">Pendientes</p>
             <ul className="mt-3 space-y-2 text-sm">
               {pending.map((p) => (
                 <li key={p.label}>
-                  <Link href={`/app/p/${id}/${p.tab}`} className={cx("flex items-baseline gap-2 hover:text-ink", p.n ? "" : "text-faint")}>
+                  <Link href={`/app/p/${id}/${p.tab}`} className={cx("flex items-baseline gap-2 hover:text-blue-600 transition-colors", p.n ? "text-slate-800 dark:text-slate-200 font-medium" : "text-slate-400")}>
                     {p.label}
-                    <span className={cx("ml-auto font-mono text-xs", p.n ? "text-ink" : "")}>{p.n}</span>
+                    <span className={cx("ml-auto font-mono text-xs", p.n ? "text-blue-600 font-bold" : "text-slate-400")}>{p.n}</span>
                   </Link>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="rounded-2xl border border-line bg-panel p-5 text-sm">
-            <p className="eyebrow">Archivo</p>
-            <p className="mt-2 text-muted">Última actualización {formatDate(w.project.updatedAt)}.</p>
-            <Link href={`/app/p/${id}/historial`} className="mt-2 inline-block text-xs font-semibold uppercase tracking-[0.12em] text-accent hover:text-accent-strong">
+          <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-6 text-sm shadow-xs">
+            <p className="eyebrow text-slate-500 dark:text-slate-400">Archivo</p>
+            <p className="mt-2 text-slate-500 dark:text-slate-400">Última actualización {formatDate(w.project.updatedAt)}.</p>
+            <Link href={`/app/p/${id}/historial`} className="mt-2 inline-block text-xs font-semibold uppercase tracking-[0.12em] text-blue-600 hover:underline">
               Ver evidencia e historial →
             </Link>
           </div>
@@ -128,13 +133,13 @@ function TurnLine({ turn, viewerIsMentor, you, mentor, owner }: { turn: Turn; vi
           ? "Esperando que la administración asigne mentor."
           : `Ahora le toca a ${who}.`;
   return (
-    <p className="mt-5 flex items-center gap-3 text-sm text-muted">
+    <p className="mt-5 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
       {who && (
         <span
           aria-hidden
           className={cx(
-            "grid h-7 w-7 place-items-center rounded-full text-[0.625rem] font-bold text-black",
-            turn === "mentor" ? "bg-cyan" : turn === "admin" ? "bg-danger" : "bg-highlight",
+            "grid h-7 w-7 place-items-center rounded-full text-[0.625rem] font-bold text-white",
+            turn === "mentor" ? "bg-blue-600" : turn === "admin" ? "bg-rose-600" : "bg-amber-600",
           )}
         >
           {who.slice(0, 2).toUpperCase()}

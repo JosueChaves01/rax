@@ -62,14 +62,14 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
 
       {!w.isMentorView && (
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-line bg-panel p-5">
-            <p className="eyebrow">Mentor asignado</p>
+          <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-6 shadow-xs">
+            <p className="eyebrow text-slate-500 dark:text-slate-400">Mentor asignado</p>
             {mentorNames.length ? (
               <>
-                <p className="display mt-2 text-2xl">{mentorNames.join(", ")}</p>
+                <p className="display mt-2 text-2xl font-bold text-slate-900 dark:text-white">{mentorNames.join(", ")}</p>
                 {w.mentors.map((m) =>
                   w.mentorContext[m] ? (
-                    <div key={m} className="mt-2 flex flex-wrap gap-1.5">
+                    <div key={m} className="mt-2.5 flex flex-wrap gap-1.5">
                       {w.mentorContext[m].expertise.map((e) => (
                         <Tag key={e} color="var(--color-cyan)">{EXPERTISE_LABEL[e]}</Tag>
                       ))}
@@ -78,7 +78,7 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
                 )}
               </>
             ) : (
-              <p className="mt-2 text-sm text-muted">
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Todavía no tenés mentor. Podés seguir conversando y ordenando información; las decisiones que requieren revisión humana quedan
                 pendientes hasta que la administración asigne a alguien.
               </p>
@@ -92,15 +92,15 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
       )}
 
       {w.isMentorView && w.founderContext && kind === "first_review" && (
-        <div className="rounded-2xl border border-line bg-panel p-5">
-          <p className="eyebrow">Lo que {w.people[w.project.ownerId]?.name.split(" ")[0] ?? "la persona"} espera de RAX</p>
+        <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-6 shadow-xs">
+          <p className="eyebrow text-slate-500 dark:text-slate-400">Lo que {w.people[w.project.ownerId]?.name.split(" ")[0] ?? "la persona"} espera de RAX</p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {w.founderContext.goals.map((g) => (
               <Tag key={g} color="var(--color-highlight)">{GOAL_LABEL[g]}</Tag>
             ))}
           </div>
-          {w.founderContext.mentorExpectation && <p className="mt-3 text-sm">«{w.founderContext.mentorExpectation}»</p>}
-          <p className="mt-2 text-xs text-muted">
+          {w.founderContext.mentorExpectation && <p className="mt-3 text-sm text-slate-800 dark:text-slate-200 font-medium">«{w.founderContext.mentorExpectation}»</p>}
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
             {w.founderContext.sector || "Rubro sin indicar"} · {WEEKLY_HOURS_LABEL[w.founderContext.weeklyHours].toLowerCase()} por semana
           </p>
         </div>
@@ -114,21 +114,21 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
       )}
 
       {w.isMentorView && suggestedResources.length > 0 && (
-        <div className="rounded-2xl border border-cyan/40 bg-cyan/5 p-5">
+        <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 dark:bg-slate-900 dark:border-blue-900/40 p-6 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="eyebrow text-cyan">Recursos recomendados para el momento actual</p>
-            <Link href="/app/mentor/recursos" className="text-xs font-semibold text-cyan hover:underline">
+            <p className="eyebrow text-blue-700 dark:text-blue-400">Recursos recomendados para el momento actual</p>
+            <Link href="/app/mentor/recursos" className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">
               Ver biblioteca completa →
             </Link>
           </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
             {suggestedResources.map((s) => (
-              <div key={s.resource.id} className="rounded-xl border border-line bg-panel p-3 text-xs space-y-1">
+              <div key={s.resource.id} className="rounded-xl border border-slate-200/90 bg-white dark:bg-slate-900 dark:border-slate-800 p-4 text-xs space-y-1.5 shadow-2xs">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-ink">{s.resource.title}</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{s.resource.title}</span>
                   <Tag color="var(--color-cyan)">{RESOURCE_CATEGORY_LABEL[s.resource.category]}</Tag>
                 </div>
-                <p className="text-muted text-[0.6875rem]">{s.whyItHelpsNow}</p>
+                <p className="text-slate-500 dark:text-slate-400 text-[0.6875rem] leading-relaxed">{s.whyItHelpsNow}</p>
               </div>
             ))}
           </div>
