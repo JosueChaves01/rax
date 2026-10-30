@@ -103,9 +103,9 @@ export async function appendAgentUserMessage(d: ServiceDeps, threadId: string, c
   // Si el hilo tenía el título por defecto "Nuevo chat", auto-asignarle las primeras palabras del mensaje
   if (thread.title === "Nuevo chat") {
     const autoTitle = clean.slice(0, 40).replace(/[\r\n]+/g, " ");
-    await d.repo.agentThreads.update(thread.id, { title: autoTitle, updatedAt: d.now() }).catch(() => {});
+    await d.repo.agentThreads.update(thread.id, { title: autoTitle, updatedAt: d.now() }).catch(() => { });
   } else {
-    await d.repo.agentThreads.update(thread.id, { updatedAt: d.now() }).catch(() => {});
+    await d.repo.agentThreads.update(thread.id, { updatedAt: d.now() }).catch(() => { });
   }
   return userMsg;
 }

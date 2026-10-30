@@ -35,11 +35,13 @@ const QUICK_PROMPTS = [
 export function ProjectConversationClient({
   projectId,
   projectName,
+  stage = "entender",
   canWrite = true,
   isMentorView = false,
 }: {
   projectId: string;
   projectName: string;
+  stage?: string;
   canWrite?: boolean;
   isMentorView?: boolean;
 }) {
@@ -143,6 +145,12 @@ export function ProjectConversationClient({
         projectId,
         threadId: activeThreadId ?? undefined,
         message: trimmed,
+        sessionContext: {
+          location: "project_conversation",
+          pageTitle: `Conversación del proyecto «${projectName}»`,
+          stage,
+          isMentorView,
+        },
       });
 
       if (res.ok && res.data) {

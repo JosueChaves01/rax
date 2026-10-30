@@ -120,7 +120,7 @@ import {
   updateProjectInstructions,
 } from "@/lib/services/project-knowledge";
 import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
-import { executeClaudeAgentTurn } from "@/lib/ai/claude-orchestrator";
+import { executeClaudeAgentTurn, type SessionContext } from "@/lib/ai/claude-orchestrator";
 import { AiProposalItemSchema } from "@/lib/n8n/contracts";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 import { generateMentorshipExplorationData, type MentorshipExplorationAiResult } from "@/lib/ai/exploration-ai";
@@ -818,7 +818,7 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
       entityType: "project",
       entityId: projectId,
       payload: { motivation: input.motivation, description: input.description, initiativeName: projectName },
-    }).catch(() => {});
+    }).catch(() => { });
 
     revalidatePath(`/app/p/${projectId}`, "layout");
     revalidatePath("/app/relaciones", "layout");
@@ -1272,6 +1272,7 @@ export async function sendClaudeAgentMessageAction(input: {
   projectId: string;
   threadId?: string;
   message: string;
+  sessionContext?: SessionContext;
 }) {
   return run(input.projectId, async (d) => {
     const { project } = await guard(d, input.projectId, "agent.chat");
@@ -1300,6 +1301,7 @@ export async function sendClaudeAgentMessageAction(input: {
       knowledge,
       role: d.actor.role,
       deps: d,
+      sessionContext: input.sessionContext,
     });
 
     const assistantMessage = await appendAgentAssistantMessage(d, thread.id, {

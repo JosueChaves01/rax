@@ -221,6 +221,10 @@ export default function ChatClient({
         projectId,
         threadId: activeThreadId ?? undefined,
         message: textToSend.trim(),
+        sessionContext: {
+          location: "global_assistant",
+          pageTitle: "Asistente de IA General de RAX",
+        },
       });
 
       if (res.ok && res.data) {
@@ -340,8 +344,8 @@ export default function ChatClient({
                 <span>{activeThread?.title || "Conversación"}</span>
                 <span
                   className={`hidden sm:inline-flex text-[0.625rem] font-bold px-2 py-0.5 rounded-full ${knowledgeStats?.evaluation.mode === "rag"
-                      ? "bg-purple-100 text-purple-800"
-                      : "bg-emerald-100 text-emerald-800"
+                    ? "bg-purple-100 text-purple-800"
+                    : "bg-emerald-100 text-emerald-800"
                     }`}
                 >
                   {knowledgeStats?.evaluation.mode === "rag"
@@ -530,8 +534,8 @@ export default function ChatClient({
                               onClick={() => handleApplyProposal(prop)}
                               disabled={isApplied || isApplying}
                               className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isApplied
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
-                                  : "bg-orange-600 hover:bg-orange-700 text-white shadow-2xs cursor-pointer"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+                                : "bg-orange-600 hover:bg-orange-700 text-white shadow-2xs cursor-pointer"
                                 }`}
                             >
                               {isApplied ? "✓ Aplicado" : isApplying ? "Aplicando..." : "Aplicar al Proyecto"}

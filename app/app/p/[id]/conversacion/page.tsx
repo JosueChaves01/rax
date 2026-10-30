@@ -22,6 +22,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     <ProjectConversationClient
       projectId={id}
       projectName={w.project.name}
+      stage={w.phase}
       canWrite={canWrite}
       isMentorView={w.isMentorView}
     />

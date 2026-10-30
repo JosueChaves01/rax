@@ -6,6 +6,13 @@ import type { ServiceDeps } from "@/lib/services/base";
 import { executeWorkflowTool, makeProposal, RAX_WORKFLOW_TOOLS } from "./workflow-tools";
 import type { AiProposalItem } from "@/lib/n8n/contracts";
 
+export interface SessionContext {
+  location?: "project_conversation" | "global_assistant" | "diagnosis" | "tasks" | "mentorship_session" | "agreements" | "evaluation";
+  pageTitle?: string;
+  stage?: string;
+  isMentorView?: boolean;
+}
+
 export interface ClaudeTurnInput {
   project: Project;
   userMessage: string;
@@ -13,6 +20,7 @@ export interface ClaudeTurnInput {
   knowledge: KnowledgeContextResult;
   role: "entrepreneur" | "mentor" | "admin";
   deps?: ServiceDeps;
+  sessionContext?: SessionContext;
 }
 
 export type CacheStatus = "hit" | "write" | "unsupported" | "simulated" | "miss";
@@ -28,7 +36,12 @@ export interface ClaudeTurnResult {
   cachedTokens?: number;
 }
 
-export function buildSystemPrompt(project: Project, knowledge: KnowledgeContextResult): string {
+export function buildSystemPrompt(
+  project: Project,
+  knowledge: KnowledgeContextResult,
+  role: "entrepreneur" | "mentor" | "admin" = "entrepreneur",
+  sessionContext?: SessionContext,
+): string {
   let knowledgeBlock = "";
 
   if (knowledge.mode === "in_context" && knowledge.inContextDocs && knowledge.inContextDocs.length > 0) {
@@ -63,8 +76,30 @@ ${chunksXml}
     ? project.customInstructions.trim()
     : "Sin instrucciones adicionales. Mantén un tono honesto, empático y pedagógico, adaptándote activamente según el usuario sea un estudiante/aprendiz guiado por un mentor o tutor, o alguien estructurando una iniciativa de negocio.";
 
+  const projectExt = project as Project & { archetype?: string; sector?: string; stage?: string; summary?: string };
+  const isLearningProject =
+    projectExt.archetype === "learning" ||
+    Boolean(projectExt.sector?.toLowerCase().includes("educa")) ||
+    /aprend|estudi|react|curso|tutor|programaci[oó]n|javascript|python|materia|clase|universidad|colegio|escuela|formaci[oó]n/i.test(project.name) ||
+    /aprend|estudi|curso|tutor|formaci[oó]n/i.test(project.description || projectExt.summary || "");
+
+  const currentStage = sessionContext?.stage || projectExt.stage || "entender";
+  const currentLocation = sessionContext?.location === "project_conversation"
+    ? `Conversación de trabajo del proyecto «${project.name}» (/app/p/.../conversacion)`
+    : sessionContext?.pageTitle || "Plataforma RAX";
+
   return `Eres el Agente Inteligente de RAX, diseñado bajo la arquitectura de Claude Projects.
 Operas como un orquestador de contexto persistente, herramientas y conocimiento compartido para el proyecto actual.
+
+<current_session_and_location>
+- Proyecto actual: "${project.name}" (ID: ${project.id})
+- Sector / Categoría: ${projectExt.sector || (isLearningProject ? "Educación y Formación" : "General")}
+- Arquetipo: ${projectExt.archetype || (isLearningProject ? "learning" : "general")}
+- Etapa del proyecto: ${currentStage} (fase actual de trabajo)
+- Ubicación / Sesión actual en la plataforma: ${currentLocation}
+- Rol del usuario actual: ${role === "mentor" ? "Mentor / Tutor" : "Estudiante / Aprendiz / Emprendedor"}
+${project.description || projectExt.summary ? `- Resumen del proyecto: "${project.description || projectExt.summary}"` : ""}
+</current_session_and_location>
 
 Tu rol es dual y se adapta a las necesidades y objetivos de la persona:
 - Como copiloto para **mentores, tutores y estudiantes**: apoyas procesos de aprendizaje, comprensión conceptual profunda, resolución de dudas académicas y formativas, desarrollo de habilidades y preparación de sesiones de tutoría.
@@ -75,11 +110,27 @@ Reglas fundamentales:
 2. Si te preguntan por información contenida en el conocimiento del proyecto, cíñete a los documentos y cita el nombre del archivo.
 3. No compartes información con otros proyectos ni mezclas historiales de otros hilos.
 4. **Regla de oro contra el sesgo de validación comercial**:
-   Si el usuario final es un estudiante o la consulta versa sobre un proceso de aprendizaje, comprensión de un concepto, estudio, un ejercicio o preparación de una tutoría:
+   Si el proyecto actual es de aprendizaje (como «${project.name}») o el usuario es un estudiante o la consulta versa sobre estudio, ejercicios o tutoría:
    - **NO envíes a la persona a validar una idea en el mercado**, ni asumas que tiene una empresa o startup, ni hables de entrevistas a clientes, disposición a pagar, tracción ni ventas.
    - En su lugar, actúa como un **tutor pedagógico con IA**: explica didácticamente los conceptos con ejemplos claros, utiliza preguntas socráticas para estimular su razonamiento, propone ejercicios de práctica formativa y ayúdale a formular preguntas estratégicas para su mentor o tutor humano.
 5. **Acompañamiento a Mentores y Tutores**:
    Cuando el usuario interactúe con el rol de mentor o tutor, ayúdale a diagnosticar vacíos conceptuales del estudiante, estructurar dinámicas de clase o sesión, diseñar ejercicios formativos y sintetizar compromisos de aprendizaje.
+
+<session_and_tool_guidelines>
+Estás interactuando en la sesión: ${currentLocation}.
+Selecciona las herramientas especializadas según el contexto y la intención del usuario:
+1. **Resumir conversación o consolidar contexto de la etapa** (ej. "hacer un resumen de lo que sabemos en esta conversación para agregarlo como contexto de la etapa entender"):
+   - Llama a **update_context_memory** (Workflow RAX-03).
+   - Sintetiza la conversación y genera una propuesta de tipo diagnosis_item con category: "context" para la etapa ${currentStage}.
+   - NUNCA generes tareas de entrevistas comerciales ni validación de mercado ante solicitudes de resumen.
+2. **Identificar afirmaciones, conceptos o supuestos**: Llama a **extract_diagnosis_items** (Workflow RAX-04).
+3. **Proponer metas u objetivos formativos o del ciclo**: Llama a **propose_goals** (Workflow RAX-07).
+4. **Planificar actividades o tareas**: Llama a **propose_tasks** (Workflow RAX-08).
+   - En proyectos formativos («${project.name}»): las tareas DEBEN ser de tipo skill_learning o research (ej. ejercicios de código, mapas conceptuales, preguntas para la tutoría).
+5. **Preparar sesión o tutoría**: Llama a **generate_mentor_briefing** (Workflow RAX-05) o **synthesize_session** (Workflow RAX-06).
+6. **Recomendar recursos o guías**: Llama a **recommend_resources** (Workflow RAX-11).
+7. **Diseñar experimentos o autoevaluaciones**: Llama a **design_experiment** (Workflow RAX-12). En aprendizaje, diseña ejercicios prácticos de autoevaluación (Técnica Feynman); solo en startups comerciales diseña validaciones de mercado.
+</session_and_tool_guidelines>
 
 <project_instructions>
 ${customInstructions}
@@ -89,13 +140,15 @@ ${knowledgeBlock}
 
 <platform_workflows>
 Como orquestador de RAX, tienes acceso a los siguientes workflows especializados:
+- RAX-03 (update_context_memory): Resumir la conversación y consolidar el contexto de la etapa en la memoria del proyecto.
 - RAX-04 (extract_diagnosis_items): Identificar y extraer supuestos, hechos u observaciones al diagnóstico.
-- RAX-12 (design_experiment): Diseñar hipótesis y experimentos de validación con criterios ex-ante.
+- RAX-07 (propose_goals): Proponer metas y objetivos de aprendizaje o desarrollo.
 - RAX-08 (propose_tasks): Proponer plan de acción y tareas con fechas estimadas.
 - RAX-06 (synthesize_session): Sintetizar acuerdos y compromisos tras reuniones.
 - RAX-05 (generate_mentor_briefing): Preparar briefing previo con puntos ciegos para el mentor.
 - RAX-09 (diagnose_task_delays): Diagnosticar causas de bloqueos o retrasos sin formular juicios morales.
 - RAX-11 (recommend_resources): Recomendar plantillas o recursos metodológicos según la fase.
+- RAX-12 (design_experiment): Diseñar hipótesis y experimentos de validación con criterios ex-ante o autoevaluaciones.
 - RAX-14 (evaluate_mentorship_cycle): Evaluar ciclo y madurez de la iniciativa.
 - RAX-15 (query_project_metrics): Consultar métricas del proyecto (tareas, hipótesis, experimentos, sesiones).
 Cuando tu respuesta requiera estructurar una acción en el proyecto, invoca la herramienta correspondiente para que el usuario pueda revisarla y aplicarla con un clic.
@@ -117,7 +170,7 @@ Cuando se te pida diseñar interfaces, componentes de UI, dashboards, diagramas 
  */
 export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<ClaudeTurnResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const systemPrompt = buildSystemPrompt(input.project, input.knowledge);
+  const systemPrompt = buildSystemPrompt(input.project, input.knowledge, input.role, input.sessionContext);
 
   if (!apiKey) {
     return generateSimulatedClaudeTurn(input);
@@ -126,9 +179,8 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
   const model =
     process.env.CLAUDE_PROJECTS_MODEL ||
     process.env.CLAUDE_MODEL ||
-    (process.env.OPENROUTER_MODEL && process.env.OPENROUTER_MODEL.includes("claude")
-      ? process.env.OPENROUTER_MODEL
-      : "anthropic/claude-sonnet-4.5");
+    process.env.OPENROUTER_MODEL ||
+    "anthropic/claude-sonnet-4.5";
 
   const messages: Array<{ role: "system" | "user" | "assistant"; content: unknown; [key: string]: unknown }> = [
     {
@@ -255,20 +307,64 @@ function generateSimulatedClaudeTurn(input: ClaudeTurnInput): ClaudeTurnResult {
   const proposals: AiProposalItem[] = [];
 
   let reply = "";
-  const isLearningContext = /aprend|estudi|tutor|ejercicio|concepto|duda|clase|materia|estudiante|alumno|aprendiz|explicar|pedag[oó]g/.test(query);
 
-  if (isLearningContext) {
-    if (/tarea|plan de acci[oó]n|acciones|to[- ]?do/.test(query)) {
+  const projectExt = input.project as Project & { archetype?: string; sector?: string; stage?: string; summary?: string };
+  const isLearningProject =
+    projectExt.archetype === "learning" ||
+    Boolean(projectExt.sector?.toLowerCase().includes("educa")) ||
+    /aprend|estudi|react|curso|tutor|programaci[oó]n|javascript|python|materia|clase|universidad|colegio|escuela|formaci[oó]n/i.test(input.project.name) ||
+    /aprend|estudi|curso|tutor|formaci[oó]n/i.test(input.project.description || projectExt.summary || "");
+
+  const isLearningQuery =
+    /aprend|estudi|tutor|ejercicio|concepto|duda|clase|materia|estudiante|alumno|aprendiz|explicar|pedag[oó]g|c[oó]digo|react|componente/i.test(query);
+
+  const isLearningContext = isLearningProject || isLearningQuery;
+  const currentStage = input.sessionContext?.stage || projectExt.stage || "entender";
+  const stageName = /entender|explor/.test(query)
+    ? "Entender"
+    : /evaluar|test/.test(query)
+      ? "Evaluar"
+      : /construir|build/.test(query)
+        ? "Construir"
+        : currentStage.charAt(0).toUpperCase() + currentStage.slice(1);
+
+  // 1. Resumen de conversación, contexto de etapa o memoria contextual (Workflow RAX-03)
+  if (/resumen|s[ií]ntesis|contexto|memoria|qu[eé] sabemos|lo que sabemos/.test(query)) {
+    if (isLearningContext) {
       proposals.push(
-        makeProposal({ type: "task", title: "Repasar conceptos fundamentales y elaborar un mapa de ideas", description: "Enfocado en consolidar la comprensión teórica antes de avanzar a la práctica", needsHumanApproval: true }),
-        makeProposal({ type: "task", title: "Resolver 2 ejercicios prácticos de aplicación autónoma", description: "Identificar dudas puntuales y verificar comprensión", needsHumanApproval: true }),
-        makeProposal({ type: "task", title: "Preparar 3 preguntas específicas para la sesión con el mentor/tutor", description: "Llegar a la tutoría con los puntos de bloqueo claramente identificados", needsHumanApproval: true }),
+        makeProposal({
+          type: "diagnosis_item",
+          title: `Contexto de la etapa «${stageName}» — Síntesis de conversación`,
+          description: `Síntesis acumulada de la conversación para el aprendizaje de «${input.project.name}»:\n- Objetivo formativo: Dominar los conceptos fundamentales y la estructura práctica del tema.\n- Enfoque pedagógico: Andamiaje conceptual progresivo y formulación de preguntas reflexivas para la tutoría.\n- Estado: Contexto consolidado para la etapa ${stageName}.`,
+          category: "context",
+          needsHumanApproval: true,
+        }),
+      );
+      reply = `He analizado la conversación de «${input.project.name}» y generado el resumen de contexto para la etapa «${stageName}» (Workflow RAX-03: Context Memory). Te propongo agregarlo al diagnóstico del proyecto para que tu mentor o tutor disponga de este marco conceptual consolidado.`;
+    } else {
+      proposals.push(
+        makeProposal({
+          type: "diagnosis_item",
+          title: `Contexto de la etapa «${stageName}» — Síntesis de conversación`,
+          description: `Síntesis acumulada de la conversación para «${input.project.name}» en la etapa ${stageName}:\n- Contexto del problema y situación inicial identificados en la conversación.\n- Supuestos clave y observaciones compartidas.\n- Estado: Registrado para avance hacia la siguiente etapa.`,
+          category: "context",
+          needsHumanApproval: true,
+        }),
+      );
+      reply = `He sintetizado los puntos clave de esta conversación para la etapa «${stageName}» (Workflow RAX-03: Context Memory). Te propongo guardar este resumen como contexto de la etapa en el diagnóstico del proyecto.`;
+    }
+  } else if (isLearningContext) {
+    if (/(?:^|[^\w])(tarea|tareas|plan de acci[oó]n|acciones|pendientes?|to-?do list)(?:[^\w]|$)/i.test(query)) {
+      proposals.push(
+        makeProposal({ type: "task", title: "Repasar conceptos fundamentales y elaborar un mapa de ideas", description: "Enfocado en consolidar la comprensión teórica antes de avanzar a la práctica", actionType: "skill_learning", needsHumanApproval: true }),
+        makeProposal({ type: "task", title: "Resolver 2 ejercicios prácticos de aplicación autónoma", description: "Identificar dudas puntuales y verificar comprensión", actionType: "skill_learning", needsHumanApproval: true }),
+        makeProposal({ type: "task", title: "Preparar 3 preguntas específicas para la sesión con el mentor/tutor", description: "Llegar a la tutoría con los puntos de bloqueo claramente identificados", actionType: "research", needsHumanApproval: true }),
       );
       reply = `Como tu tutor y copiloto de aprendizaje con IA, he estructurado un plan de estudio y práctica (Workflow RAX-08) adaptado a tu proceso formativo. Te sugiero estas ${proposals.length} actividades para avanzar a tu propio ritmo con el apoyo de tu mentor o tutor.`;
     } else if (/hip[oó]tesis|experimento|validar|probar/.test(query)) {
       proposals.push(
-        makeProposal({ type: "task", title: "Ejercicio de autoevaluación: explicar el concepto en tus palabras con un ejemplo", description: "Técnica Feynman para comprobar que no quedan lagunas conceptuales", needsHumanApproval: true }),
-        makeProposal({ type: "task", title: "Revisar aplicación práctica con el mentor/tutor", description: "Validar tu razonamiento y recibir retroalimentación formativa", needsHumanApproval: true }),
+        makeProposal({ type: "task", title: "Ejercicio de autoevaluación: explicar el concepto en tus palabras con un ejemplo", description: "Técnica Feynman para comprobar que no quedan lagunas conceptuales", actionType: "skill_learning", needsHumanApproval: true }),
+        makeProposal({ type: "task", title: "Revisar aplicación práctica con el mentor/tutor", description: "Validar tu razonamiento y recibir retroalimentación formativa", actionType: "research", needsHumanApproval: true }),
       );
       reply = `En lugar de una validación comercial, hemos diseñado un ejercicio de autoevaluación y verificación de comprensión formativa. Esto te permitirá comprobar tu dominio del tema y discutirlo con tu tutor.`;
     } else if (/sesi[oó]n|briefing|mentor|tutor/.test(query)) {
@@ -284,14 +380,14 @@ function generateSimulatedClaudeTurn(input: ClaudeTurnInput): ClaudeTurnResult {
       reply = `He consultado el catálogo de recursos formativos de RAX (Workflow RAX-11) y te recomiendo este material de apoyo pedagógico.`;
     } else {
       proposals.push(
-        makeProposal({ type: "task", title: "Anotar dudas clave para la próxima tutoría", description: "Registrar preguntas concretas surgidas durante el estudio", needsHumanApproval: true }),
+        makeProposal({ type: "task", title: "Anotar dudas clave para la próxima tutoría", description: "Registrar preguntas concretas surgidas durante el estudio", actionType: "skill_learning", needsHumanApproval: true }),
       );
       reply = `Entendido. Como copiloto pedagógico con IA, estoy aquí para guiarte en tu proceso de aprendizaje paso a paso. Recuerda que no necesitas validar ningún modelo comercial: el objetivo es comprender el tema, desarrollar tus habilidades y apoyarte en tu mentor o tutor para resolver cualquier inquietud. ¿Hay algún concepto específico en el que te gustaría que profundicemos?`;
     }
-  } else if (/tarea|plan de acci[oó]n|acciones|to[- ]?do/.test(query)) {
+  } else if (/(?:^|[^\w])(tarea|tareas|plan de acci[oó]n|acciones|pendientes?|to-?do list)(?:[^\w]|$)/i.test(query)) {
     proposals.push(
-      makeProposal({ type: "task", title: "Definir guion de 10 entrevistas con clientes potenciales", description: "Enfocado en validar el problema real y la disposición a pagar", needsHumanApproval: true }),
-      makeProposal({ type: "task", title: "Elaborar propuesta de valor en una sola frase", description: "Para comprobar comprensión inmediata con mentores", needsHumanApproval: true }),
+      makeProposal({ type: "task", title: "Definir guion de 10 entrevistas con clientes potenciales", description: "Enfocado en validar el problema real y la disposición a pagar", actionType: "operational_task", needsHumanApproval: true }),
+      makeProposal({ type: "task", title: "Elaborar propuesta de valor en una sola frase", description: "Para comprobar comprensión inmediata con mentores", actionType: "operational_task", needsHumanApproval: true }),
     );
     reply = `He analizado las prioridades de «${input.project.name}» e invocado la formulación de tareas (Workflow RAX-08). Te propongo ${proposals.length} acciones prioritarias para avanzar en la hoja de ruta.`;
   } else if (/hip[oó]tesis|experimento|validar|probar/.test(query)) {

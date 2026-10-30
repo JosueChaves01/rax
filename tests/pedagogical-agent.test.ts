@@ -104,4 +104,58 @@ describe("Agente RAX: Soporte integral para mentores, tutores y estudiantes", ()
     expect(result.description).not.toContain("entrevistas con clientes");
     expect(result.description).not.toContain("disposición real a pagar");
   });
+
+  it("entiende la sesión actual en 'Aprender React' y atiende la petición de resumen de conversación para la etapa entender (RAX-03)", async () => {
+    const reactProject: Project = {
+      id: "prj-react-1",
+      ownerId: "usr-student-1",
+      name: "Aprender React",
+      description: "Explorando una idea de estudio",
+      nature: "exploring_idea",
+      status: "active",
+      shareConversationWithMentor: true,
+      createdAt: "2026-10-30T00:00:00.000Z",
+      updatedAt: "2026-10-30T00:00:00.000Z",
+    };
+
+    // Caso exacto del usuario: la palabra "todo" ("resumen de todo lo que sabemos")
+    // no debe confundir al agente con una lista de tareas (to-do) comerciales ni clientes potenciales.
+    const turnResult = await executeClaudeAgentTurn({
+      project: reactProject,
+      userMessage: "quiero que haga un resumen de todo lo que sabemos en esta conversacion para agregarlo como contexto de la etapa entender",
+      history: [
+        { author: "user", content: "Hola, quiero aprender React desde cero y comprender componentes y hooks." },
+        { author: "assistant", content: "¡Excelente! Vamos a estructurar tu aprendizaje paso a paso." },
+      ],
+      knowledge: emptyKnowledge,
+      role: "entrepreneur",
+      sessionContext: {
+        location: "project_conversation",
+        pageTitle: "Conversación del Proyecto",
+        stage: "entender",
+      },
+    });
+
+    // 1. Debe invocar el contexto de RAX-03 y resumir la conversación para la etapa Entender
+    expect(turnResult.reply).toContain("RAX-03");
+    expect(turnResult.reply).toContain("Entender");
+
+    // 2. NO debe desviar a tareas de entrevistas a clientes ni disposición a pagar
+    expect(turnResult.reply).not.toContain("entrevistas con clientes");
+    expect(turnResult.reply).not.toContain("disposición a pagar");
+    expect(turnResult.reply).not.toContain("RAX-08");
+
+    // 3. Debe proponer un elemento de contexto para el diagnóstico de la etapa
+    expect(turnResult.proposals).toHaveLength(1);
+    expect(turnResult.proposals[0].type).toBe("diagnosis_item");
+    expect(turnResult.proposals[0].category).toBe("context");
+    expect(String(turnResult.proposals[0].title)).toContain("Entender");
+    expect(String(turnResult.proposals[0].description)).not.toContain("clientes potenciales");
+  });
+
+  it("RAX_WORKFLOW_TOOLS expone update_context_memory (RAX-03) y propose_goals (RAX-07)", () => {
+    const toolNames = RAX_WORKFLOW_TOOLS.map((t) => t.name);
+    expect(toolNames).toContain("update_context_memory");
+    expect(toolNames).toContain("propose_goals");
+  });
 });

@@ -16,6 +16,28 @@ export interface WorkflowToolDefinition {
 
 export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
   {
+    name: "update_context_memory",
+    description: "Workflow RAX-03: Resume y consolida la memoria contextual a partir de la conversación actual. Extrae la síntesis de lo aprendido o acordado para agregarlo como contexto consolidado de la etapa actual (ej. etapa entender, diagnóstico) o conocimiento persistente.",
+    parameters: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "Resumen estructurado y conciso de lo conversado o descubierto" },
+        stage: { type: "string", description: "Etapa del proyecto a la que pertenece este contexto (ej. entender, evaluar, construir, crecer)" },
+        keyInsights: {
+          type: "array",
+          description: "Principales conceptos, certezas o puntos clave confirmados",
+          items: { type: "string" },
+        },
+        openQuestions: {
+          type: "array",
+          description: "Dudas pendientes, incógnitas o preguntas para el mentor o tutor",
+          items: { type: "string" },
+        },
+      },
+      required: ["summary"],
+    },
+  },
+  {
     name: "extract_diagnosis_items",
     description: "Workflow RAX-04: Extrae afirmaciones, supuestos, observaciones o incógnitas para incorporarlas al diagnóstico estructurado del proyecto.",
     parameters: {
@@ -67,6 +89,29 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
         rejectionCriterion: { type: "string", description: "Criterio de descarte numérico fijado antes de mirar resultados" },
       },
       required: ["hypothesisStatement", "segment", "question", "method", "metric", "successCriterion", "rejectionCriterion"],
+    },
+  },
+  {
+    name: "propose_goals",
+    description: "Workflow RAX-07: Propone metas de aprendizaje u objetivos observables de desarrollo para el plan de trabajo o tutoría.",
+    parameters: {
+      type: "object",
+      properties: {
+        goals: {
+          type: "array",
+          description: "Lista de metas u objetivos sugeridos",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "Título del objetivo o meta de aprendizaje" },
+              description: { type: "string", description: "Descripción del resultado observable esperado y cómo verificarlo" },
+              priority: { type: "string", enum: ["high", "medium", "low"], description: "Prioridad del objetivo" },
+            },
+            required: ["title"],
+          },
+        },
+      },
+      required: ["goals"],
     },
   },
   {
@@ -241,6 +286,39 @@ export async function executeWorkflowTool(
   await guard(d, projectId, "project.read");
 
   switch (toolName) {
+    case "update_context_memory": {
+      const summary = String(args.summary || "");
+      const stage = String(args.stage || "entender");
+      const keyInsights = (args.keyInsights as string[]) || [];
+      const openQuestions = (args.openQuestions as string[]) || [];
+
+      const proposals: AiProposalItem[] = [
+        makeProposal({
+          type: "diagnosis_item",
+          title: `Contexto de la etapa «${stage}» — Síntesis de conversación`,
+          description: summary + (keyInsights.length > 0 ? `\n\nPuntos clave:\n- ${keyInsights.join("\n- ")}` : ""),
+          category: "context",
+          needsHumanApproval: true,
+        }),
+        ...openQuestions.map((q) =>
+          makeProposal({
+            type: "agenda_topic" as const,
+            title: `Pregunta para tutoría: ${q}`,
+            description: `Pregunta clave identificada en la etapa «${stage}»`,
+            needsHumanApproval: true,
+          }),
+        ),
+      ];
+
+      return {
+        ok: true,
+        toolName,
+        summary: `Se sintetizó la memoria contextual para la etapa «${stage}» (Workflow RAX-03).`,
+        proposals,
+        data: { summary, stage, keyInsights, openQuestions },
+      };
+    }
+
     case "extract_diagnosis_items": {
       const items = (args.items as Array<Record<string, unknown>>) || [];
       const proposals: AiProposalItem[] = items.map((item) =>
@@ -288,6 +366,25 @@ export async function executeWorkflowTool(
         ok: true,
         toolName,
         summary: `Se formuló la hipótesis y se estructuró el diseño del experimento ex-ante (Workflow RAX-12).`,
+        proposals,
+      };
+    }
+
+    case "propose_goals": {
+      const goals = (args.goals as Array<Record<string, unknown>>) || [];
+      const proposals: AiProposalItem[] = goals.map((g) =>
+        makeProposal({
+          type: "goal",
+          title: String(g.title || "Nuevo objetivo"),
+          description: String(g.description || (g.priority ? `Prioridad: ${g.priority}` : "")),
+          needsHumanApproval: true,
+        }),
+      );
+
+      return {
+        ok: true,
+        toolName,
+        summary: `Se propusieron ${proposals.length} objetivos para el plan de trabajo (Workflow RAX-07).`,
         proposals,
       };
     }
