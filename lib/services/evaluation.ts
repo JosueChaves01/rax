@@ -1,7 +1,7 @@
 import { notFound } from "@/lib/errors";
 import { CycleEvaluationInput, parse } from "@/lib/validation/inputs";
 import type { CycleEvaluation } from "@/types/domain";
-import { guard, type ServiceDeps } from "./base";
+import { guard, sysRepo, type ServiceDeps } from "./base";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 
 export async function recordCycleEvaluation(
@@ -25,7 +25,7 @@ export async function recordCycleEvaluation(
         status: ge.status,
         updatedAt: now,
       });
-      await d.repo.auditEvents.insert({
+      await sysRepo(d).auditEvents.insert({
         id: d.newId("audit"),
         projectId: rel.projectId,
         actorId: d.actor.id,
@@ -76,7 +76,7 @@ export async function recordCycleEvaluation(
       stage: nextStage,
       updatedAt: now,
     });
-    await d.repo.auditEvents.insert({
+    await sysRepo(d).auditEvents.insert({
       id: d.newId("audit"),
       projectId: rel.projectId,
       actorId: d.actor.id,
@@ -88,7 +88,7 @@ export async function recordCycleEvaluation(
   }
 
   if (decisionAction) {
-    await d.repo.auditEvents.insert({
+    await sysRepo(d).auditEvents.insert({
       id: d.newId("audit"),
       projectId: rel.projectId,
       actorId: d.actor.id,
@@ -99,7 +99,7 @@ export async function recordCycleEvaluation(
     });
   }
 
-  await d.repo.auditEvents.insert({
+  await sysRepo(d).auditEvents.insert({
     id: d.newId("audit"),
     projectId: rel.projectId,
     actorId: d.actor.id,

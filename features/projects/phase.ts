@@ -7,6 +7,8 @@ export interface PhaseInput {
   hypotheses: Hypothesis[];
   experiments: Experiment[];
   hasPrioritizedProblem: boolean;
+  /** Hallazgos vigentes del diagnóstico: con el agente, contar el proyecto deja hallazgos aunque no haya mensajes del chat clásico. */
+  diagnosisItemCount?: number;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface PhaseInput {
  */
 export function derivePhase(x: PhaseInput): ProjectPhase {
   const entrepreneurMessages = x.messages.filter((m) => m.author === "entrepreneur").length;
-  if (entrepreneurMessages === 0 && !x.diagnosis.summary) return "new";
+  if (entrepreneurMessages === 0 && !x.diagnosis.summary && !x.diagnosisItemCount) return "new";
   if (!x.diagnosis.summary) return "conversation";
   if (!x.diagnosis.summaryConfirmedAt) return "summary_pending";
 

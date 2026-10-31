@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { cx } from "@/shared/ui/primitives";
+import { PROPOSAL_TYPE_LABEL } from "@/lib/ai/step-actions";
 import type { AgentArtifact, AgentThread, KnowledgeCitation } from "@/types/domain";
 import {
   applyAiProposalAction,
@@ -530,7 +531,7 @@ export default function ChatClient({
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="text-[0.625rem] font-bold uppercase px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-800">
-                                  {rawType.replace("_", " ")}
+                                  {PROPOSAL_TYPE_LABEL[rawType] ?? rawType.replace("_", " ")}
                                 </span>
                                 <span className="font-semibold text-slate-800 truncate">{title}</span>
                               </div>

@@ -9,15 +9,11 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   const { w } = await loadWorkspace(id);
   if (!w) notFound();
 
-  if (w.conversationHidden) {
-    return (
-      <Empty title="Conversación privada">
-        El emprendedor no compartió la conversación completa. Trabajá con el resumen preparado y el diagnóstico, que contienen lo que confirmó.
-      </Empty>
-    );
+  // Cada persona conversa con el agente en sus propios hilos: el mentor también lleva sus pasos desde aquí.
+  const canWrite = Boolean(w.permissions["agent.chat"]);
+  if (!canWrite) {
+    return <Empty title="Conversación no disponible">Tu rol no conversa con el agente dentro de este proyecto.</Empty>;
   }
-
-  const canWrite = Boolean(w.permissions["conversation.write"]);
   const currentStage = stageOf(w.phase);
   const mentorNames = w.mentors.map((m) => w.people[m]?.name).filter(Boolean);
 

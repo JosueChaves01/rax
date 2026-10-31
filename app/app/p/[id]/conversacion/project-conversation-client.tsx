@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { PROPOSAL_TYPE_LABEL } from "@/lib/ai/step-actions";
 import { cx } from "@/shared/ui/primitives";
 import type { AgentArtifact, AgentThread, KnowledgeCitation } from "@/types/domain";
 import {
@@ -72,6 +74,8 @@ export function ProjectConversationClient({
   const [isLoading, setIsLoading] = useState(false);
   const [appliedProposals, setAppliedProposals] = useState<Set<string>>(new Set());
   const [applyingTitle, setApplyingTitle] = useState<string | null>(null);
+  const [applyFeedback, setApplyFeedback] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const router = useRouter();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -246,6 +250,12 @@ export function ProjectConversationClient({
       const res = await applyAiProposalAction(projectId, proposal);
       if (res.ok) {
         setAppliedProposals((prev) => new Set(prev).add(title));
+        const notice = res.data && "notice" in res.data ? res.data.notice : undefined;
+        setApplyFeedback((prev) => ({ ...prev, [title]: { ok: true, text: notice ?? "Aplicado al proyecto." } }));
+        // El paso puede cambiar la etapa: se refresca la navegación del proyecto.
+        router.refresh();
+      } else {
+        setApplyFeedback((prev) => ({ ...prev, [title]: { ok: false, text: res.error } }));
       }
     } finally {
       setApplyingTitle(null);
@@ -484,14 +494,27 @@ export function ProjectConversationClient({
                               >
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800">
-                                      {pType}
+                                    <span
+                                      className={cx(
+                                        "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
+                                        pType === "flow_action" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800",
+                                      )}
+                                    >
+                                      {PROPOSAL_TYPE_LABEL[pType] ?? pType}
                                     </span>
                                     <p className="text-xs font-semibold truncate">{pTitle}</p>
                                   </div>
                                   {Boolean(prop.description) && (
                                     <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
                                       {String(prop.description)}
+                                    </p>
+                                  )}
+                                  {applyFeedback[pTitle] && (
+                                    <p
+                                      role={applyFeedback[pTitle].ok ? "status" : "alert"}
+                                      className={cx("text-[11px] mt-0.5", applyFeedback[pTitle].ok ? "text-emerald-700" : "text-red-700")}
+                                    >
+                                      {applyFeedback[pTitle].text}
                                     </p>
                                   )}
                                 </div>

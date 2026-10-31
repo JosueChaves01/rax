@@ -54,6 +54,7 @@ export const AiProposalItemSchema = z.object({
     "intervention",
     "agenda_topic",
     "field_value",
+    "flow_action",
   ]),
   title: z.string().min(1).max(300),
   description: z.string().max(4000).optional(),
@@ -85,6 +86,9 @@ export const AiProposalItemSchema = z.object({
 }).superRefine((proposal, ctx) => {
   if (proposal.type === "field_value" && (!proposal.fieldPath || proposal.value === undefined)) {
     ctx.addIssue({ code: "custom", message: "Una propuesta de campo requiere fieldPath y value." });
+  }
+  if (proposal.type === "flow_action" && typeof proposal.metadata?.action !== "string") {
+    ctx.addIssue({ code: "custom", message: "Una acción del recorrido requiere metadata.action." });
   }
 });
 

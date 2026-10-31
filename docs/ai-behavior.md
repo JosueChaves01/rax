@@ -33,6 +33,16 @@ Modelos: `CLAUDE_PROJECTS_MODEL` (o `OPENROUTER_MODEL`, o el gratuito por defect
 
 Herramientas: si el modelo pide herramientas, se ejecutan con los permisos de la persona y sus resultados vuelven al modelo, que redacta la respuesta final (`tool_choice: none`). Las herramientas solo generan **propuestas**; se guardan cuando la persona las aplica. Los borradores de campos de formulario usan `draft_field_value` y no se guardan en el hilo.
 
+### Recorrido completo desde el chat
+
+El emprendedor (o estudiante) y el mentor pueden llevar un proyecto del paso cero a la conclusión sin salir de la conversación:
+
+- **Dónde está**: `lib/ai/journey.ts` deriva de los datos reales los 17 pasos del recorrido (contar el proyecto → resumen → confirmarlo → mentor asignado → primera revisión → priorizar → acuerdo y objetivos → hipótesis → aprobación → experimento → iniciarlo → resultado → segunda revisión → decisión del mentor → evaluación del ciclo), quién hace cada uno y cuál es el actual. Va en el estado del proyecto como «Recorrido: paso N de 17», con los ids de hipótesis, experimentos, sesiones, problemas, tareas y acuerdos para que el agente pueda referirse a ellos.
+- **Cómo avanza**: la herramienta `propose_step_action` (`lib/ai/step-actions.ts`) propone cualquier paso como tarjeta `flow_action`. Solo se ofrece si quien conversa tiene el permiso (`lib/authz.ts`); si no, el agente explica a quién le corresponde. `design_experiment` formula la hipótesis y, con una hipótesis aprobada (`hypothesisId`), su experimento completo.
+- **Cómo se aplica**: `lib/services/agent-actions.ts` (`applyAgentProposal`) ejecuta cada tarjeta con el mismo servicio de dominio que usa la pantalla, que vuelve a verificar permisos y reglas (por ejemplo, no se pide la primera revisión sin resumen confirmado ni se diseña un experimento sobre una hipótesis sin aprobar). Si un paso no corresponde, la tarjeta muestra el motivo.
+- El mentor también conversa con el agente desde `/app/p/<id>/conversacion` (en sus propios hilos).
+- `tests/agent-journey.test.ts` recorre el ciclo completo con ambos roles solo con propuestas del agente.
+
 Fallos: sin `OPENROUTER_API_KEY` responde la simulación (etiquetada "Simulado"). Con clave, si ningún modelo responde, el mensaje queda como fallo visible ("IA no disponible") con el motivo, sin respuesta ni propuestas inventadas.
 
 ## Contrato de salida

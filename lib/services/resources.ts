@@ -1,7 +1,7 @@
 import { forbidden, notFound } from "@/lib/errors";
 import { MentorResourceInput, parse } from "@/lib/validation/inputs";
 import type { MentorResource, ResourceCategory } from "@/types/domain";
-import { guard, type ServiceDeps } from "./base";
+import { guard, sysRepo, type ServiceDeps } from "./base";
 
 export interface ResourceFilter {
   category?: ResourceCategory;
@@ -72,7 +72,7 @@ export async function createResource(d: ServiceDeps, raw: unknown): Promise<Ment
   };
 
   const created = await d.repo.mentorResources.insert(resource);
-  await d.repo.auditEvents.insert({
+  await sysRepo(d).auditEvents.insert({
     id: d.newId("audit"),
     actorId: d.actor.id,
     action: "resource.created",

@@ -7,7 +7,6 @@ import type {
   Comment,
   DiagnosisCategory,
   EvidenceKind,
-  Experiment,
   InfoType,
   InitiativeNature,
   MentorDecision,
@@ -32,7 +31,7 @@ import { getDeps, homeFor } from "@/lib/runtime";
 import { createUserClient } from "@/lib/supabase/server";
 import { appUrl, missingConfig } from "@/lib/supabase/config";
 import { completeOnboarding } from "@/lib/services/onboarding";
-import { isDomainError, validation } from "@/lib/errors";
+import { isDomainError } from "@/lib/errors";
 import { audit, guard, sysRepo, type ServiceDeps } from "@/lib/services/base";
 import type { ItemChange } from "@/features/diagnosis/rules";
 import { createProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
@@ -122,6 +121,7 @@ import {
 import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
 import { executeClaudeAgentTurn, type SessionContext } from "@/lib/ai/claude-orchestrator";
 import { AiProposalItemSchema, type AiProposalItem } from "@/lib/n8n/contracts";
+import { applyAgentProposal } from "@/lib/services/agent-actions";
 import { loadProjectState, runAgentTurn } from "@/lib/services/agent-turn";
 import type { z } from "zod";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
@@ -1393,130 +1393,6 @@ export async function sendClaudeAgentMessageAction(input: {
 export async function applyAiProposalAction(projectId: string, proposal: unknown) {
   const parsed = AiProposalItemSchema.safeParse(proposal);
   if (!parsed.success) return { ok: false as const, error: "La propuesta no tiene un formato válido." };
-
-  return run(projectId, async (d) => {
-    const item = parsed.data;
-
-    if (item.type === "task") {
-      const task = await createTask(d, projectId, {
-        title: item.title,
-        dueDate: undefined,
-        actionType: item.actionType || "operational_task",
-      });
-      return { ok: true as const, type: "task" as const, id: task.id, title: task.title };
-    }
-
-    if (item.type === "hypothesis") {
-      const hyp = await proposeHypothesis(d, projectId, {
-        statement: item.title,
-        segment: "General",
-        whyItMatters: item.description || "Hipótesis sugerida para validación",
-        currentEvidence: "Por verificar",
-        costOfBeingWrong: "Riesgo de dedicar tiempo y recursos a un supuesto no comprobado",
-        evaluationCriterion: "Validación ex-ante con clientes",
-        uncertainty: "high",
-      });
-      return { ok: true as const, type: "hypothesis" as const, id: hyp.id, title: hyp.statement };
-    }
-
-    if (item.type === "experiment") {
-      const existingHyps = await d.repo.hypotheses.list({ projectId });
-      let hyp = existingHyps.find((h) => ["approved", "testing", "inconclusive", "supported", "weakened"].includes(h.status)) ?? existingHyps[0];
-      if (!hyp) {
-        hyp = await proposeHypothesis(d, projectId, {
-          statement: item.title,
-          segment: "General",
-          whyItMatters: item.description || "Hipótesis sugerida para experimentación",
-          currentEvidence: "Por comprobar",
-          costOfBeingWrong: "Riesgo de dedicar tiempo y recursos a un supuesto no comprobado",
-          evaluationCriterion: "Validación ex-ante con clientes",
-          uncertainty: "high",
-        });
-      }
-      const now = d.now();
-      const expRow: Experiment = {
-        id: d.newId("exp"),
-        projectId,
-        hypothesisId: hyp.id,
-        question: item.title.slice(0, 500),
-        method: (item.description || "Entrevistas de solución y preventa").slice(0, 500),
-        participants: "15 prospectos calificados",
-        activities: ["Contactar clientes potenciales", "Realizar entrevistas de validación", "Documentar cartas de intención"],
-        resources: "Tiempo de fundadores",
-        budget: 0,
-        durationDays: 14,
-        metric: "Tasa de conversión / intención de compra",
-        successCriterion: ">= 20% de cartas de intención",
-        rejectionCriterion: "< 5% de interés",
-        risks: "Baja tasa de respuesta en frío",
-        evidencePlan: "Citas textuales y cartas de intención firmadas",
-        ownerId: d.actor.id,
-        status: "design",
-        version: 1,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await d.repo.experiments.insert(expRow);
-      return { ok: true as const, type: "experiment" as const, id: expRow.id, title: expRow.question };
-    }
-
-    if (item.type === "diagnosis_item") {
-      const diag = await addItem(d, projectId, {
-        category: (item.category as DiagnosisCategory) || "context",
-        title: item.title,
-        content: item.description || item.title,
-        uncertainty: "medium",
-      });
-      // Si es una propuesta de contexto / resumen y el diagnóstico no tiene resumen previo,
-      // actualizamos el resumen de diagnóstico para que pueda ser confirmado hacia la etapa de Orientar.
-      if (
-        (item.category === "context" || /s[ií]ntesis|resumen|contexto/i.test(item.title)) &&
-        item.description &&
-        item.description.length >= 10
-      ) {
-        const [dx] = await d.repo.diagnoses.list({ projectId });
-        if (dx && (!dx.summary || !dx.summaryConfirmedAt)) {
-          await editSummary(d, projectId, item.description.slice(0, 3000));
-        }
-      }
-      return { ok: true as const, type: "diagnosis_item" as const, id: diag.id, title: diag.title };
-    }
-
-    if (item.type === "agenda_topic") {
-      // El mentor lo guarda como pregunta en su próxima sesión; el emprendedor, como tarea para llevar a la sesión.
-      if (d.actor.role === "mentor") {
-        const sessions = await d.repo.mentorSessions.list({ projectId });
-        const next = sessions
-          .filter((s) => s.mentorId === d.actor.id && s.status !== "completed")
-          .sort((a, b) => (a.scheduledAt ?? a.createdAt).localeCompare(b.scheduledAt ?? b.createdAt))[0];
-        if (!next) throw validation("Programa una sesión para guardar este tema en su agenda.");
-        await guard(d, projectId, "mentor.note");
-        // Se inserta sin addNote para no marcar como iniciada una sesión que todavía no ocurrió.
-        const note = await d.repo.sessionNotes.insert({
-          id: d.newId("note"),
-          sessionId: next.id,
-          projectId,
-          authorId: d.actor.id,
-          kind: "question",
-          body: [item.title, item.description].filter(Boolean).join("\n").slice(0, 2000),
-          isPrivate: false,
-          createdAt: d.now(),
-        });
-        return { ok: true as const, type: "agenda_topic" as const, id: note.id, title: item.title };
-      }
-      const task = await createTask(d, projectId, { title: `Llevar a la sesión: ${item.title}`.slice(0, 300), dueDate: undefined, actionType: "research" });
-      return { ok: true as const, type: "agenda_topic" as const, id: task.id, title: task.title };
-    }
-
-    if (item.type === "goal") {
-      const task = await createTask(d, projectId, {
-        title: item.title,
-        dueDate: undefined,
-        actionType: "operational_task",
-      });
-      return { ok: true as const, type: "goal" as const, id: task.id, title: task.title };
-    }
-
-    return { ok: true as const, type: item.type, title: item.title };
-  });
+  // Cada tipo (incluidos los pasos del recorrido) se aplica con su servicio de dominio y sus permisos.
+  return run(projectId, (d) => applyAgentProposal(d, projectId, parsed.data));
 }
