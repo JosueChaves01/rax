@@ -59,12 +59,14 @@ export default async function RelationsPage() {
             Gestión de vínculos mentor-emprendedor, acuerdos pactados y avance de ciclo.
           </p>
         </div>
-        <Link
-          href="/app/exploracion"
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs"
-        >
-          Explorar nueva mentoría
-        </Link>
+        {!isMentor && (
+          <Link
+            href="/app/exploracion"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs"
+          >
+            Explorar nueva mentoría
+          </Link>
+        )}
       </div>
 
       {enrichedRelations.length === 0 ? (
@@ -76,16 +78,20 @@ export default async function RelationsPage() {
             Sin relaciones de mentoría activas
           </h2>
           <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-            Aún no has formalizado un acuerdo de mentoría. Inicia el proceso de exploración para vincularte con un mentor o emprendedor.
+            {isMentor
+              ? "Todavía no tienes relaciones de mentoría. Aparecerán aquí cuando un emprendedor te elija o la administración te asigne un proyecto."
+              : "Aún no has formalizado un acuerdo de mentoría. Inicia el proceso de exploración para vincularte con un mentor."}
           </p>
-          <div className="mt-4">
-            <Link
-              href="/app/exploracion"
-              className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 shadow-xs inline-block"
-            >
-              Iniciar exploración →
-            </Link>
-          </div>
+          {!isMentor && (
+            <div className="mt-4">
+              <Link
+                href="/app/exploracion"
+                className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 shadow-xs inline-block"
+              >
+                Iniciar exploración →
+              </Link>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

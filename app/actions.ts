@@ -32,7 +32,7 @@ import { getDeps, homeFor } from "@/lib/runtime";
 import { createUserClient } from "@/lib/supabase/server";
 import { appUrl, missingConfig } from "@/lib/supabase/config";
 import { completeOnboarding } from "@/lib/services/onboarding";
-import { isDomainError } from "@/lib/errors";
+import { isDomainError, validation } from "@/lib/errors";
 import { audit, guard, sysRepo, type ServiceDeps } from "@/lib/services/base";
 import type { ItemChange } from "@/features/diagnosis/rules";
 import { createProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
@@ -560,9 +560,35 @@ export const improveDocumentWithAIAction = async (input: {
   return { ok: false as const, error: "La mejora con IA estará disponible cuando esta pantalla use el agente principal con un proyecto autorizado." };
 };
 
-export const evaluateExerciseAction = async (exerciseText: string): Promise<{ ok: true; score: string; feedback: string } | { ok: false; error: string }> => {
-  void exerciseText;
-  return { ok: false as const, error: "La evaluación estará disponible cuando PREP se integre como capacidad del agente principal con un proyecto autorizado." };
+/**
+ * Evalúa un ejercicio con el mismo agente del chat del proyecto (OpenRouter directo, sin n8n).
+ * Si la IA no está disponible no se inventa una nota: se devuelve el motivo.
+ */
+export const evaluateExerciseAction = async (
+  projectId: string,
+  exerciseText: string,
+): Promise<{ ok: true; score: string; feedback: string } | { ok: false; error: string }> => {
+  const text = exerciseText.trim().slice(0, 8000);
+  if (!text) return { ok: false, error: "Escribe o pega tu ejercicio para evaluarlo." };
+  const res = await run(projectId, async (d) => {
+    const { project } = await guard(d, V.parse(V.Ids, projectId), "agent.chat");
+    const knowledge = await getProjectKnowledgeContext(d.repo, project.id, text);
+    return executeClaudeAgentTurn({
+      project,
+      userMessage: `Evalúa este ejercicio como tutor. Empieza tu respuesta con una línea exacta «Puntaje: N/10» y luego da retroalimentación concreta: qué está bien, qué corregir y un siguiente paso.\n\n${text}`,
+      history: [],
+      knowledge,
+      role: d.actor.role,
+      sessionContext: { location: "evaluation", pageTitle: "Aprendizaje · Evaluación de ejercicio" },
+    });
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+  const turn = res.data!;
+  if (turn.cacheStatus === "simulated") {
+    return { ok: false, error: "La IA no está disponible en este momento (sin clave o sin cupo en OpenRouter), así que no se puede evaluar el ejercicio." };
+  }
+  const match = turn.reply.match(/puntaje:\s*([\d.,]+\s*\/\s*10)/i);
+  return { ok: true, score: match ? match[1].replace(/\s+/g, "") : "—", feedback: turn.reply.replace(/^.*puntaje:.*$/im, "").trim() };
 };
 
 export const completeExplorationAction = async (input: {
@@ -619,7 +645,6 @@ export interface ExplorationCreateProjectInput {
   motivation: string;
   description: string;
   mentorId?: string;
-  entrepreneurId?: string;
   compatibilityRationale?: string;
   agreement: {
     frequency: AgreementFrequency;
@@ -639,34 +664,31 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
   if (!d) return { ok: false as const, error: "Tu sesión terminó. Volvé a entrar.", code: "unauthenticated" };
 
   try {
+    // La exploración la inicia el emprendedor: el proyecto queda a su nombre y el mentor
+    // elegido tiene que ser un mentor aprobado. Todo se escribe con permisos de sistema,
+    // así que nada que venga del cliente se usa sin verificar.
+    if (d.actor.role !== "entrepreneur") {
+      return {
+        ok: false as const,
+        error: "La exploración la inicia la persona emprendedora desde su cuenta.",
+        code: "forbidden",
+      };
+    }
+
     const sys = sysRepo(d);
     const allProfiles = await sys.profiles.list().catch(() => []);
-    const isMentor = d.actor.role === "mentor";
-
-    // Determinar quién es el emprendedor y quién es el mentor
-    let mentorId = input.mentorId;
-    let entrepreneurId = input.entrepreneurId;
-
-    if (isMentor) {
-      mentorId = d.actor.id;
-      if (!entrepreneurId) {
-        const entProfile = allProfiles.find((p) => p.role === "entrepreneur");
-        entrepreneurId = entProfile?.id || d.actor.id;
-      }
-    } else {
-      entrepreneurId = d.actor.id;
-      if (!mentorId) {
-        const mentorProfile =
-          allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved") ||
-          allProfiles.find((p) => p.role === "mentor");
-        mentorId = mentorProfile?.id;
-      }
-    }
+    const approvedMentors = allProfiles.filter((p) => p.role === "mentor" && p.mentorStatus === "approved" && p.id !== d.actor.id);
+    const entrepreneurId = d.actor.id;
+    const mentorId = input.mentorId
+      ? approvedMentors.find((p) => p.id === input.mentorId)?.id
+      : approvedMentors[0]?.id;
 
     if (!mentorId) {
       return {
         ok: false as const,
-        error: "No hay mentores disponibles en la plataforma para formalizar el acuerdo.",
+        error: input.mentorId
+          ? "El mentor elegido no está disponible. Elegí otro de la lista."
+          : "No hay mentores disponibles en la plataforma para formalizar el acuerdo.",
         code: "validation",
       };
     }
@@ -852,8 +874,7 @@ export const loadExplorationContextAction = async () => {
   try {
     const sys = sysRepo(d);
     const allProfiles = await sys.profiles.list().catch(() => []);
-    const approvedMentors = allProfiles.filter((p) => p.role === "mentor" && p.mentorStatus === "approved");
-    const mentors = approvedMentors.length > 0 ? approvedMentors : allProfiles.filter((p) => p.role === "mentor");
+    const mentors = allProfiles.filter((p) => p.role === "mentor" && p.mentorStatus === "approved" && p.id !== d.actor.id);
 
     return {
       ok: true as const,
@@ -873,9 +894,7 @@ export const generateMentorshipExplorationWithAiAction = async (prompt?: string)
   try {
     const sys = sysRepo(d);
     const allProfiles = await sys.profiles.list().catch(() => []);
-    const firstMentor =
-      allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved") ||
-      allProfiles.find((p) => p.role === "mentor");
+    const firstMentor = allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved" && p.id !== d.actor.id);
     const preferredMentorName = firstMentor?.name || "Mentora Asignada (Lean & Estrategia)";
 
     const data: MentorshipExplorationAiResult = await generateMentorshipExplorationData(prompt, preferredMentorName);
@@ -1426,6 +1445,32 @@ export async function applyAiProposalAction(projectId: string, proposal: unknown
         }
       }
       return { ok: true as const, type: "diagnosis_item" as const, id: diag.id, title: diag.title };
+    }
+
+    if (item.type === "agenda_topic") {
+      // El mentor lo guarda como pregunta en su próxima sesión; el emprendedor, como tarea para llevar a la sesión.
+      if (d.actor.role === "mentor") {
+        const sessions = await d.repo.mentorSessions.list({ projectId });
+        const next = sessions
+          .filter((s) => s.mentorId === d.actor.id && s.status !== "completed")
+          .sort((a, b) => (a.scheduledAt ?? a.createdAt).localeCompare(b.scheduledAt ?? b.createdAt))[0];
+        if (!next) throw validation("Programa una sesión para guardar este tema en su agenda.");
+        await guard(d, projectId, "mentor.note");
+        // Se inserta sin addNote para no marcar como iniciada una sesión que todavía no ocurrió.
+        const note = await d.repo.sessionNotes.insert({
+          id: d.newId("note"),
+          sessionId: next.id,
+          projectId,
+          authorId: d.actor.id,
+          kind: "question",
+          body: [item.title, item.description].filter(Boolean).join("\n").slice(0, 2000),
+          isPrivate: false,
+          createdAt: d.now(),
+        });
+        return { ok: true as const, type: "agenda_topic" as const, id: note.id, title: item.title };
+      }
+      const task = await createTask(d, projectId, { title: `Llevar a la sesión: ${item.title}`.slice(0, 300), dueDate: undefined, actionType: "research" });
+      return { ok: true as const, type: "agenda_topic" as const, id: task.id, title: task.title };
     }
 
     if (item.type === "goal") {

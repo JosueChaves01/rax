@@ -442,7 +442,14 @@ Para iniciar el diagnóstico:
 3. **¿Qué has observado o comprobado de primera mano, y qué creés que todavía es una suposición?**`;
     }
   } else if (isLearningContext) {
-    if (/(?:^|[^\w])(tarea|tareas|plan|plan de acci[oó]n|plan de estudio|acciones|pendientes?|to-?do list)(?:[^\w]|$)/i.test(query)) {
+    if (input.role === "mentor" && /sesi[oó]n|tutor[ií]a|clase|ense[ñn]ar|preparar|preparame|prep[aá]rame|agenda/i.test(query)) {
+      // El mentor no edita el diagnóstico: se le proponen temas para la agenda de su próxima sesión.
+      proposals.push(
+        makeProposal({ type: "agenda_topic", title: "Revisar con el estudiante los bloqueos registrados en su diagnóstico", description: "Pedirle que explique con sus palabras el concepto que más le cuesta y corregir sobre su ejemplo.", needsHumanApproval: true }),
+        makeProposal({ type: "agenda_topic", title: "Ejercicio guiado en vivo sobre el tema de la sesión", description: "Resolver juntos un ejemplo corto y dejar uno similar como tarea.", needsHumanApproval: true }),
+      );
+      reply = `Preparé una agenda de enseñanza para tu próxima sesión de «${input.project.name}». Al aprobar cada punto queda guardado como pregunta en esa sesión.`;
+    } else if (/(?:^|[^\w])(tarea|tareas|plan|plan de acci[oó]n|plan de estudio|acciones|pendientes?|to-?do list)(?:[^\w]|$)/i.test(query)) {
       proposals.push(
         makeProposal({ type: "task", title: "Repasar conceptos fundamentales y elaborar un mapa de ideas", description: "Enfocado en consolidar la comprensión teórica antes de avanzar a la práctica", actionType: "skill_learning", needsHumanApproval: true }),
         makeProposal({ type: "task", title: "Resolver 2 ejercicios prácticos de aplicación autónoma", description: "Identificar dudas puntuales y verificar comprensión", actionType: "skill_learning", needsHumanApproval: true }),

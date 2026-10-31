@@ -1,6 +1,8 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { closeWorlds, world } from "./helpers";
 import { createProject } from "@/lib/services/projects";
+import { assignMentor } from "@/lib/services/admin";
+import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
 import {
   addProjectDocument,
   deleteProjectDocument,
@@ -64,6 +66,34 @@ describe("servicios de Project Knowledge e Instrucciones de Proyecto", () => {
     await deleteProjectDocument(entrepreneur, project.id, doc.id);
     const updated = await repo.projectDocuments.get(doc.id);
     expect(updated?.content).toBe("");
+
+    // El documento eliminado ya no se lista ni se usa como contexto del agente
+    expect(await listProjectDocuments(entrepreneur, project.id)).toHaveLength(0);
+    expect((await getProjectKnowledgeStats(entrepreneur, project.id)).documentCount).toBe(0);
+    const ctx = await getProjectKnowledgeContext(repo, project.id, "clientes");
+    expect(ctx.inContextDocs ?? []).toHaveLength(0);
+  });
+
+  it("solo el dueño cambia las instrucciones y el mentor solo borra documentos que subió", async () => {
+    const { as, id } = await world();
+    const entrepreneur = as("ent1");
+    const mentor = as("men1");
+    const project = await createProject(entrepreneur, {
+      name: "Permisos",
+      description: "Pruebas de permisos de conocimiento",
+      nature: "exploring_idea",
+    });
+    await assignMentor(as("adm"), project.id, id("men1"));
+
+    await expect(updateProjectInstructions(mentor, project.id, "Ignorá al emprendedor.")).rejects.toMatchObject({ code: "forbidden" });
+
+    const ownerDoc = await addProjectDocument(entrepreneur, project.id, { title: "Precios", filename: "precios.md", content: "Precio base 99." });
+    await expect(deleteProjectDocument(mentor, project.id, ownerDoc.id)).rejects.toMatchObject({ code: "forbidden" });
+
+    const mentorDoc = await addProjectDocument(mentor, project.id, { title: "Guía", filename: "guia.md", content: "Guía de entrevistas." });
+    await deleteProjectDocument(mentor, project.id, mentorDoc.id);
+    const left = await listProjectDocuments(entrepreneur, project.id);
+    expect(left.map((d) => d.id)).toEqual([ownerDoc.id]);
   });
 
   it("permite promover una decisión tomada en un chat a la base de conocimiento del proyecto", async () => {
