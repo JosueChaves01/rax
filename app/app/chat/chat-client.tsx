@@ -126,6 +126,7 @@ export default function ChatClient({
               artifacts: m.artifacts,
               citations: m.citations,
               proposals: m.proposals,
+              cacheStatus: m.status === "failed" ? "unavailable" : undefined,
             })),
           );
         }
@@ -171,6 +172,7 @@ export default function ChatClient({
           artifacts: m.artifacts,
           citations: m.citations,
           proposals: m.proposals,
+          cacheStatus: m.status === "failed" ? "unavailable" : undefined,
         })),
       );
     }
@@ -247,7 +249,7 @@ export default function ChatClient({
           {
             id: assistantMessage.id,
             sender: "ai",
-            senderName: "Claude Agent",
+            senderName: "RAX Copilot",
             text: assistantMessage.content,
             time: new Date(assistantMessage.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             artifacts,
@@ -269,7 +271,7 @@ export default function ChatClient({
           {
             id: `err-${Date.now()}`,
             sender: "ai",
-            senderName: "Claude Agent",
+            senderName: "RAX Copilot",
             text: !res.ok ? res.error : "No se pudo procesar la respuesta.",
             time: "Aviso",
           },
@@ -281,7 +283,7 @@ export default function ChatClient({
         {
           id: `err-${Date.now()}`,
           sender: "ai",
-          senderName: "Claude Agent",
+          senderName: "RAX Copilot",
           text: `Error al comunicar con el agente: ${err instanceof Error ? err.message : String(err)}`,
           time: "Error",
         },
@@ -438,6 +440,11 @@ export default function ChatClient({
                   {m.cacheStatus === "write" && (
                     <span className="text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded font-sans font-semibold inline-flex items-center gap-1">
                       💾 Prompt Cache Escrito
+                    </span>
+                  )}
+                  {m.cacheStatus === "unavailable" && (
+                    <span className="text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded font-sans font-semibold inline-flex items-center gap-1">
+                      IA no disponible
                     </span>
                   )}
                   {m.cacheStatus === "simulated" && (

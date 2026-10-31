@@ -25,19 +25,33 @@ describe("acciones del chat persistente del agente", () => {
     projectId = project.id;
   });
 
-  it("persists project conversation before recording the gated RAX-02 result", async () => {
+  it("sin n8n, RAX-02 usa el agente nativo y guarda el turno en el hilo de la persona", async () => {
     const result = await sendMainAgentMessageAction({ projectId, stage: "conversation", message: "¿Qué sigue?" });
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data).toMatchObject({ ok: false, capability: "RAX-02", status: "disabled" });
+    if (!result.ok || !result.data) return;
+    expect(result.data).toMatchObject({ ok: true });
+    if (!result.data.ok) return;
+    // Responde con el estado real del proyecto, no con un texto genérico.
+    expect(result.data.reply).toContain("Entender");
     const loaded = await loadMainAgentThreadAction(projectId);
     expect(loaded.ok).toBe(true);
     if (!loaded.ok || !loaded.data) return;
-    const { thread, messages } = loaded.data;
-    expect(thread?.status).toBe("error");
+    const { messages } = loaded.data;
     expect(messages.map((m) => m.author)).toEqual(["user", "assistant"]);
     expect(messages[0].content).toBe("¿Qué sigue?");
-    expect(messages[1]).toMatchObject({ status: "failed", errorCode: "agent_disabled" });
+    expect(messages[1].status).toBe("complete");
+  });
+
+  it("los borradores de campo no se guardan en el hilo de conversación", async () => {
+    const result = await sendMainAgentMessageAction({
+      projectId,
+      stage: "form",
+      fieldPath: "experiment.metric",
+      fieldSchema: { type: "string", label: "Métrica" },
+      message: "Proponé una métrica",
+    });
+    expect(result.ok).toBe(true);
+    expect(await deps.repo.agentMessages.list({ projectId })).toHaveLength(0);
   });
 
   it("routes the legacy interview action through agent persistence without adding interview rows", async () => {
@@ -45,7 +59,7 @@ describe("acciones del chat persistente del agente", () => {
     const result = await sendMessageAction(projectId, "Consulta desde conversación");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data?.aiError).toContain("deshabilitado");
+    expect(result.data?.aiError).toBeNull();
     expect(await deps.repo.messages.list({ projectId })).toHaveLength(before.length);
     expect(await deps.repo.agentMessages.list({ projectId })).toHaveLength(2);
   });

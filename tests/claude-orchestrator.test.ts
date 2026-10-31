@@ -196,8 +196,9 @@ describe("Claude Orchestrator y Prompt Caching", () => {
       expect(result.cachedTokens).toBe(0);
     });
 
-    it("cae a simulación si OpenRouter responde con error HTTP (ej. 429 cuota o 404 modelo)", async () => {
+    it("no inventa una respuesta si OpenRouter falla con clave configurada (ej. 429 cuota)", async () => {
       process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+      process.env.OPENROUTER_FALLBACK_MODELS = "";
 
       vi.stubGlobal(
         "fetch",
@@ -221,9 +222,37 @@ describe("Claude Orchestrator y Prompt Caching", () => {
         role: "entrepreneur",
       });
 
-      expect(result.cacheStatus).toBe("simulated");
-      expect(result.cachedPromptUsed).toBe(false);
-      expect(result.reply).toBeDefined();
+      expect(result.cacheStatus).toBe("unavailable");
+      expect(result.unavailable?.code).toBe("ai_rate_limited");
+      expect(result.proposals).toEqual([]);
+      expect(result.reply).toContain("saturados");
+    });
+
+    it("prueba los modelos de respaldo en orden cuando el principal está saturado", async () => {
+      process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+      process.env.CLAUDE_PROJECTS_MODEL = "modelo/principal:free";
+      process.env.OPENROUTER_FALLBACK_MODELS = "modelo/respaldo:free";
+      const models: string[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_url, options?: RequestInit) => {
+          const body = JSON.parse(options?.body as string);
+          models.push(body.model);
+          if (body.model === "modelo/principal:free") return new Response(JSON.stringify({ error: { code: 429, message: "busy" } }), { status: 429 });
+          return new Response(JSON.stringify({ model: body.model, choices: [{ message: { content: "Respuesta del respaldo" } }] }), { status: 200 });
+        }),
+      );
+
+      const result = await executeClaudeAgentTurn({
+        project: dummyProject,
+        userMessage: "Hola",
+        history: [],
+        knowledge: { mode: "in_context", totalTokens: 0, inContextDocs: [], citations: [] },
+        role: "entrepreneur",
+      });
+      expect(models).toEqual(["modelo/principal:free", "modelo/respaldo:free"]);
+      expect(result.reply).toBe("Respuesta del respaldo");
+      expect(result.model).toBe("modelo/respaldo:free");
     });
   });
 });
