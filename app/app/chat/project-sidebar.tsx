@@ -14,6 +14,8 @@ interface ProjectSidebarProps {
   onRenameThread: (threadId: string, newTitle: string) => void;
   onOpenInstructions: () => void;
   onOpenKnowledge: () => void;
+  /** Cierra el cajón en móvil. En escritorio el botón no se muestra. */
+  onClose?: () => void;
   knowledgeTokens?: number;
   knowledgeMode?: "in_context" | "rag";
 }
@@ -29,6 +31,7 @@ export function ProjectSidebar({
   onRenameThread,
   onOpenInstructions,
   onOpenKnowledge,
+  onClose,
   knowledgeTokens = 0,
   knowledgeMode = "in_context",
 }: ProjectSidebarProps) {
@@ -49,12 +52,26 @@ export function ProjectSidebar({
   };
 
   return (
-    <div className="w-64 sm:w-72 shrink-0 border-r border-slate-200 bg-slate-50/70 flex flex-col h-full overflow-hidden select-none">
+    <div className="w-[85vw] max-w-72 md:w-72 shrink-0 border-r border-slate-200 bg-slate-50/70 flex flex-col h-full overflow-hidden select-none">
       {/* 1. Selector de Proyecto */}
       <div className="p-3.5 border-b border-slate-200/80 bg-white">
-        <label className="block text-[0.6875rem] font-bold uppercase tracking-wider text-slate-400 mb-1">
-          Proyecto Activo
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-[0.6875rem] font-bold uppercase tracking-wider text-slate-400">
+            Proyecto Activo
+          </label>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="md:hidden -mr-1 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              aria-label="Cerrar panel"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
         <select
           value={activeProjectId}
           onChange={(e) => onSelectProject(e.target.value)}
