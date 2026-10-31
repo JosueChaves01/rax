@@ -176,8 +176,20 @@ export interface AgentThread {
   status: AgentThreadStatus;
   lastErrorCode?: string;
   lastErrorMessage?: string;
+  /** Memoria compacta del hilo (resumen de mensajes viejos, decisiones, preguntas abiertas). */
+  memory?: AgentThreadMemory;
   createdAt: ISODate;
   updatedAt: ISODate;
+}
+
+/** Estado persistente de un hilo: lo que ya salió de la ventana de mensajes recientes. */
+export interface AgentThreadMemory {
+  summary: string;
+  decisions: string[];
+  openQuestions: string[];
+  /** Cuántos de los mensajes más viejos (sin contar fallos) ya están resumidos en `summary`. */
+  coveredMessageCount: number;
+  updatedAt?: ISODate;
 }
 
 export type ArtifactType =

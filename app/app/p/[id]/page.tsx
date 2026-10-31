@@ -4,7 +4,7 @@ import { STAGES, phasesDone, stageOf, stageState, type Turn } from "@/features/p
 import { openQuestions, pendingReview } from "@/features/diagnosis/rules";
 import { cx, formatDate } from "@/shared/ui/primitives";
 import { loadWorkspace } from "./data";
-import { nextAction } from "./next-action";
+import { nextAction } from "@/lib/services/next-action";
 
 const CTA: Record<string, string> = {
   conversacion: "Ir a la conversación",

@@ -655,6 +655,7 @@ const agentThreadSpec: Spec<AgentThread> = {
     id: ["id", same], projectId: ["project_id", same], creatorId: ["creator_id", same],
     title: ["title", same], isPinned: ["is_pinned", same],
     status: ["status", same], lastErrorCode: ["last_error_code", nul], lastErrorMessage: ["last_error_message", nul],
+    memory: ["memory", nul],
     createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
   },
 };
