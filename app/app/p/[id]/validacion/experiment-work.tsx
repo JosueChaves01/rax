@@ -93,7 +93,7 @@ export function ExperimentWork({
 
   return (
     <div className="mt-4 grid gap-3 md:grid-cols-2">
-      <section aria-labelledby={fid("tasks")} className="min-w-0 rounded-lg border border-line p-3">
+      <section aria-labelledby={fid("tasks")} className="min-w-0 rounded-lg border border-slate-200 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <h4 id={fid("tasks")} className="eyebrow flex items-center gap-2">
                         Tareas
@@ -132,14 +132,14 @@ export function ExperimentWork({
                     )}
 
                     {suggestedTasks && (
-                      <div className="mt-3 rounded-lg border border-line bg-panel p-3 space-y-2.5">
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 space-y-2.5">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-cyan">
+                          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-blue-700">
                             ✨ Tareas sugeridas ({selectedIndices.size}/{suggestedTasks.length})
                           </p>
                           <button
                             type="button"
-                            className="text-xs text-faint hover:text-ink"
+                            className="text-xs text-faint hover:text-slate-900"
                             onClick={() => setSuggestedTasks(null)}
                           >
                             Descartar
@@ -161,13 +161,13 @@ export function ExperimentWork({
                                   setSelectedIndices(next);
                                 }}
                               />
-                              <label htmlFor={`${fid("st")}-${idx}`} className="flex-1 text-ink cursor-pointer leading-tight">
+                              <label htmlFor={`${fid("st")}-${idx}`} className="flex-1 text-slate-900 cursor-pointer leading-tight">
                                 {st.title}
                               </label>
                 </li>
               ))}
                 </ul>
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-line">
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200">
                 <Button
                   size="sm"
                   variant="primary"
@@ -224,7 +224,7 @@ export function ExperimentWork({
                       </label>
                       <select
                         id={fid(t.id)}
-                        className="shrink-0 rounded-lg border border-line-strong bg-bg px-2 py-1 text-xs text-ink focus:border-highlight focus:outline-none"
+                        className="shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
                         value={t.status}
                         disabled={pending}
                         onChange={(x) => run(() => setTaskStatusAction(projectId, t.id, x.target.value as TaskStatus))}
@@ -268,7 +268,7 @@ export function ExperimentWork({
           )}
       </section>
 
-      <section aria-labelledby={fid("ev")} className="min-w-0 rounded-lg border border-line p-3">
+      <section aria-labelledby={fid("ev")} className="min-w-0 rounded-lg border border-slate-200 p-3">
         <h4 id={fid("ev")} className="eyebrow">
           Evidencia
         </h4>

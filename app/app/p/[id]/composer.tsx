@@ -27,9 +27,9 @@ export function Composer({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="space-y-3 border-t border-line px-5 py-4">
+    <div className="space-y-3 border-t border-slate-200 px-5 py-4">
       {pending && (
-        <p role="status" className="text-xs text-cyan">
+        <p role="status" className="text-xs text-blue-700">
           Enviando el mensaje al agente principal…
         </p>
       )}
@@ -51,7 +51,7 @@ export function Composer({ projectId }: { projectId: string }) {
             type="button"
             disabled={pending}
             onClick={() => send(q)}
-            className="rounded-full border border-line-strong px-3 py-1 text-xs text-muted hover:border-highlight hover:text-ink disabled:opacity-50"
+            className="rounded-full border border-slate-300 px-3 py-1 text-xs text-muted hover:border-highlight hover:text-slate-900 disabled:opacity-50"
           >
             {q}
           </button>

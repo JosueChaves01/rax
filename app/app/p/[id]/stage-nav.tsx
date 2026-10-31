@@ -51,8 +51,8 @@ export function StageNav({ projectId, phase, badges }: { projectId: string; phas
                 className={cx(
                   "flex h-full flex-col justify-center rounded-xl border px-3 py-2 transition-colors",
                   active
-                    ? "border-blue-600 bg-blue-50/80 text-blue-900 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-100 shadow-2xs font-semibold"
-                    : "border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:border-slate-300 shadow-2xs",
+                    ? "border-blue-600 bg-blue-50/80 text-blue-900 shadow-2xs font-semibold"
+                    : "border-slate-200/80 bg-white hover:bg-slate-50 text-slate-700 hover:border-slate-300 shadow-2xs",
                   state === "upcoming" && !active && "opacity-70",
                 )}
               >
@@ -71,7 +71,7 @@ export function StageNav({ projectId, phase, badges }: { projectId: string; phas
       </ol>
 
       {section.pages.length > 1 && (
-        <ul className="-mx-4 flex min-w-0 gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800 px-4 sm:mx-0 sm:px-0">
+        <ul className="-mx-4 flex min-w-0 gap-1 overflow-x-auto border-b border-slate-200 px-4 sm:mx-0 sm:px-0">
           {section.pages.map((p) => {
             const active = p.slug === slug;
             return (
@@ -81,7 +81,7 @@ export function StageNav({ projectId, phase, badges }: { projectId: string; phas
                   aria-current={active ? "page" : undefined}
                   className={cx(
                     "relative inline-flex h-11 items-center gap-2 whitespace-nowrap px-3 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] transition-colors",
-                    active ? "text-blue-600 dark:text-blue-400" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white",
+                    active ? "text-blue-600" : "text-slate-500 hover:text-slate-900",
                   )}
                 >
                   {p.label}
@@ -103,7 +103,7 @@ export function MobileStageBar({ projectId, phase, badges }: { projectId: string
   return (
     <nav
       aria-label="Etapas del proyecto"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
     >
       <ul className="grid grid-cols-5">
         {SECTIONS.filter((s) => s.id !== "archivo").map((s) => {

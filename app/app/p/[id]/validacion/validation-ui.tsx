@@ -228,7 +228,7 @@ export function NewHypothesis({ projectId, problems }: { projectId: string; prob
 
       {suggestions.length > 0 && (
         <div className="mt-4 space-y-3 rounded-xl border border-accent/40 bg-accent/5 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent flex items-center gap-1.5">
                 <span>✨</span> Hipótesis sugeridas por IA ({suggestions.length})
@@ -243,7 +243,7 @@ export function NewHypothesis({ projectId, problems }: { projectId: string; prob
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
             {suggestions.map((s, idx) => (
-              <div key={idx} className="flex flex-col justify-between rounded-lg border border-line bg-panel p-3.5 space-y-3">
+              <div key={idx} className="flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-3.5 space-y-3">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Tag>{UNCERTAINTY_LABEL[s.uncertainty]}</Tag>
@@ -253,7 +253,7 @@ export function NewHypothesis({ projectId, problems }: { projectId: string; prob
                       </span>
                     )}
                   </div>
-                  <p className="font-semibold text-sm text-ink leading-snug">{s.statement}</p>
+                  <p className="font-semibold text-sm text-slate-900 leading-snug">{s.statement}</p>
                   <dl className="grid gap-1.5 text-xs">
                     <div>
                       <dt className="text-faint font-semibold uppercase tracking-wider text-[0.625rem]">Segmento:</dt>
@@ -270,7 +270,7 @@ export function NewHypothesis({ projectId, problems }: { projectId: string; prob
                     )}
                   </dl>
                 </div>
-                <div className="flex flex-wrap gap-2 border-t border-line/60 pt-2.5">
+                <div className="flex flex-wrap gap-2 border-t border-slate-200/60 pt-2.5">
                   <Button size="sm" type="button" onClick={() => handleUseInForm(s)}>
                     Cargar en formulario
                   </Button>
@@ -367,7 +367,7 @@ export function HypothesisCard(props: {
         </span>
       </div>
       <p className={cx("display mt-3 text-2xl leading-tight", closed && "line-through decoration-1")}>{h.statement}</p>
-      {successor && <p className="mt-1 text-xs text-cyan">Reformulada como: «{successor.statement.slice(0, 120)}»</p>}
+      {successor && <p className="mt-1 text-xs text-blue-700">Reformulada como: «{successor.statement.slice(0, 120)}»</p>}
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <Def label="Segmento" value={h.segment} />
         <Def label="Por qué importa" value={h.whyItMatters} />
@@ -435,14 +435,14 @@ export function HypothesisCard(props: {
       )}
 
       {mode === "reformulate" && (
-        <div className="mt-4 rounded-xl border border-line p-4">
+        <div className="mt-4 rounded-xl border border-slate-200 p-4">
           <p className="mb-3 text-xs text-muted">La hipótesis actual se conserva como «Reformulada» con su evidencia; la nueva empieza en borrador.</p>
           <ReformulateForm projectId={projectId} h={h} problems={props.problems} onDone={() => setMode(null)} />
         </div>
       )}
       {mode === "experiment" && (
-        <div className="mt-4 rounded-xl border border-line p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+        <div className="mt-4 rounded-xl border border-slate-200 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
               Diseño del experimento (se creará como borrador para que el mentor pueda editarlo y confirmarlo)
             </p>
@@ -468,7 +468,7 @@ export function HypothesisCard(props: {
       )}
 
       {props.experiments.length > 0 && (
-        <ul className="mt-5 space-y-3 border-t border-line pt-5">
+        <ul className="mt-5 space-y-3 border-t border-slate-200 pt-5">
           {props.experiments.map((e) => (
             <ExperimentCard
               key={`${e.id}-${e.version}`}
@@ -609,10 +609,10 @@ function ExperimentCard({
   const missing = missingForReady(e);
 
   return (
-    <li className="rounded-xl border border-line bg-bg p-4">
+    <li className="rounded-xl border border-slate-200 bg-white p-4">
       <ol className="flex flex-wrap gap-1" aria-label="Estado del experimento">
         {STEPS.map((s, i) => (
-          <li key={s} className={cx("rounded-full px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.1em]", i === step ? "bg-accent text-white" : i < step ? "bg-white/10 text-muted" : "text-faint")} aria-current={i === step ? "step" : undefined}>
+          <li key={s} className={cx("rounded-full px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.1em]", i === step ? "bg-accent text-white" : i < step ? "bg-slate-100 text-muted" : "text-faint")} aria-current={i === step ? "step" : undefined}>
             {EXPERIMENT_STATUS_LABEL[s]}
           </li>
         ))}
@@ -636,7 +636,7 @@ function ExperimentCard({
           ))}
         </ul>
       )}
-      {e.criteriaLockedAt && <p className="mt-3 text-xs text-cyan">🔒 Criterios bloqueados el {formatDate(e.criteriaLockedAt)}, antes de observar resultados.</p>}
+      {e.criteriaLockedAt && <p className="mt-3 text-xs text-blue-700">🔒 Criterios bloqueados el {formatDate(e.criteriaLockedAt)}, antes de observar resultados.</p>}
 
       <ExperimentWork
         projectId={projectId}
@@ -649,7 +649,7 @@ function ExperimentCard({
       />
 
       {results.map((r) => (
-        <div key={r.id} className="mt-3 rounded-lg border border-line p-3 text-sm">
+        <div key={r.id} className="mt-3 rounded-lg border border-slate-200 p-3 text-sm">
           <p className="flex items-center gap-2">
             <Tag color={r.outcome === "positive" ? "var(--color-ok)" : r.outcome === "negative" ? "var(--color-danger)" : "var(--color-highlight)"}>Resultado {OUTCOME_LABEL[r.outcome].toLowerCase()}</Tag>
             <span className="text-xs text-faint">
@@ -660,7 +660,7 @@ function ExperimentCard({
           <p className="mt-1 text-muted">Valor observado: {r.metricValue || "—"}</p>
           <p className="text-muted">Aprendizaje: {r.learnings || "—"}</p>
           <p className="text-muted">Limitaciones: {r.limitations || "—"}</p>
-          {r.outcome === "negative" && <p className="mt-2 text-xs text-cyan">Un resultado negativo no es un fracaso: muestra qué no funciona y orienta el próximo paso.</p>}
+          {r.outcome === "negative" && <p className="mt-2 text-xs text-blue-700">Un resultado negativo no es un fracaso: muestra qué no funciona y orienta el próximo paso.</p>}
         </div>
       ))}
 
@@ -702,7 +702,7 @@ function ExperimentCard({
       )}
 
       {mode === "edit" && (
-        <div className="mt-3 rounded-lg border border-line p-3">
+        <div className="mt-3 rounded-lg border border-slate-200 p-3">
           <ExperimentForm
             projectId={projectId}
             entityId={e.id}
@@ -730,20 +730,20 @@ function ResultForm({ projectId, e, evidence, onDone }: { projectId: string; e: 
   const id = (x: string) => `${e.id}-r-${x}`;
   return (
     <form
-      className="mt-3 grid gap-3 rounded-lg border border-line p-3 md:grid-cols-2"
+      className="mt-3 grid gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-2"
       onSubmit={(x) => {
         x.preventDefault();
         run(() => recordResultAction(projectId, e.id, { outcome, observed, metricValue, learnings, limitations, evidenceIds: ev }), onDone);
       }}
     >
-      <div className="rounded-lg bg-white/5 p-3 text-xs text-muted md:col-span-2">
+      <div className="rounded-lg bg-slate-50 p-3 text-xs text-muted md:col-span-2">
         Comparalo con lo definido antes: éxito «{e.successCriterion}» · rechazo «{e.rejectionCriterion}».
       </div>
       <fieldset className="md:col-span-2">
         <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted">Resultado</legend>
         <div className="flex flex-wrap gap-2">
           {(Object.keys(OUTCOME_LABEL) as ResultOutcome[]).map((k) => (
-            <label key={k} className="cursor-pointer rounded-full border border-line-strong px-3 py-1 text-xs has-[:checked]:border-accent has-[:checked]:bg-accent has-[:checked]:text-white">
+            <label key={k} className="cursor-pointer rounded-full border border-slate-300 px-3 py-1 text-xs has-[:checked]:border-accent has-[:checked]:bg-accent has-[:checked]:text-white">
               <input type="radio" name={id("o")} className="sr-only" checked={outcome === k} onChange={() => setOutcome(k)} />
               {OUTCOME_LABEL[k]}
             </label>

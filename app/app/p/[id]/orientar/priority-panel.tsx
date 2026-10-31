@@ -11,16 +11,16 @@ type Problem = { id: string; title: string; content: string; version: number; pr
 export function PriorityPanel({ projectId, problems, canPrioritize }: { projectId: string; problems: Problem[]; canPrioritize: boolean }) {
   const sorted = [...problems].sort((a, b) => (a.priority?.rank ?? 99) - (b.priority?.rank ?? 99));
   return (
-    <section aria-labelledby="prio-title" className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-6 shadow-xs">
-      <h3 id="prio-title" className="eyebrow text-slate-500 dark:text-slate-400">
+    <section aria-labelledby="prio-title" className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
+      <h3 id="prio-title" className="eyebrow text-slate-500">
         Priorizar el problema
       </h3>
-      <p className="mt-2 max-w-3xl text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+      <p className="mt-2 max-w-3xl text-sm text-slate-600 leading-relaxed">
         La prioridad es una decisión contextual y revisable, no un puntaje objetivo. Considerá impacto, frecuencia, evidencia disponible y costo de
         investigarlo. El problema #1 es el que se convierte en hipótesis.
       </p>
       {sorted.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Todavía no hay problemas en el diagnóstico. Aparecen cuando la conversación los identifica.</p>
+        <p className="mt-4 text-sm text-slate-500">Todavía no hay problemas en el diagnóstico. Aparecen cuando la conversación los identifica.</p>
       ) : (
         <ul className="mt-4 space-y-2.5">
           {sorted.map((p) => (
@@ -46,23 +46,23 @@ function ProblemRow({ projectId, problem: p, canPrioritize }: { projectId: strin
       className={cx(
         "rounded-xl border p-4 transition-colors",
         isFirstPriority
-          ? "border-2 border-blue-500/80 bg-blue-50/40 dark:bg-blue-950/20 dark:border-blue-700 shadow-xs"
-          : "border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-2xs",
+          ? "border-2 border-blue-500/80 bg-blue-50/40 shadow-xs"
+          : "border-slate-200/80 bg-white shadow-2xs",
       )}
     >
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {p.priority && (
-              <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+              <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
                 Prioridad #{p.priority.rank}
               </span>
             )}
-            <p className="font-semibold text-slate-900 dark:text-white">{p.title}</p>
+            <p className="font-semibold text-slate-900">{p.title}</p>
           </div>
-          <p className="mt-1 line-clamp-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{p.content}</p>
+          <p className="mt-1 line-clamp-2 text-sm text-slate-600 leading-relaxed">{p.content}</p>
           {p.priority && (
-            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <p className="mt-1.5 text-xs text-slate-500">
               {p.priority.rationale} ({p.priority.setByName})
             </p>
           )}
@@ -75,7 +75,7 @@ function ProblemRow({ projectId, problem: p, canPrioritize }: { projectId: strin
       </div>
       {open && (
         <form
-          className="mt-3 space-y-3 border-t border-slate-200 dark:border-slate-800 pt-3"
+          className="mt-3 space-y-3 border-t border-slate-200 pt-3"
           onSubmit={(e) => {
             e.preventDefault();
             run(() => changeItemAction(projectId, p.id, { kind: "prioritize", rank, rationale: reason }, p.version), () => setOpen(false));
