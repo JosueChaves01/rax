@@ -22,7 +22,9 @@ export async function completeOnboarding(d: ServiceDeps, input: OnboardingInput)
 
   if (intent === "admin" && me.role !== "admin") throw forbidden();
   if (intent === "entrepreneur" && me.role !== "entrepreneur") throw validation("Tu cuenta ya tiene otro rol en RAX.");
-  if (me.onboardedAt && me.onboarding?.intent === intent) throw validation("Ya completaste esta bienvenida.");
+  // Quien fue rechazado como mentor puede volver a postularse con datos nuevos; nadie más repite su bienvenida.
+  const reapplying = intent === "mentor" && me.role !== "mentor" && me.mentorStatus === "rejected";
+  if (me.onboardedAt && me.onboarding?.intent === intent && !reapplying) throw validation("Ya completaste esta bienvenida.");
 
   if (intent === "mentor") {
     const m = input.profile as MentorOnboarding;
