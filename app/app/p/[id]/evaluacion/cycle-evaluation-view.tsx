@@ -169,7 +169,7 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
       )}
 
       {/* Estado actual de la relación */}
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-panel p-4">
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex items-center gap-3">
           <span className="font-semibold text-xs text-muted uppercase">Etapa actual del proceso:</span>
           <Tag color="var(--color-cyan)">{MENTORSHIP_STAGE_LABEL[mentorshipRelation.stage]}</Tag>
@@ -206,25 +206,25 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
                   <p className="text-sm text-muted">No hay objetivos definidos en este ciclo.</p>
                 ) : (
                   activeGoals.map((g) => (
-                    <div key={g.id} className="rounded-xl border border-line-strong bg-bg/50 p-4 space-y-4">
+                    <div key={g.id} className="rounded-xl border border-slate-300 bg-slate-50 p-4 space-y-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-semibold text-sm text-ink">{g.title}</span>
+                        <span className="font-semibold text-sm text-slate-900">{g.title}</span>
                         <Tag>{GOAL_KIND_LABEL[g.kind]}</Tag>
                       </div>
 
                       {/* Línea Base vs Resultado Esperado */}
                       <div className="grid gap-4 sm:grid-cols-2 text-xs">
-                        <div className="rounded-lg bg-panel p-3 border border-line">
+                        <div className="rounded-lg bg-white p-3 border border-slate-200">
                           <span className="block font-semibold text-muted uppercase tracking-wider text-[0.6875rem]">
                             Línea Base Inicial (Inmutable)
                           </span>
-                          <p className="mt-1 text-ink">{g.baseline}</p>
+                          <p className="mt-1 text-slate-900">{g.baseline}</p>
                         </div>
-                        <div className="rounded-lg bg-panel p-3 border border-line">
-                          <span className="block font-semibold text-cyan uppercase tracking-wider text-[0.6875rem]">
+                        <div className="rounded-lg bg-white p-3 border border-slate-200">
+                          <span className="block font-semibold text-blue-700 uppercase tracking-wider text-[0.6875rem]">
                             Resultado Esperado
                           </span>
-                          <p className="mt-1 text-ink">{g.targetResult}</p>
+                          <p className="mt-1 text-slate-900">{g.targetResult}</p>
                         </div>
                       </div>
 
@@ -305,7 +305,7 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
               </div>
 
               {/* Evaluación de Crecimiento en Autonomía */}
-              <div className="space-y-4 pt-6 border-t border-line">
+              <div className="space-y-4 pt-6 border-t border-slate-200">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
                   2. Evaluación de Autonomía y Aprendizaje
                 </h3>
@@ -342,7 +342,7 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
               </div>
 
               {/* Retroalimentación cualitativa */}
-              <div className="space-y-4 pt-6 border-t border-line">
+              <div className="space-y-4 pt-6 border-t border-slate-200">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
                   3. Retroalimentación Cualitativa y Síntesis
                 </h3>
@@ -372,7 +372,7 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
               </div>
 
               {/* Decisión de ciclo */}
-              <div className="space-y-4 pt-6 border-t border-line">
+              <div className="space-y-4 pt-6 border-t border-slate-200">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
                   4. Decisión del Ciclo (Continuidad o Cierre)
                 </h3>
@@ -403,7 +403,7 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
                 </Field>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
                 <Button type="submit" variant="primary" size="md" disabled={isPending}>
                   {isPending ? "Consolidando..." : "Consolidar evaluación formal del ciclo"}
                 </Button>
@@ -429,10 +429,10 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
         ) : (
           <div className="mt-6 space-y-6">
             {cycleEvaluations.map((ev) => (
-              <Card key={ev.id} className="p-6 space-y-6 border-line">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
+              <Card key={ev.id} className="p-6 space-y-6 border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-4">
                   <div className="flex items-center gap-3">
-                    <span className="font-semibold text-lg text-ink">Ciclo #{ev.cycleNumber}</span>
+                    <span className="font-semibold text-lg text-slate-900">Ciclo #{ev.cycleNumber}</span>
                     <Tag color="var(--color-cyan)">{CYCLE_DECISION_LABEL[ev.decision]}</Tag>
                   </div>
                   <span className="font-mono text-xs text-faint">
@@ -447,9 +447,9 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
                   </h4>
                   <div className="space-y-3">
                     {ev.goalEvaluations.map((ge, idx) => (
-                      <div key={idx} className="rounded-xl border border-line bg-panel p-3 text-xs space-y-2">
+                      <div key={idx} className="rounded-xl border border-slate-200 bg-white p-3 text-xs space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold text-ink">{ge.goalTitle}</span>
+                          <span className="font-semibold text-slate-900">{ge.goalTitle}</span>
                           <Tag>{GOAL_STATUS_LABEL[ge.status]}</Tag>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2 text-faint">
@@ -458,11 +458,11 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
                             {ge.baseline}
                           </div>
                           <div>
-                            <span className="font-semibold text-cyan">Resultado esperado: </span>
+                            <span className="font-semibold text-blue-700">Resultado esperado: </span>
                             {ge.targetResult}
                           </div>
                         </div>
-                        <div className="pt-1 text-ink">
+                        <div className="pt-1 text-slate-900">
                           <span className="font-semibold text-ok">Resultado comprobado: </span>
                           {ge.actualResult}
                         </div>
@@ -479,23 +479,23 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
 
                 {/* Autonomía y Feedback */}
                 <div className="grid gap-4 sm:grid-cols-2 text-xs">
-                  <div className="rounded-xl border border-line bg-panel p-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <span className="font-semibold text-muted uppercase text-[0.6875rem]">
                       Nivel de Autonomía
                     </span>
-                    <p className="mt-1 font-semibold text-ink">
+                    <p className="mt-1 font-semibold text-slate-900">
                       {AUTONOMY_RATING_LABEL[ev.autonomyAssessment.rating]}
                     </p>
                     <p className="mt-2 text-muted">{ev.autonomyAssessment.observations}</p>
                   </div>
 
-                  <div className="rounded-xl border border-line bg-panel p-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <span className="font-semibold text-muted uppercase text-[0.6875rem]">
                       Feedback del Mentor
                     </span>
-                    <p className="mt-2 text-ink whitespace-pre-wrap">{ev.mentorFeedback}</p>
+                    <p className="mt-2 text-slate-900 whitespace-pre-wrap">{ev.mentorFeedback}</p>
                     {ev.entrepreneurFeedback && (
-                      <div className="mt-3 pt-3 border-t border-line">
+                      <div className="mt-3 pt-3 border-t border-slate-200">
                         <span className="font-semibold text-muted uppercase text-[0.6875rem]">
                           Feedback del Emprendedor
                         </span>
@@ -508,7 +508,7 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
                 {ev.nextCycleFocus && (
                   <div className="rounded-xl bg-accent/5 border border-accent/20 p-3 text-xs">
                     <span className="font-semibold text-accent">Foco acordado: </span>
-                    <span className="text-ink">{ev.nextCycleFocus}</span>
+                    <span className="text-slate-900">{ev.nextCycleFocus}</span>
                   </div>
                 )}
               </Card>

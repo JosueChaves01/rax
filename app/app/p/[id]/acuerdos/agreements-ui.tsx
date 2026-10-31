@@ -259,10 +259,10 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
 
       {/* ── BLOQUE 1: Exploración y Compatibilidad ── */}
       <Card className="p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <span className="text-xs font-semibold uppercase tracking-wider text-muted">Etapa 1 del proceso</span>
-            <h3 className="display text-xl text-ink">Relación y evaluación de compatibilidad</h3>
+            <h3 className="display text-xl text-slate-900">Relación y evaluación de compatibilidad</h3>
           </div>
           {rel && (
             <div className="flex items-center gap-2">
@@ -308,7 +308,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
           <div className="mt-4 space-y-4">
             {rel.compatibilityStatus === "pending" && (
               <div className="rounded-xl border border-highlight/30 bg-highlight/5 p-4">
-                <p className="text-sm text-ink">
+                <p className="text-sm text-slate-900">
                   <strong>Evaluación mutua en curso:</strong> Antes de fijar compromisos formales, ambas partes verifican
                   que haya química de trabajo, disponibilidad real de tiempo y expectativas equilibradas. Si alguna de las
                   dos partes siente que no es el momento o perfil adecuado, se puede declinar con respeto sin forzar el
@@ -338,7 +338,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
             {rel.compatibilityStatus === "proceed" && (
               <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted">
                 <div>
-                  <p className="text-ink">
+                  <p className="text-slate-900">
                     ✓ Compatibilidad mutua confirmada el {formatDate(rel.compatibilityDecidedAt ?? rel.updatedAt)}.
                   </p>
                   {rel.compatibilityRationale && (
@@ -383,7 +383,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
 
       {/* Modal para declinar */}
       {showDeclineModal && (
-        <Card className="border-danger/40 bg-raised p-6">
+        <Card className="border-danger/40 bg-slate-50 p-6">
           <h4 className="text-base font-semibold text-danger">Declinar proceso de mentoría</h4>
           <p className="mt-1 text-xs text-muted">
             Declinar con respeto permite al emprendedor buscar un mentor con mayor afinidad sin desgastar expectativas.
@@ -418,10 +418,10 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
       {/* ── BLOQUE 2: Acuerdo Bilateral de Mentoría ── */}
       {rel && rel.compatibilityStatus === "proceed" && (
         <Card className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted">Pacto operativo</span>
-              <h3 className="display text-xl text-ink">Acuerdo de mentoría</h3>
+              <h3 className="display text-xl text-slate-900">Acuerdo de mentoría</h3>
             </div>
             {latestAgreement && (
               <div className="flex items-center gap-2">
@@ -568,48 +568,48 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
             <div className="mt-6 space-y-6">
               {/* Tarjetas resumen */}
               <div className="grid gap-4 sm:grid-cols-4">
-                <div className="rounded-xl border border-line bg-raised p-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted">Frecuencia</p>
-                  <p className="mt-1 text-sm font-medium text-ink">{AGREEMENT_FREQUENCY_LABEL[latestAgreement.frequency]}</p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">{AGREEMENT_FREQUENCY_LABEL[latestAgreement.frequency]}</p>
                 </div>
-                <div className="rounded-xl border border-line bg-raised p-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted">Duración sesión</p>
-                  <p className="mt-1 text-sm font-medium text-ink">{latestAgreement.sessionDurationMinutes} min</p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">{latestAgreement.sessionDurationMinutes} min</p>
                 </div>
-                <div className="rounded-xl border border-line bg-raised p-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted">Canales</p>
-                  <p className="mt-1 text-sm font-medium text-ink">{latestAgreement.authorizedChannels.join(", ")}</p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">{latestAgreement.authorizedChannels.join(", ")}</p>
                 </div>
-                <div className="rounded-xl border border-line bg-raised p-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted">Ciclo estimado</p>
-                  <p className="mt-1 text-sm font-medium text-ink">{latestAgreement.expectedDurationWeeks} semanas</p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">{latestAgreement.expectedDurationWeeks} semanas</p>
                 </div>
               </div>
 
               {/* Textos del acuerdo */}
               <div className="space-y-3 text-sm">
                 <div>
-                  <h4 className="font-semibold text-ink">Alcance del acompañamiento:</h4>
+                  <h4 className="font-semibold text-slate-900">Alcance del acompañamiento:</h4>
                   <p className="mt-1 text-muted whitespace-pre-wrap">{latestAgreement.scope}</p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-xl border border-line bg-raised/50 p-4">
-                    <h5 className="font-semibold text-ink">Compromisos del mentor/a</h5>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <h5 className="font-semibold text-slate-900">Compromisos del mentor/a</h5>
                     <p className="mt-1 text-xs text-muted whitespace-pre-wrap">{latestAgreement.mentorCommitments}</p>
                   </div>
-                  <div className="rounded-xl border border-line bg-raised/50 p-4">
-                    <h5 className="font-semibold text-ink">Compromisos del emprendedor/a</h5>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <h5 className="font-semibold text-slate-900">Compromisos del emprendedor/a</h5>
                     <p className="mt-1 text-xs text-muted whitespace-pre-wrap">{latestAgreement.entrepreneurCommitments}</p>
                   </div>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-ink">Confidencialidad:</h4>
+                  <h4 className="font-semibold text-slate-900">Confidencialidad:</h4>
                   <p className="mt-1 text-xs text-muted whitespace-pre-wrap">{latestAgreement.confidentialityTerms}</p>
                 </div>
               </div>
 
               {/* Estado de confirmación bilateral */}
-              <div className="rounded-xl border border-line bg-raised p-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted">Confirmación bilateral</p>
@@ -666,10 +666,10 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
       {/* ── BLOQUE 3: Objetivos de Mentoría ── */}
       {rel && rel.compatibilityStatus === "proceed" && (
         <Card className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted">Resultados observables</span>
-              <h3 className="display text-xl text-ink">Objetivos del ciclo ({goals.length})</h3>
+              <h3 className="display text-xl text-slate-900">Objetivos del ciclo ({goals.length})</h3>
             </div>
             <div className="flex items-center gap-3">
               <Button variant="secondary" size="sm" onClick={handleRequestAiSuggestions} disabled={action.pending}>
@@ -691,8 +691,8 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
 
           {/* Formulario nuevo objetivo */}
           {showGoalForm && (
-            <form onSubmit={handleCreateGoal} className="mt-6 space-y-4 rounded-xl border border-line-strong bg-raised p-4">
-              <h4 className="font-semibold text-ink">Registrar nuevo objetivo de mentoría</h4>
+            <form onSubmit={handleCreateGoal} className="mt-6 space-y-4 rounded-xl border border-slate-300 bg-slate-50 p-4">
+              <h4 className="font-semibold text-slate-900">Registrar nuevo objetivo de mentoría</h4>
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="sm:col-span-2">
@@ -827,7 +827,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
           ) : (
             <ul className="mt-6 space-y-4">
               {goals.map((g) => (
-                <li key={g.id} className="rounded-xl border border-line bg-raised p-5 transition-colors">
+                <li key={g.id} className="rounded-xl border border-slate-200 bg-slate-50 p-5 transition-colors">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -869,7 +869,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
                           {GOAL_STATUS_LABEL[g.status]}
                         </Tag>
                       </div>
-                      <h4 className="mt-2 text-base font-semibold text-ink">{g.title}</h4>
+                      <h4 className="mt-2 text-base font-semibold text-slate-900">{g.title}</h4>
                       {g.description && <p className="mt-1 text-xs text-muted">{g.description}</p>}
                     </div>
 
@@ -911,17 +911,17 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
 
                   {/* Línea base y resultado esperado */}
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-lg border border-line/60 bg-panel/70 p-3">
+                    <div className="rounded-lg border border-slate-200/60 bg-slate-50 p-3">
                       <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted">
                         Línea base actual (hechos documentados)
                       </p>
-                      <p className="mt-1 text-xs text-ink">{g.baseline}</p>
+                      <p className="mt-1 text-xs text-slate-900">{g.baseline}</p>
                     </div>
-                    <div className="rounded-lg border border-line/60 bg-panel/70 p-3">
+                    <div className="rounded-lg border border-slate-200/60 bg-slate-50 p-3">
                       <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted">
                         Resultado esperado observable
                       </p>
-                      <p className="mt-1 text-xs text-ink">{g.targetResult}</p>
+                      <p className="mt-1 text-xs text-slate-900">{g.targetResult}</p>
                     </div>
                   </div>
 
@@ -941,12 +941,12 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
       {aiModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <Card className="max-h-[90vh] w-full max-w-3xl overflow-y-auto p-6">
-            <div className="flex items-center justify-between border-b border-line pb-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-highlight">
                   Asistente metodológico RAX
                 </span>
-                <h3 className="display text-xl text-ink">Sugerencias de objetivos y términos</h3>
+                <h3 className="display text-xl text-slate-900">Sugerencias de objetivos y términos</h3>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setAiModalOpen(false)}>
                 ✕ Cerrar
@@ -955,7 +955,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
 
             {action.pending && !aiSuggestions ? (
               <div className="py-12 text-center">
-                <p className="text-sm text-ink animate-pulse">
+                <p className="text-sm text-slate-900 animate-pulse">
                   Analizando el diagnóstico confirmado, notas del mentor y problemas priorizados...
                 </p>
                 <p className="mt-1 text-xs text-muted">
@@ -972,9 +972,9 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
 
                 {/* Términos de acuerdo sugeridos */}
                 {aiSuggestions.suggestedAgreementTerms && (
-                  <div className="rounded-xl border border-line bg-raised p-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-ink">Términos sugeridos para el acuerdo</h4>
+                      <h4 className="text-sm font-semibold text-slate-900">Términos sugeridos para el acuerdo</h4>
                       {canEditAgreement && (
                         <Button variant="secondary" size="sm" onClick={handleApplySuggestedTerms}>
                           Aplicar términos al acuerdo
@@ -1003,19 +1003,19 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
 
                 {/* Objetivos sugeridos */}
                 <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-ink">
+                  <h4 className="text-sm font-semibold text-slate-900">
                     Objetivos sugeridos ({aiSuggestions.suggestedGoals.length})
                   </h4>
                   <ul className="space-y-3">
                     {aiSuggestions.suggestedGoals.map((sug, idx) => (
-                      <li key={idx} className="rounded-xl border border-line bg-raised p-4">
+                      <li key={idx} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
                             <div className="flex items-center gap-2">
                               <Tag color="var(--color-cyan)">{GOAL_KIND_LABEL[sug.kind]}</Tag>
                               <Tag color="var(--color-highlight)">Prioridad {GOAL_PRIORITY_LABEL[sug.priority]}</Tag>
                             </div>
-                            <h5 className="mt-1.5 text-sm font-semibold text-ink">{sug.title}</h5>
+                            <h5 className="mt-1.5 text-sm font-semibold text-slate-900">{sug.title}</h5>
                             <p className="mt-1 text-xs text-muted">{sug.description}</p>
                           </div>
                           {canManageGoal && (
@@ -1031,13 +1031,13 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
                         </div>
 
                         <div className="mt-3 grid gap-2 sm:grid-cols-2 text-xs">
-                          <div className="rounded bg-panel p-2">
+                          <div className="rounded bg-white p-2">
                             <span className="font-semibold text-muted">Línea base:</span>
-                            <p className="text-ink">{sug.baseline}</p>
+                            <p className="text-slate-900">{sug.baseline}</p>
                           </div>
-                          <div className="rounded bg-panel p-2">
+                          <div className="rounded bg-white p-2">
                             <span className="font-semibold text-muted">Resultado esperado:</span>
-                            <p className="text-ink">{sug.targetResult}</p>
+                            <p className="text-slate-900">{sug.targetResult}</p>
                           </div>
                         </div>
 

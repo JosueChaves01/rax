@@ -67,12 +67,12 @@ export function AgentFieldAssist(props: AgentFieldAssistProps) {
         {open ? "Cerrar ayuda del agente" : "Pedir borrador al agente"}
       </button>
       {open && (
-        <div className="mt-2 space-y-2 rounded-lg border border-line bg-bg p-3">
+        <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs text-muted">El borrador se revisa aquí; solo se aplica al formulario si lo eliges.</p>
           <label className="sr-only" htmlFor={`${props.fieldPath}-agent-prompt`}>Qué necesitas para este campo</label>
           <textarea
             id={`${props.fieldPath}-agent-prompt`}
-            className="w-full rounded border border-line-strong bg-panel p-2 text-xs"
+            className="w-full rounded border border-slate-300 bg-white p-2 text-xs"
             maxLength={1000}
             rows={2}
             value={message}
@@ -86,13 +86,13 @@ export function AgentFieldAssist(props: AgentFieldAssistProps) {
           {error && <p role="status" className="text-xs text-amber-800">{error}</p>}
           {reply && <p className="whitespace-pre-wrap text-xs text-muted">{reply}</p>}
           {proposal && (
-            <div className="space-y-2 rounded border border-cyan/40 bg-panel p-2">
+            <div className="space-y-2 rounded border border-blue-200 bg-white p-2">
               <p className="text-xs font-semibold">Borrador para revisión</p>
               <p className="whitespace-pre-wrap text-xs">{String(proposal.value)}</p>
               {proposal.uncertainties.length > 0 && <p className="text-xs text-muted">Incertidumbre: {proposal.uncertainties.join("; ")}</p>}
               <button
                 type="button"
-                className="rounded border border-line-strong px-3 py-1.5 text-xs font-semibold"
+                className="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold"
                 onClick={() => { props.onApply(proposal.value === null ? "" : String(proposal.value)); setOpen(false); }}
               >
                 Aplicar al campo

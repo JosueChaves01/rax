@@ -46,8 +46,8 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
               className={cx(
                 "min-w-0 rounded-xl border px-2 py-2 sm:px-3 sm:py-2.5 shadow-2xs transition-colors",
                 state === "current"
-                  ? "border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 dark:border-blue-500"
-                  : "border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800",
+                  ? "border-blue-600 bg-blue-50/60"
+                  : "border-slate-200/80 bg-white",
               )}
               aria-current={state === "current" ? "step" : undefined}
             >
@@ -55,12 +55,12 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
                 {s.n}
                 <span className="hidden sm:inline"> · {state === "done" ? "hecha" : state === "current" ? "en curso" : "por venir"}</span>
               </p>
-              <p className={cx("display mt-1 truncate text-base sm:text-xl font-bold", state === "done" ? "text-slate-400" : state === "upcoming" ? "text-slate-400" : "text-slate-900 dark:text-white")}>{s.label}</p>
+              <p className={cx("display mt-1 truncate text-base sm:text-xl font-bold", state === "done" ? "text-slate-400" : state === "upcoming" ? "text-slate-400" : "text-slate-900")}>{s.label}</p>
               <div className="mt-2 flex gap-[3px]" aria-hidden>
                 {s.phases.map((p, i) => (
                   <span
                     key={p}
-                    className={cx("h-[3px] flex-1 rounded", i < done ? "bg-emerald-600" : state === "current" && i === done ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700")}
+                    className={cx("h-[3px] flex-1 rounded", i < done ? "bg-emerald-600" : state === "current" && i === done ? "bg-blue-600" : "bg-slate-200")}
                   />
                 ))}
               </div>
@@ -70,12 +70,12 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
       </ol>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <section aria-labelledby="sigue" className="rounded-2xl border border-blue-200/80 bg-blue-50/40 dark:bg-blue-950/20 dark:border-blue-900/40 p-6 shadow-xs">
-          <p id="sigue" className="eyebrow text-blue-700 dark:text-blue-400">
+        <section aria-labelledby="sigue" className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-6 shadow-xs">
+          <p id="sigue" className="eyebrow text-blue-700">
             Lo que sigue · {stage.label}
           </p>
-          <p className="mt-3 text-xl font-bold leading-snug sm:text-2xl text-slate-900 dark:text-white">{text}</p>
-          <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{PHASE_LABEL[w.phase]}</p>
+          <p className="mt-3 text-xl font-bold leading-snug sm:text-2xl text-slate-900">{text}</p>
+          <p className="mt-3 text-sm text-slate-600">{PHASE_LABEL[w.phase]}</p>
           <Link
             href={`/app/p/${id}/${tab}`}
             className="mt-5 inline-flex h-10 items-center rounded-full bg-blue-600 px-5 text-xs font-semibold uppercase tracking-[0.08em] text-white hover:bg-blue-700 shadow-xs"
@@ -86,12 +86,12 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
         </section>
 
         <aside className="space-y-4">
-          <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-6 shadow-xs">
-            <p className="eyebrow text-slate-500 dark:text-slate-400">Pendientes</p>
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
+            <p className="eyebrow text-slate-500">Pendientes</p>
             <ul className="mt-3 space-y-2 text-sm">
               {pending.map((p) => (
                 <li key={p.label}>
-                  <Link href={`/app/p/${id}/${p.tab}`} className={cx("flex items-baseline gap-2 hover:text-blue-600 transition-colors", p.n ? "text-slate-800 dark:text-slate-200 font-medium" : "text-slate-400")}>
+                  <Link href={`/app/p/${id}/${p.tab}`} className={cx("flex items-baseline gap-2 hover:text-blue-600 transition-colors", p.n ? "text-slate-800 font-medium" : "text-slate-400")}>
                     {p.label}
                     <span className={cx("ml-auto font-mono text-xs", p.n ? "text-blue-600 font-bold" : "text-slate-400")}>{p.n}</span>
                   </Link>
@@ -99,9 +99,9 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
               ))}
             </ul>
           </div>
-          <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-6 text-sm shadow-xs">
-            <p className="eyebrow text-slate-500 dark:text-slate-400">Archivo</p>
-            <p className="mt-2 text-slate-500 dark:text-slate-400">Última actualización {formatDate(w.project.updatedAt)}.</p>
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 text-sm shadow-xs">
+            <p className="eyebrow text-slate-500">Archivo</p>
+            <p className="mt-2 text-slate-500">Última actualización {formatDate(w.project.updatedAt)}.</p>
             <Link href={`/app/p/${id}/historial`} className="mt-2 inline-block text-xs font-semibold uppercase tracking-[0.12em] text-blue-600 hover:underline">
               Ver evidencia e historial →
             </Link>
@@ -133,7 +133,7 @@ function TurnLine({ turn, viewerIsMentor, you, mentor, owner }: { turn: Turn; vi
           ? "Esperando que la administración asigne mentor."
           : `Ahora le toca a ${who}.`;
   return (
-    <p className="mt-5 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
+    <p className="mt-5 flex items-center gap-3 text-sm text-slate-600">
       {who && (
         <span
           aria-hidden

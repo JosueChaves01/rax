@@ -66,10 +66,10 @@ export function Heading({ children, highlight, level = 2, className }: { childre
 
 export function Notice({ tone = "info", children }: { tone?: "info" | "error" | "success" | "warn"; children: ReactNode }) {
   const tones = {
-    info: "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200",
-    error: "border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
-    warn: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+    info: "border-sky-200 bg-sky-50 text-sky-950",
+    error: "border-rose-200 bg-rose-50 text-rose-950",
+    success: "border-emerald-200 bg-emerald-50 text-emerald-950",
+    warn: "border-amber-200 bg-amber-50 text-amber-950",
   };
   return (
     <div role={tone === "error" ? "alert" : "status"} className={cx("rounded-xl border px-4 py-3 text-sm", tones[tone])}>
@@ -120,7 +120,7 @@ export function Meter({ value, total, label }: { value: number; total: number; l
           {String(value).padStart(2, "0")} / {String(total).padStart(2, "0")}
         </span>
       </div>
-      <div className="h-[3px] rounded bg-white/10" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={value} aria-label={label}>
+      <div className="h-[3px] rounded bg-slate-200" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={value} aria-label={label}>
         <div className="h-full rounded bg-accent" style={{ width: `${(value / total) * 100}%` }} />
       </div>
     </div>

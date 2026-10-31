@@ -18,7 +18,7 @@ export function EvidenceForm({ projectId, idPrefix = "ev", onSaved }: { projectI
 
   return (
     <form
-      className="grid gap-3 rounded-2xl border border-line bg-panel p-4 md:grid-cols-2"
+      className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
         run(
@@ -44,7 +44,7 @@ export function EvidenceForm({ projectId, idPrefix = "ev", onSaved }: { projectI
         <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted">Tipo de evidencia</legend>
         <div className="flex gap-2">
           {(["note", "link", "file"] as const).map((k) => (
-            <label key={k} className="cursor-pointer rounded-full border border-line-strong px-3 py-1 text-xs has-[:checked]:border-accent has-[:checked]:bg-accent has-[:checked]:text-white">
+            <label key={k} className="cursor-pointer rounded-full border border-slate-300 px-3 py-1 text-xs has-[:checked]:border-accent has-[:checked]:bg-accent has-[:checked]:text-white">
               <input type="radio" name={`${idPrefix}-kind`} className="sr-only" checked={kind === k} onChange={() => setKind(k)} />
               {k === "note" ? "Nota" : k === "link" ? "Enlace" : "Archivo"}
             </label>
@@ -61,7 +61,7 @@ export function EvidenceForm({ projectId, idPrefix = "ev", onSaved }: { projectI
       )}
       {kind === "file" && (
         <Field id={`${idPrefix}-file`} label="Archivo" hint="PDF, imagen, texto o CSV, hasta 10 MB. En el prototipo se valida pero no se almacena.">
-          <input id={`${idPrefix}-file`} type="file" accept={ACCEPT} className="block w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-raised file:px-3 file:py-1.5 file:text-xs file:text-ink" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
+          <input id={`${idPrefix}-file`} type="file" accept={ACCEPT} className="block w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:text-slate-900" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
         </Field>
       )}
       <div className="md:col-span-2">

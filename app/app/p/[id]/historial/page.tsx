@@ -39,7 +39,7 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
                 <p className="mt-2 font-semibold">{e.title}</p>
                 {e.description && <p className="mt-1 text-sm text-muted">{e.description}</p>}
                 {e.url && (
-                  <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="mt-1 block truncate text-sm text-cyan underline">
+                  <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="mt-1 block truncate text-sm text-blue-700 underline">
                     {e.url}
                   </a>
                 )}
@@ -63,7 +63,7 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
         {timeline.length === 0 ? (
           <Empty title="Sin cambios todavía" />
         ) : (
-          <ol className="relative space-y-3 border-l border-line pl-5">
+          <ol className="relative space-y-3 border-l border-slate-200 pl-5">
             {timeline.slice(0, 120).map((t, i) => (
               <li key={i} className="relative text-sm">
                 <span aria-hidden className={`absolute -left-[25px] top-1.5 h-2 w-2 rounded-full ${t.kind === "item" ? "bg-cyan" : "bg-accent"}`} />
