@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { closeWorlds, world } from "./helpers";
+import { BACKEND, closeWorlds, world } from "./helpers";
 import { createProject, getWorkspace } from "@/lib/services/projects";
 import { assignMentor } from "@/lib/services/admin";
 import { createAgentThread } from "@/lib/services/agent-chat";
@@ -178,5 +178,20 @@ describe("herramientas en dos pasos", () => {
     expect(turn.assistantMessage?.status).toBe("failed");
     expect(turn.assistantMessage?.proposals).toEqual([]);
     expect(turn.result.unavailable?.message).toContain("no respondió");
+  });
+});
+
+describe("proyectos con armado incompleto", () => {
+  it.skipIf(BACKEND === "pg")("un proyecto sin diagnóstico no rompe el espacio de trabajo: se repara", async () => {
+    const w = await world();
+    const ent = w.as("ent1");
+    const project = await createProject(ent, { name: "A medias", description: "x", nature: "unknown" });
+    const [dx] = await w.repo.diagnoses.list({ projectId: project.id });
+    // Simula un armado que falló antes de crear el diagnóstico.
+    (w.repo.diagnoses as unknown as { rows?: Map<string, unknown> }).rows?.delete(dx.id);
+    expect(await w.repo.diagnoses.list({ projectId: project.id })).toHaveLength(0);
+    const ws = await getWorkspace(ent, project.id);
+    expect(ws.phase).toBe("new");
+    expect(await w.repo.diagnoses.list({ projectId: project.id })).toHaveLength(1);
   });
 });
