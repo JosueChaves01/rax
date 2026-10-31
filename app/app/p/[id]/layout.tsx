@@ -5,7 +5,7 @@ import { Meter, Notice, Tag, cx } from "@/shared/ui/primitives";
 import { loadWorkspace } from "./data";
 import { STAGES, stageOf, stageState } from "@/features/projects/stages";
 import { MobileStageBar, StageNav } from "./stage-nav";
-import { nextAction } from "./next-action";
+import { nextAction } from "@/lib/services/next-action";
 import { HideOnHome } from "./hide-on-home";
 
 export default async function WorkspaceLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {

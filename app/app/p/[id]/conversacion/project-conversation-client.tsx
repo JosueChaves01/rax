@@ -23,6 +23,8 @@ interface MessageView {
   citations?: KnowledgeCitation[];
   proposals?: Array<Record<string, unknown>>;
   cachedPromptUsed?: boolean;
+  /** La IA no respondió: el texto explica el motivo, no es una respuesta del agente. */
+  failed?: boolean;
 }
 
 const QUICK_PROMPTS = [
@@ -109,6 +111,7 @@ export function ProjectConversationClient({
               artifacts: m.artifacts,
               citations: m.citations,
               proposals: m.proposals,
+              failed: m.status === "failed",
             })),
           );
         }
@@ -137,6 +140,7 @@ export function ProjectConversationClient({
           artifacts: m.artifacts,
           citations: m.citations,
           proposals: m.proposals,
+          failed: m.status === "failed",
         })),
       );
     }
@@ -204,6 +208,7 @@ export function ProjectConversationClient({
             citations,
             proposals,
             cachedPromptUsed: res.data?.cachedPromptUsed,
+            failed: assistantMessage.status === "failed",
           },
         ]);
       } else {
@@ -417,6 +422,11 @@ export function ProjectConversationClient({
                     <span className="font-semibold text-slate-700">{m.senderName}</span>
                     <span>·</span>
                     <span>{m.time}</span>
+                    {m.failed && (
+                      <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] font-semibold">
+                        IA no disponible
+                      </span>
+                    )}
                     {m.cachedPromptUsed && (
                       <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 font-mono text-[9px]">
                         ⚡ Prompt Cache

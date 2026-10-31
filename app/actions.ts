@@ -121,7 +121,9 @@ import {
 } from "@/lib/services/project-knowledge";
 import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
 import { executeClaudeAgentTurn, type SessionContext } from "@/lib/ai/claude-orchestrator";
-import { AiProposalItemSchema } from "@/lib/n8n/contracts";
+import { AiProposalItemSchema, type AiProposalItem } from "@/lib/n8n/contracts";
+import { loadProjectState, runAgentTurn } from "@/lib/services/agent-turn";
+import type { z } from "zod";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 import { generateMentorshipExplorationData, type MentorshipExplorationAiResult } from "@/lib/ai/exploration-ai";
 import { canUseCapability, invokeMainAgent, MainAgentChatInputSchema, selectRaxCapability } from "@/lib/n8n/main-agent";
@@ -572,8 +574,12 @@ export const evaluateExerciseAction = async (
   if (!text) return { ok: false, error: "Escribe o pega tu ejercicio para evaluarlo." };
   const res = await run(projectId, async (d) => {
     const { project } = await guard(d, V.parse(V.Ids, projectId), "agent.chat");
-    const knowledge = await getProjectKnowledgeContext(d.repo, project.id, text);
+    const [knowledge, projectState] = await Promise.all([
+      getProjectKnowledgeContext(d.repo, project.id, text),
+      loadProjectState(d, project.id),
+    ]);
     return executeClaudeAgentTurn({
+      projectState,
       project,
       userMessage: `Evalúa este ejercicio como tutor. Empieza tu respuesta con una línea exacta «Puntaje: N/10» y luego da retroalimentación concreta: qué está bien, qué corregir y un siguiente paso.\n\n${text}`,
       history: [],
@@ -584,8 +590,9 @@ export const evaluateExerciseAction = async (
   });
   if (!res.ok) return { ok: false, error: res.error };
   const turn = res.data!;
-  if (turn.cacheStatus === "simulated") {
-    return { ok: false, error: "La IA no está disponible en este momento (sin clave o sin cupo en OpenRouter), así que no se puede evaluar el ejercicio." };
+  if (turn.cacheStatus === "simulated" || turn.unavailable) {
+    const why = turn.unavailable ? ` ${turn.unavailable.message}` : " Falta configurar la clave de OpenRouter.";
+    return { ok: false, error: `La IA no está disponible en este momento, así que no se puede evaluar el ejercicio.${why}` };
   }
   const match = turn.reply.match(/puntaje:\s*([\d.,]+\s*\/\s*10)/i);
   return { ok: true, score: match ? match[1].replace(/\s+/g, "") : "—", feedback: turn.reply.replace(/^.*puntaje:.*$/im, "").trim() };
@@ -1092,6 +1099,12 @@ export async function sendMainAgentMessageAction(input: unknown) {
     }
     await guard(d, parsed.data.projectId, selection.requiredAction);
 
+    // Sin el canal n8n habilitado, todas las pantallas usan el mismo agente nativo que el chat:
+    // conoce la plataforma, el estado del proyecto y el hilo de la persona.
+    if (process.env.RAX_N8N_MAIN_AGENT_ENABLED !== "true") {
+      return nativeMainAgentTurn(d, project.id, parsed.data, selection.primary);
+    }
+
     const thread = await getOrCreateAgentThread(d, project.id);
     const previousMessages = await listAgentMessages(d, thread.id);
     const userMessage = await appendAgentUserMessage(d, thread.id, parsed.data.message);
@@ -1205,6 +1218,52 @@ export async function sendMainAgentMessageAction(input: unknown) {
   });
 }
 
+const STAGE_LOCATION: Partial<Record<string, SessionContext["location"]>> = {
+  conversation: "project_conversation",
+  summary_pending: "diagnosis",
+  learning: "learning",
+  session: "mentorship_session",
+  form: "form",
+};
+
+/**
+ * RAX-02 sobre el agente nativo. Los pedidos de un campo o de una entidad (borradores, tareas de un
+ * experimento) no se guardan en el hilo: son ayudas puntuales de una pantalla, no conversación.
+ */
+async function nativeMainAgentTurn(
+  d: ServiceDeps,
+  projectId: string,
+  input: z.infer<typeof MainAgentChatInputSchema>,
+  capability: ReturnType<typeof selectRaxCapability>["primary"],
+) {
+  const fieldSchema = input.fieldSchema;
+  const sessionContext: SessionContext = {
+    location: STAGE_LOCATION[input.stage] ?? (input.fieldPath ? "form" : "project_conversation"),
+    pageTitle: input.section,
+    section: input.section,
+    ...(input.fieldPath && fieldSchema
+      ? {
+          field: {
+            path: input.fieldPath,
+            label: fieldSchema.label,
+            description: fieldSchema.description,
+            type: fieldSchema.type,
+            options: fieldSchema.options,
+            maxLength: fieldSchema.maxLength,
+            currentValue: typeof input.currentValue === "string" ? input.currentValue : undefined,
+          },
+        }
+      : {}),
+  };
+  const ephemeral = Boolean(input.fieldPath || input.entityId);
+  const { thread, userMessage, assistantMessage, result } = await runAgentTurn(d, { projectId, message: input.message, sessionContext, ephemeral });
+  const proposals = result.proposals as unknown as AiProposalItem[];
+  if (result.unavailable) {
+    return { ok: false as const, threadId: thread.id, userMessage, assistantMessage, capability, status: "unavailable" as const, message: result.unavailable.message };
+  }
+  return { ok: true as const, threadId: thread.id, userMessage, assistantMessage, reply: result.reply, proposals, capability };
+}
+
 /** Loads only the signed-in actor's agent thread for this authorized project. */
 export async function loadMainAgentThreadAction(projectId: string) {
   return run(projectId, async (d) => {
@@ -1304,39 +1363,14 @@ export async function sendClaudeAgentMessageAction(input: {
   return run(input.projectId, async (d) => {
     const { project } = await guard(d, input.projectId, "agent.chat");
 
-    const thread = input.threadId
-      ? await authorizedThread(d, input.threadId)
-      : await getOrCreateAgentThread(d, project.id);
-
-    const previousMessages = await listAgentMessages(d, thread.id);
-    const userMessage = await appendAgentUserMessage(d, thread.id, input.message);
-
-    // Recuperación de conocimiento híbrido (In-Context vs RAG automático)
-    const knowledge = await getProjectKnowledgeContext(d.repo, project.id, input.message);
-
-    // Historial del hilo aislado actual
-    const history = previousMessages.map((m) => ({
-      author: m.author,
-      content: m.content,
-    }));
-
-    // Ejecución orquestada del agente
-    const result = await executeClaudeAgentTurn({
-      project,
-      userMessage: input.message,
-      history,
-      knowledge,
-      role: d.actor.role,
-      deps: d,
-      sessionContext: input.sessionContext,
+    const { thread, userMessage, assistantMessage, result } = await runAgentTurn(d, {
+      projectId: project.id,
+      threadId: input.threadId,
+      message: input.message,
+      // El campo de formulario solo lo define el servidor (sendMainAgentMessageAction), nunca el navegador.
+      sessionContext: input.sessionContext ? { ...input.sessionContext, field: undefined } : undefined,
     });
-
-    const assistantMessage = await appendAgentAssistantMessage(d, thread.id, {
-      content: result.reply,
-      artifacts: result.artifacts,
-      citations: result.citations,
-      proposals: result.proposals,
-    });
+    if (!userMessage || !assistantMessage) throw new Error("agent_turn_not_persisted");
 
     return {
       threadId: thread.id,
@@ -1350,6 +1384,7 @@ export async function sendClaudeAgentMessageAction(input: {
       cachedPromptUsed: result.cachedPromptUsed ?? false,
       cacheStatus: result.cacheStatus ?? "simulated",
       cachedTokens: result.cachedTokens ?? 0,
+      unavailable: result.unavailable ?? null,
     };
   });
 }
