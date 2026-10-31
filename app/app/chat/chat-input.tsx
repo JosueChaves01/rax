@@ -229,7 +229,10 @@ export function ChatInput({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Enviar con Enter (si está activado y no se presionó Shift)
     if (e.key === "Enter" && !e.shiftKey) {
-      if (sendOnEnter) {
+      // En pantallas táctiles Enter hace salto de línea; se envía con el botón.
+      const isTouch =
+        typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+      if (sendOnEnter && !isTouch) {
         e.preventDefault();
         handleSubmit();
       }
@@ -265,12 +268,14 @@ export function ChatInput({
   return (
     <div className="border-t border-slate-200 bg-white">
       {/* 1. Barra superior de navegación del input (Pestañas y utilidades) */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 pt-2.5 pb-1 border-b border-slate-100 bg-slate-50/70">
+      <div className="flex items-center justify-between gap-2 px-2.5 @2xl:px-3.5 pt-2 @2xl:pt-2.5 pb-1 border-b border-slate-100 bg-slate-50/70">
         {/* Pestañas: Escribir vs Vista Previa */}
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setActiveTab("write")}
+            title="Escribir"
+            aria-label="Escribir"
             className={cx(
               "px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer",
               activeTab === "write"
@@ -279,11 +284,13 @@ export function ChatInput({
             )}
           >
             <span>✏️</span>
-            <span>Escribir</span>
+            <span className="hidden @2xl:inline">Escribir</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("preview")}
+            title="Vista previa"
+            aria-label="Vista previa"
             className={cx(
               "px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer",
               activeTab === "preview"
@@ -292,7 +299,7 @@ export function ChatInput({
             )}
           >
             <span>👁️</span>
-            <span>Vista previa</span>
+            <span className="hidden @2xl:inline">Vista previa</span>
             {text.trim() && (
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
             )}
@@ -315,7 +322,7 @@ export function ChatInput({
               title="Insertar plantillas estructuradas para textos largos"
             >
               <span>📋</span>
-              <span className="hidden sm:inline">Plantillas</span>
+              <span className="hidden @2xl:inline">Plantillas</span>
               <span className="text-[10px] text-slate-400">▾</span>
             </button>
 
@@ -326,7 +333,7 @@ export function ChatInput({
                   className="fixed inset-0 z-20"
                   onClick={() => setShowTemplates(false)}
                 />
-                <div className="absolute right-0 bottom-full mb-1 w-72 sm:w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-30 space-y-1">
+                <div className="absolute right-0 bottom-full mb-1 w-[min(18rem,calc(100vw-3rem))] sm:w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-30 space-y-1">
                   <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
                     Estructuras para textos largos
                   </div>
@@ -358,15 +365,15 @@ export function ChatInput({
             title="Expandir editor para redactar textos largos cómodamente"
           >
             <span>⤢</span>
-            <span className="hidden sm:inline text-[11px] font-medium">Ampliar</span>
+            <span className="hidden @2xl:inline text-[11px] font-medium">Ampliar</span>
           </button>
         </div>
       </div>
 
       {/* 2. Barra de herramientas de formato (solo visible en pestaña Escribir) */}
       {activeTab === "write" && (
-        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-slate-100 bg-white overflow-x-auto text-xs text-slate-600">
-          <span className="text-[11px] font-medium text-slate-400 mr-1 hidden sm:inline">Formato:</span>
+        <div className="hidden @2xl:flex items-center gap-1 px-3 py-1.5 border-b border-slate-100 bg-white overflow-x-auto text-xs text-slate-600">
+          <span className="text-[11px] font-medium text-slate-400 mr-1 hidden @2xl:inline">Formato:</span>
 
           <button
             type="button"
@@ -461,7 +468,8 @@ export function ChatInput({
       )}
 
       {/* 3. Área de entrada o Vista Previa */}
-      <div className="p-3">
+      <div className="p-2.5 @2xl:p-3 flex items-end gap-2">
+        <div className="flex-1 min-w-0">
         {activeTab === "write" ? (
           <textarea
             ref={textareaRef}
@@ -471,7 +479,7 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             rows={2}
-            className="w-full px-3.5 py-2.5 text-xs text-slate-900 bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 disabled:opacity-50 resize-y transition-all leading-relaxed placeholder:text-slate-400 min-h-[56px] max-h-[220px]"
+            className="block w-full px-3 @2xl:px-3.5 py-2.5 text-base sm:text-xs text-slate-900 bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 disabled:opacity-50 resize-none @2xl:resize-y transition-all leading-relaxed placeholder:text-slate-400 min-h-[56px] max-h-[160px] @2xl:max-h-[220px]"
           />
         ) : (
           <div className="min-h-[72px] max-h-[220px] overflow-y-auto p-3.5 bg-slate-50/70 rounded-xl border border-slate-200 text-xs">
@@ -484,20 +492,38 @@ export function ChatInput({
             )}
           </div>
         )}
+        </div>
+
+        {/* Enviar compacto en móvil */}
+        <button
+          type="button"
+          disabled={disabled || isLoading || !text.trim()}
+          onClick={handleSubmit}
+          aria-label="Enviar"
+          className="@2xl:hidden shrink-0 w-11 h-11 mb-0.5 bg-blue-600 active:bg-blue-800 text-white rounded-xl shadow-xs flex items-center justify-center disabled:opacity-40"
+        >
+          {isLoading ? (
+            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* 4. Barra inferior de envío, contadores y opciones */}
-      <div className="px-3.5 pb-3 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500">
+      <div className="hidden @2xl:flex px-3.5 pb-3 flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500">
         <div className="flex items-center gap-3">
           {/* Contador de palabras y caracteres */}
           <span className="font-mono text-slate-500">
             {wordCount} {wordCount === 1 ? "palabra" : "palabras"} · {charCount} car.
           </span>
 
-          <span className="text-slate-300 hidden sm:inline">•</span>
+          <span className="text-slate-300 hidden @2xl:inline">•</span>
 
           {/* Atajo de teclado descriptivo */}
-          <span className="text-slate-400 hidden sm:inline">
+          <span className="text-slate-400 hidden @2xl:inline">
             <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px] font-sans">
               Enter
             </kbd>{" "}

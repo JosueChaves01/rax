@@ -46,7 +46,7 @@ export function ArtifactViewer({ artifact, onClose, onSaveToKnowledge }: Artifac
     artifact.type === "application/vnd.ant.markdown";
 
   return (
-    <div className="w-full lg:w-[480px] xl:w-[540px] shrink-0 border-l border-slate-200 bg-white flex flex-col h-full overflow-hidden shadow-lg animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-0 z-50 h-dvh w-full lg:static lg:z-auto lg:h-full lg:w-[480px] xl:w-[540px] shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden shadow-lg animate-in slide-in-from-right duration-200">
       {/* Top Header */}
       <div className="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
         <div className="flex items-center gap-2 min-w-0">

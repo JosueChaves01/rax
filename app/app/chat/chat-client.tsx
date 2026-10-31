@@ -55,6 +55,7 @@ export default function ChatClient({
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageView[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [appliedProposals, setAppliedProposals] = useState<Set<string>>(new Set());
   const [applyingProposalTitle, setApplyingProposalTitle] = useState<string | null>(null);
 
@@ -317,36 +318,76 @@ export default function ChatClient({
   const activeThread = threads.find((t) => t.id === activeThreadId);
 
   return (
-    <div className="max-w-[1600px] mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm flex h-[calc(100vh-130px)] min-h-[640px] overflow-hidden">
-      {/* 1. Panel Lateral Izquierdo: Proyectos e Hilos */}
-      <ProjectSidebar
-        projects={projects}
-        activeProjectId={projectId}
-        onSelectProject={handleSelectProject}
-        threads={threads}
-        activeThreadId={activeThreadId}
-        onSelectThread={handleSelectThread}
-        onNewThread={handleNewThread}
-        onRenameThread={handleRenameThread}
-        onOpenInstructions={() => setIsInstructionsOpen(true)}
-        onOpenKnowledge={() => setIsKnowledgeOpen(true)}
-        knowledgeTokens={knowledgeStats?.totalTokens ?? 0}
-        knowledgeMode={knowledgeStats?.evaluation.mode ?? "in_context"}
-      />
+    <div className="max-w-[1600px] mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm flex h-[calc(100dvh-176px)] min-h-[420px] md:h-[calc(100vh-130px)] md:min-h-[640px] overflow-hidden">
+      {/* 1. Panel Lateral Izquierdo: Proyectos e Hilos.
+          En escritorio queda fijo a la izquierda; en móvil es un cajón que se abre con el botón ☰. */}
+      {isSidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-50 bg-slate-950/40"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <div
+        className={cx(
+          "fixed inset-y-0 left-0 z-50 h-dvh bg-white shadow-2xl transition-transform duration-200 ease-out",
+          "lg:static lg:z-auto lg:h-full lg:shadow-none lg:translate-x-0 lg:transition-none",
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <ProjectSidebar
+          projects={projects}
+          activeProjectId={projectId}
+          onSelectProject={handleSelectProject}
+          threads={threads}
+          activeThreadId={activeThreadId}
+          onSelectThread={(id) => {
+            handleSelectThread(id);
+            setIsSidebarOpen(false);
+          }}
+          onNewThread={() => {
+            handleNewThread();
+            setIsSidebarOpen(false);
+          }}
+          onRenameThread={handleRenameThread}
+          onOpenInstructions={() => {
+            setIsSidebarOpen(false);
+            setIsInstructionsOpen(true);
+          }}
+          onOpenKnowledge={() => {
+            setIsSidebarOpen(false);
+            setIsKnowledgeOpen(true);
+          }}
+          onClose={() => setIsSidebarOpen(false)}
+          knowledgeTokens={knowledgeStats?.totalTokens ?? 0}
+          knowledgeMode={knowledgeStats?.evaluation.mode ?? "in_context"}
+        />
+      </div>
 
       {/* 2. Área Central de Conversación */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white">
+      <div className="@container flex-1 flex flex-col min-w-0 bg-white">
         {/* Header superior del chat */}
-        <div className="p-3.5 border-b border-slate-200/80 flex items-center justify-between bg-white shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+        <div className="p-2.5 @lg:p-3.5 border-b border-slate-200/80 flex items-center justify-between gap-2 bg-white shrink-0">
+          <div className="flex items-center gap-2 @lg:gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden w-9 h-9 shrink-0 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center"
+              aria-label="Abrir proyectos y chats"
+              title="Proyectos y chats"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div className="hidden @lg:flex w-8 h-8 rounded-xl bg-orange-100 text-orange-600 items-center justify-center font-bold text-xs uppercase shrink-0">
               ⚡
             </div>
             <div className="min-w-0">
-              <h1 className="text-xs sm:text-sm font-bold text-slate-900 truncate flex items-center gap-2">
-                <span>{activeThread?.title || "Conversación"}</span>
+              <h1 className="text-xs @lg:text-sm font-bold text-slate-900 truncate flex items-center gap-2">
+                <span className="truncate">{activeThread?.title || "Conversación"}</span>
                 <span
-                  className={`hidden sm:inline-flex text-[0.625rem] font-bold px-2 py-0.5 rounded-full ${knowledgeStats?.evaluation.mode === "rag"
+                  className={`hidden @lg:inline-flex text-[0.625rem] font-bold px-2 py-0.5 rounded-full ${knowledgeStats?.evaluation.mode === "rag"
                     ? "bg-purple-100 text-purple-800"
                     : "bg-emerald-100 text-emerald-800"
                     }`}
@@ -366,21 +407,23 @@ export default function ChatClient({
             <button
               onClick={() => setIsInstructionsOpen(true)}
               title="Instrucciones del Proyecto"
-              className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
+              aria-label="Instrucciones del Proyecto"
+              className="px-2 @lg:px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
             >
-              ⚙️ Instrucciones
+              ⚙️<span className="hidden @lg:inline"> Instrucciones</span>
             </button>
             <button
               onClick={() => setIsKnowledgeOpen(true)}
               title="Base de Conocimiento"
-              className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
+              aria-label="Base de Conocimiento"
+              className="px-2 @lg:px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
             >
-              📚 Conocimiento
+              📚<span className="hidden @lg:inline"> Conocimiento</span>
             </button>
             {activeArtifact && (
               <button
                 onClick={() => setActiveArtifact(null)}
-                className="px-2.5 py-1 text-xs font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg border border-orange-200 transition"
+                className="hidden lg:inline-flex px-2.5 py-1 text-xs font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg border border-orange-200 transition"
               >
                 Cerrar Artefacto
               </button>
@@ -389,9 +432,9 @@ export default function ChatClient({
         </div>
 
         {/* Mensajes del Hilo */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/30">
+        <div className="flex-1 overflow-y-auto p-3 @lg:p-6 space-y-5 bg-slate-50/30">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+            <div className="min-h-full flex flex-col items-center justify-center text-center p-3 @lg:p-6 space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-600 text-xl font-bold">
                 ⚡
               </div>
@@ -429,7 +472,7 @@ export default function ChatClient({
                 key={m.id}
                 className={cx("flex flex-col group", m.sender === "user" ? "items-end" : "items-start")}
               >
-                <div className="flex items-center gap-1.5 mb-1 px-1 text-[10px] text-slate-400 font-mono">
+                <div className="flex flex-wrap items-center gap-1.5 mb-1 px-1 text-[10px] text-slate-400 font-mono">
                   <span>{m.senderName}</span>
                   <span>•</span>
                   <span>{m.time}</span>
@@ -457,7 +500,7 @@ export default function ChatClient({
 
                 <div
                   className={cx(
-                    "max-w-[90%] sm:max-w-[80%] p-4 rounded-2xl text-xs leading-relaxed",
+                    "max-w-[92%] @lg:max-w-[80%] p-3 @lg:p-4 rounded-2xl text-xs leading-relaxed",
                     m.sender === "user"
                       ? "bg-slate-900 text-white rounded-br-xs shadow-xs"
                       : "bg-white text-slate-900 border border-slate-200/80 shadow-2xs rounded-bl-xs",
@@ -488,7 +531,10 @@ export default function ChatClient({
                               <p className="text-[0.625rem] text-slate-500 font-mono">{art.identifier} · {art.type.split(".").pop()}</p>
                             </div>
                           </div>
-                          <span className="text-xs font-semibold text-orange-600 shrink-0">Abrir en Panel →</span>
+                          <span className="text-xs font-semibold text-orange-600 shrink-0">
+                            <span className="hidden @lg:inline">Abrir en Panel </span>
+                            <span className="@lg:hidden">Abrir </span>→
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -526,7 +572,7 @@ export default function ChatClient({
                         return (
                           <div
                             key={idx}
-                            className="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl flex items-center justify-between gap-3 text-xs"
+                            className="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl flex flex-col @lg:flex-row items-stretch @lg:items-center justify-between gap-2 @lg:gap-3 text-xs"
                           >
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
@@ -557,7 +603,7 @@ export default function ChatClient({
 
                 {/* Acción: Guardar en el conocimiento del proyecto */}
                 {m.sender === "ai" && (
-                  <div className="mt-1 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition px-1">
+                  <div className="mt-1 flex items-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition px-1">
                     <button
                       onClick={() => {
                         setSaveModalMessage(m);
@@ -594,7 +640,7 @@ export default function ChatClient({
           onSend={sendMessageToAgent}
           isLoading={isLoading}
           disabled={!projectId}
-          placeholder="Escribe tu consulta o pide crear un artefacto... (Soporta Markdown, código y análisis)"
+          placeholder="Escribe tu consulta o pide un artefacto…"
         />
       </div>
 
