@@ -29,6 +29,7 @@ const RECOMMENDATIONS = [
 ];
 
 export function EvaluationView({
+  projectId,
   goalsCount,
   achievedGoalsCount,
   milestonesCount,
@@ -186,13 +187,16 @@ export function EvaluationView({
           >
             Cancelar
           </Link>
-          <button
-            type="button"
-            disabled
-            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-          >
-            Guardado no disponible
-          </button>
+          {projectId ? (
+            <Link
+              href={`/app/p/${projectId}/evaluacion`}
+              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
+            >
+              Registrar la evaluación en el proyecto →
+            </Link>
+          ) : (
+            <span className="text-xs text-slate-500">Crea un proyecto para evaluar su ciclo.</span>
+          )}
         </div>
       </div>
     </div>

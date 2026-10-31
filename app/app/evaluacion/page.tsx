@@ -2,15 +2,17 @@ import { redirect } from "next/navigation";
 import { getDeps } from "@/lib/runtime";
 import { listMyProjects } from "@/lib/services/projects";
 import { EvaluationView } from "@/shared/ui/evaluation-view";
+import { ProjectPicker } from "@/shared/ui/project-picker";
 
 export const metadata = { title: "Evaluación de Etapa · RAX" };
 
-export default async function CycleEvaluationPage() {
+export default async function CycleEvaluationPage({ searchParams }: { searchParams?: Promise<{ proyecto?: string }> }) {
   const d = await getDeps();
   if (!d) redirect("/entrar");
 
+  const sp = searchParams ? await searchParams : {};
   const projects = await listMyProjects(d);
-  const primaryProject = projects[0];
+  const primaryProject = projects.find((p) => p.id === sp.proyecto) ?? projects[0];
 
   let relationId = "";
   let goalsCount = 0;
@@ -33,13 +35,17 @@ export default async function CycleEvaluationPage() {
   }
 
   return (
-    <EvaluationView
-      projectId={primaryProject?.id || ""}
-      relationId={relationId}
-      goalsCount={goalsCount}
-      achievedGoalsCount={achievedGoalsCount}
-      milestonesCount={milestonesCount}
-      achievedMilestonesCount={achievedMilestonesCount}
-    />
+    <div className="space-y-4">
+      <ProjectPicker basePath="/app/evaluacion" projects={projects} currentId={primaryProject?.id} />
+      <EvaluationView
+        key={primaryProject?.id}
+        projectId={primaryProject?.id || ""}
+        relationId={relationId}
+        goalsCount={goalsCount}
+        achievedGoalsCount={achievedGoalsCount}
+        milestonesCount={milestonesCount}
+        achievedMilestonesCount={achievedMilestonesCount}
+      />
+    </div>
   );
 }

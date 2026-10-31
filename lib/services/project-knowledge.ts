@@ -1,6 +1,6 @@
 import "server-only";
 import type { ProjectDocumentFileType, ProjectKnowledgeDocument } from "@/types/domain";
-import { notFound, validation } from "@/lib/errors";
+import { forbidden, notFound, validation } from "@/lib/errors";
 import { guard, sysRepo, type ServiceDeps } from "./base";
 import { estimateTokens, evaluateKnowledgeMode } from "@/lib/ai/token-counter";
 import { chunkDocumentText } from "@/lib/ai/chunking";
@@ -8,18 +8,21 @@ import { chunkDocumentText } from "@/lib/ai/chunking";
 const MAX_DOCUMENT_CONTENT_LENGTH = 1_000_000; // ~1 MB de texto
 const MAX_INSTRUCTIONS_LENGTH = 10_000;
 
+/** Los documentos eliminados quedan vacíos (no hay borrado físico): no se listan ni se usan como contexto. */
+export const isActiveDocument = (doc: Pick<ProjectKnowledgeDocument, "content">) => doc.content !== "";
+
 export async function listProjectDocuments(
   d: ServiceDeps,
   projectId: string,
 ): Promise<ProjectKnowledgeDocument[]> {
   await guard(d, projectId, "project.read");
-  const docs = await d.repo.projectDocuments.list({ projectId });
+  const docs = (await d.repo.projectDocuments.list({ projectId })).filter(isActiveDocument);
   return docs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export async function getProjectKnowledgeStats(d: ServiceDeps, projectId: string) {
   const { project } = await guard(d, projectId, "project.read");
-  const docs = await d.repo.projectDocuments.list({ projectId });
+  const docs = (await d.repo.projectDocuments.list({ projectId })).filter(isActiveDocument);
   const totalTokens = docs.reduce((acc, doc) => acc + (doc.tokenCount || 0), 0);
   const evaluation = evaluateKnowledgeMode(totalTokens);
 
@@ -37,7 +40,8 @@ export async function updateProjectInstructions(
   projectId: string,
   instructions: string,
 ) {
-  await guard(d, projectId, "project.read");
+  // Las instrucciones son del proyecto: solo su dueño las cambia (se escriben con permisos de sistema).
+  await guard(d, projectId, "project.update");
   const clean = instructions.trim();
   if (clean.length > MAX_INSTRUCTIONS_LENGTH) {
     throw validation(`Las instrucciones no pueden superar los ${MAX_INSTRUCTIONS_LENGTH} caracteres.`);
@@ -122,9 +126,12 @@ export async function deleteProjectDocument(
   projectId: string,
   documentId: string,
 ): Promise<{ ok: true }> {
-  await guard(d, projectId, "project.read");
+  const { rel } = await guard(d, projectId, "project.read");
   const doc = await d.repo.projectDocuments.get(documentId);
-  if (!doc || doc.projectId !== projectId) throw notFound("Documento no encontrado.");
+  if (!doc || doc.projectId !== projectId || !isActiveDocument(doc)) throw notFound("Documento no encontrado.");
+  if (!rel.isOwner && doc.createdBy !== d.actor.id) {
+    throw forbidden("Solo el dueño del proyecto o quien subió el documento puede eliminarlo.");
+  }
 
   const sys = sysRepo(d);
   // Limpiar chunks asociados

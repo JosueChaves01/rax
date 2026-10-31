@@ -29,7 +29,8 @@ export async function getProjectKnowledgeContext(
   const threshold = options.threshold ?? DEFAULT_IN_CONTEXT_TOKEN_LIMIT;
   const maxRagChunks = options.maxRagChunks ?? 8;
 
-  const documents = await repo.projectDocuments.list({ projectId });
+  // Un documento eliminado queda con contenido vacío: no se usa como contexto.
+  const documents = (await repo.projectDocuments.list({ projectId })).filter((doc) => doc.content !== "");
   if (documents.length === 0) {
     return {
       mode: "in_context",
@@ -59,8 +60,8 @@ export async function getProjectKnowledgeContext(
   }
 
   // Modo RAG Automático: Recuperación semántica / híbrida de fragmentos
-  const allChunks = await repo.projectDocumentChunks.list({ projectId });
   const docsById = new Map<string, ProjectKnowledgeDocument>(documents.map((d) => [d.id, d]));
+  const allChunks = (await repo.projectDocumentChunks.list({ projectId })).filter((chunk) => docsById.has(chunk.documentId));
 
   // Tokenizar términos de consulta para ranking híbrido
   const queryTerms = userQuery

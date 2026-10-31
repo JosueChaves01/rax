@@ -619,7 +619,6 @@ export interface ExplorationCreateProjectInput {
   motivation: string;
   description: string;
   mentorId?: string;
-  entrepreneurId?: string;
   compatibilityRationale?: string;
   agreement: {
     frequency: AgreementFrequency;
@@ -639,34 +638,31 @@ export const completeExplorationAndCreateProjectAction = async (input: Explorati
   if (!d) return { ok: false as const, error: "Tu sesión terminó. Volvé a entrar.", code: "unauthenticated" };
 
   try {
+    // La exploración la inicia el emprendedor: el proyecto queda a su nombre y el mentor
+    // elegido tiene que ser un mentor aprobado. Todo se escribe con permisos de sistema,
+    // así que nada que venga del cliente se usa sin verificar.
+    if (d.actor.role !== "entrepreneur") {
+      return {
+        ok: false as const,
+        error: "La exploración la inicia la persona emprendedora desde su cuenta.",
+        code: "forbidden",
+      };
+    }
+
     const sys = sysRepo(d);
     const allProfiles = await sys.profiles.list().catch(() => []);
-    const isMentor = d.actor.role === "mentor";
-
-    // Determinar quién es el emprendedor y quién es el mentor
-    let mentorId = input.mentorId;
-    let entrepreneurId = input.entrepreneurId;
-
-    if (isMentor) {
-      mentorId = d.actor.id;
-      if (!entrepreneurId) {
-        const entProfile = allProfiles.find((p) => p.role === "entrepreneur");
-        entrepreneurId = entProfile?.id || d.actor.id;
-      }
-    } else {
-      entrepreneurId = d.actor.id;
-      if (!mentorId) {
-        const mentorProfile =
-          allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved") ||
-          allProfiles.find((p) => p.role === "mentor");
-        mentorId = mentorProfile?.id;
-      }
-    }
+    const approvedMentors = allProfiles.filter((p) => p.role === "mentor" && p.mentorStatus === "approved" && p.id !== d.actor.id);
+    const entrepreneurId = d.actor.id;
+    const mentorId = input.mentorId
+      ? approvedMentors.find((p) => p.id === input.mentorId)?.id
+      : approvedMentors[0]?.id;
 
     if (!mentorId) {
       return {
         ok: false as const,
-        error: "No hay mentores disponibles en la plataforma para formalizar el acuerdo.",
+        error: input.mentorId
+          ? "El mentor elegido no está disponible. Elegí otro de la lista."
+          : "No hay mentores disponibles en la plataforma para formalizar el acuerdo.",
         code: "validation",
       };
     }
@@ -852,8 +848,7 @@ export const loadExplorationContextAction = async () => {
   try {
     const sys = sysRepo(d);
     const allProfiles = await sys.profiles.list().catch(() => []);
-    const approvedMentors = allProfiles.filter((p) => p.role === "mentor" && p.mentorStatus === "approved");
-    const mentors = approvedMentors.length > 0 ? approvedMentors : allProfiles.filter((p) => p.role === "mentor");
+    const mentors = allProfiles.filter((p) => p.role === "mentor" && p.mentorStatus === "approved" && p.id !== d.actor.id);
 
     return {
       ok: true as const,
@@ -873,9 +868,7 @@ export const generateMentorshipExplorationWithAiAction = async (prompt?: string)
   try {
     const sys = sysRepo(d);
     const allProfiles = await sys.profiles.list().catch(() => []);
-    const firstMentor =
-      allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved") ||
-      allProfiles.find((p) => p.role === "mentor");
+    const firstMentor = allProfiles.find((p) => p.role === "mentor" && p.mentorStatus === "approved" && p.id !== d.actor.id);
     const preferredMentorName = firstMentor?.name || "Mentora Asignada (Lean & Estrategia)";
 
     const data: MentorshipExplorationAiResult = await generateMentorshipExplorationData(prompt, preferredMentorName);
