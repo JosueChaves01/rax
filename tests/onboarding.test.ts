@@ -70,6 +70,25 @@ describe("Onboarding por tipo de usuario", () => {
     expect(after.mentorLoad[w.id("mentora")]).toEqual({ active: 1, max: 2 });
   });
 
+  it("quien fue rechazado como mentor puede volver a postularse, y solo entonces", async () => {
+    const w = await world();
+    await w.signUp("mentora", "Mentora Nueva");
+    await completeOnboarding(w.as("mentora"), { name: "Mentora Nueva", profile: MENTOR });
+    await w.reload("mentora");
+    // Mientras está pendiente no puede mandar otra solicitud.
+    await expect(completeOnboarding(w.as("mentora"), { name: "Mentora Nueva", profile: MENTOR })).rejects.toMatchObject({ code: "validation" });
+
+    await reviewMentorApplication(w.as("adm"), w.id("mentora"), false);
+    await w.reload("mentora");
+    expect(w.as("mentora").actor).toMatchObject({ role: "entrepreneur", mentorStatus: "rejected" });
+
+    await completeOnboarding(w.as("mentora"), { name: "Mentora Nueva", profile: { ...MENTOR, maxProjects: 3 } });
+    await w.reload("mentora");
+    expect(w.as("mentora").actor).toMatchObject({ role: "entrepreneur", mentorStatus: "pending", onboarding: { maxProjects: 3 } });
+    const overview = await adminOverview(w.as("adm"));
+    expect(overview.pendingMentors.map((m) => m.name)).toEqual(["Mentora Nueva"]);
+  });
+
   it("la bienvenida de administración es solo para quien ya tiene ese rol", async () => {
     const w = await world();
     await expect(

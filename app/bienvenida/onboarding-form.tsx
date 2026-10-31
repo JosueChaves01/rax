@@ -13,11 +13,11 @@ type Mode = "choose" | "entrepreneur" | "mentor" | "admin";
  * Bienvenida por tipo de usuario. Lo que la persona cuenta acá le sirve a la administración para
  * asignar mentores y al mentor para entender qué espera cada emprendedor.
  */
-export function OnboardingForm({ mode: initial, defaultName }: { mode: Mode; defaultName: string }) {
+export function OnboardingForm({ mode: initial, defaultName, reapply = false }: { mode: Mode; defaultName: string; reapply?: boolean }) {
   const [mode, setMode] = useState<Mode>(initial);
   if (mode === "choose") return <Choose onPick={setMode} />;
   if (mode === "entrepreneur") return <EntrepreneurFlow defaultName={defaultName} onBack={initial === "choose" ? () => setMode("choose") : undefined} />;
-  if (mode === "mentor") return <MentorFlow defaultName={defaultName} alreadyMentor={initial === "mentor"} onBack={initial === "choose" ? () => setMode("choose") : undefined} />;
+  if (mode === "mentor") return <MentorFlow defaultName={defaultName} alreadyMentor={initial === "mentor" && !reapply} onBack={initial === "choose" ? () => setMode("choose") : undefined} />;
   return <AdminFlow defaultName={defaultName} />;
 }
 

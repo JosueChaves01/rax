@@ -169,7 +169,11 @@ function MentorApplication({
       <div className="mt-8">
         {status === "rejected" ? (
           <Notice tone="warn">
-            La administración no aprobó tu solicitud por ahora. Si crees que es un error, escribe al equipo del programa.
+            La administración no aprobó tu solicitud por ahora. Puedes enviar una nueva con tu experiencia actualizada, o escribir al equipo del programa si
+            crees que es un error.
+            <Link href="/bienvenida?repostular=1" className="mt-2 block font-semibold underline">
+              Volver a postularme
+            </Link>
           </Notice>
         ) : (
           <Notice>
