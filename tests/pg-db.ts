@@ -9,6 +9,12 @@ pg.types.setTypeParser(1082, (v) => v);
  * que tendría en Supabase: `authenticated` + id de la persona, o `service_role` para el sistema.
  */
 export function pgDb(pool: pg.Pool, uid: string | null): Db {
+  // Columnas jsonb: ahí van como JSON también las listas (vacías o no), como haría PostgREST.
+  const jsonbCols = loadJsonbColumns(pool);
+  const encode = async (table: string, row: Row) => {
+    const cols = await jsonbCols;
+    return Object.entries(row).map(([c, v]) => (cols.has(`${table}.${c}`) && v !== null && v !== undefined ? JSON.stringify(v) : jsonable(v)));
+  };
   async function run(sql: string, params: unknown[]): Promise<Row[]> {
     const client = await pool.connect();
     try {
@@ -23,6 +29,7 @@ export function pgDb(pool: pg.Pool, uid: string | null): Db {
     } catch (e) {
       await client.query("rollback").catch(() => {});
       const err = e as { code?: string; message: string };
+      if (process.env.RAX_DEBUG_PG) console.error("[pg]", err.code, err.message);
       throw fromPgError(err.code, err.message);
     } finally {
       client.release();
@@ -45,7 +52,7 @@ export function pgDb(pool: pg.Pool, uid: string | null): Db {
     },
     async insert(table, row) {
       const cols = Object.keys(row);
-      const params = Object.values(row).map(jsonable);
+      const params = await encode(table, row);
       const rows = await run(
         `insert into public."${table}" (${cols.map((c) => `"${c}"`).join(", ")}) values (${cols.map((_, i) => `$${i + 1}`).join(", ")}) returning *`,
         params,
@@ -54,7 +61,7 @@ export function pgDb(pool: pg.Pool, uid: string | null): Db {
     },
     async update(table, match, patch) {
       const cols = Object.keys(patch);
-      const params: unknown[] = Object.values(patch).map(jsonable);
+      const params: unknown[] = await encode(table, patch);
       const set = cols.map((c, i) => `"${c}" = $${i + 1}`).join(", ");
       const extra: unknown[] = [];
       const w = where(match, params.length, extra);
@@ -65,3 +72,15 @@ export function pgDb(pool: pg.Pool, uid: string | null): Db {
 
 /** node-pg envía arreglos como arreglos de Postgres; los objetos (jsonb) van como JSON. */
 const jsonable = (v: unknown) => (v !== null && typeof v === "object" && !Array.isArray(v) ? JSON.stringify(v) : v);
+
+const jsonbCache = new WeakMap<pg.Pool, Promise<Set<string>>>();
+function loadJsonbColumns(pool: pg.Pool): Promise<Set<string>> {
+  let p = jsonbCache.get(pool);
+  if (!p) {
+    p = pool
+      .query("select table_name, column_name from information_schema.columns where table_schema = 'public' and data_type = 'jsonb'")
+      .then((r) => new Set(r.rows.map((x: { table_name: string; column_name: string }) => `${x.table_name}.${x.column_name}`)));
+    jsonbCache.set(pool, p);
+  }
+  return p;
+}

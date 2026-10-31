@@ -19,6 +19,7 @@ import {
   TASK_STATUS_LABEL,
 } from "@/features/labels";
 import { nextAction } from "@/lib/services/next-action";
+import { buildJourney, renderJourney, type Journey } from "./journey";
 
 /**
  * Estado del proyecto que ve el agente en cada turno. Se arma en el servidor desde el espacio de
@@ -42,10 +43,17 @@ export interface ProjectStateSnapshot {
     counts: { total: number; confirmed: number; proposed: number; needsClarification: number; openQuestions: number };
     prioritizedProblem: string | null;
     highlights: string[];
+    /** Problemas vigentes con su id, para priorizar desde el chat. */
+    problems: string[];
+    /** Hallazgos propuestos sin revisar, con su id. */
+    pendingReview: string[];
   };
+  journey: Journey;
+  relation: string | null;
   mentors: string[];
   owner: string | null;
   sessions: { upcoming: string[]; lastCompleted: string | null };
+  evaluations: string[];
   agreement: string | null;
   goals: string[];
   hypotheses: string[];
@@ -55,7 +63,7 @@ export interface ProjectStateSnapshot {
   permissions: string[];
 }
 
-const LIMITS = { highlights: 12, goals: 8, hypotheses: 6, experiments: 6, openTasks: 10, blockedTasks: 6, upcoming: 3 } as const;
+const LIMITS = { highlights: 12, goals: 8, hypotheses: 6, experiments: 6, openTasks: 10, blockedTasks: 6, upcoming: 3, problems: 8, pendingReview: 8 } as const;
 
 const clip = (s: string | undefined | null, n: number) => {
   const t = (s ?? "").replace(/\s+/g, " ").trim();
@@ -80,7 +88,7 @@ export function buildProjectState(w: Workspace, viewerRole: Role, today: string)
 
   const name = (id: string) => w.people[id]?.name ?? "otra persona";
   const sessionLine = (s: Workspace["sessions"][number]) =>
-    `${SESSION_KIND_LABEL[s.kind]} (${s.status === "completed" ? `realizada ${day(s.completedAt)}` : s.scheduledAt ? `programada ${day(s.scheduledAt)}` : "pedida, sin fecha"})${s.decision ? ` · decisión: ${DECISION_LABEL[s.decision.value].toLowerCase()}` : ""}`;
+    `[${s.id}] ${SESSION_KIND_LABEL[s.kind]} (${s.status === "completed" ? `realizada ${day(s.completedAt)}` : s.scheduledAt ? `programada ${day(s.scheduledAt)}` : "pedida, sin fecha"})${s.decision ? ` · decisión: ${DECISION_LABEL[s.decision.value].toLowerCase()}` : ""}`;
   const upcoming = w.sessions
     .filter((s) => s.status !== "completed")
     .sort((a, b) => (a.scheduledAt ?? a.createdAt).localeCompare(b.scheduledAt ?? b.createdAt))
@@ -93,7 +101,7 @@ export function buildProjectState(w: Workspace, viewerRole: Role, today: string)
   const agreement = [...w.mentorshipAgreements].sort((a, b) => b.version - a.version)[0];
   const tasks = w.tasks;
   const openTasks = tasks.filter((t) => t.status === "todo" || t.status === "doing");
-  const taskLine = (t: (typeof tasks)[number]) => `${clip(t.title, 120)} (${TASK_STATUS_LABEL[t.status]}${t.dueDate ? `, vence ${day(t.dueDate)}` : ""})`;
+  const taskLine = (t: (typeof tasks)[number]) => `[${t.id}] ${clip(t.title, 120)} (${TASK_STATUS_LABEL[t.status]}${t.dueDate ? `, vence ${day(t.dueDate)}` : ""})`;
 
   return {
     projectId: w.project.id,
@@ -117,27 +125,38 @@ export function buildProjectState(w: Workspace, viewerRole: Role, today: string)
       },
       prioritizedProblem: problem ? `${clip(problem.title, 140)} — ${clip(problem.priority!.rationale, 200)}` : null,
       highlights,
+      problems: current
+        .filter((i) => i.category === "problem")
+        .slice(0, LIMITS.problems)
+        .map((i) => `[${i.id}] ${clip(i.title, 140)}${i.priority ? ` (prioridad ${i.priority.rank})` : ""}`),
+      pendingReview: current
+        .filter((i) => i.reviewStatus === "proposed" || i.reviewStatus === "needs_clarification")
+        .slice(0, LIMITS.pendingReview)
+        .map((i) => `[${i.id}] ${CATEGORY_LABEL[i.category]}: ${clip(i.title, 120)} (${REVIEW_LABEL[i.reviewStatus]})`),
     },
+    journey: buildJourney(w),
+    relation: w.mentorshipRelation ? `[${w.mentorshipRelation.id}] etapa ${w.mentorshipRelation.stage}` : null,
+    evaluations: w.cycleEvaluations.map((e) => `Ciclo ${e.cycleNumber}: decisión ${e.decision}`),
     mentors: w.mentors.map(name),
     owner: w.people[w.project.ownerId]?.name ?? null,
     sessions: { upcoming, lastCompleted: lastCompleted ? sessionLine(lastCompleted) : null },
     agreement: agreement
-      ? `${AGREEMENT_STATUS_LABEL[agreement.status]} · frecuencia ${AGREEMENT_FREQUENCY_LABEL[agreement.frequency].toLowerCase()}, ${agreement.sessionDurationMinutes} min · alcance: ${clip(agreement.scope, 200)}`
+      ? `[${agreement.id}] ${AGREEMENT_STATUS_LABEL[agreement.status]} · frecuencia ${AGREEMENT_FREQUENCY_LABEL[agreement.frequency].toLowerCase()}, ${agreement.sessionDurationMinutes} min · alcance: ${clip(agreement.scope, 200)}`
       : null,
-    goals: w.mentorshipGoals.slice(0, LIMITS.goals).map((g) => `${clip(g.title, 120)} (${GOAL_STATUS_LABEL[g.status]}, prioridad ${GOAL_PRIORITY_LABEL[g.priority].toLowerCase()})`),
+    goals: w.mentorshipGoals.slice(0, LIMITS.goals).map((g) => `[${g.id}] ${clip(g.title, 120)} (${GOAL_STATUS_LABEL[g.status]}, prioridad ${GOAL_PRIORITY_LABEL[g.priority].toLowerCase()})`),
     hypotheses: w.hypotheses
       .filter((h) => h.status !== "discarded")
       .slice(-LIMITS.hypotheses)
-      .map((h) => `${clip(h.statement, 200)} (${HYPOTHESIS_STATUS_LABEL[h.status]})`),
+      .map((h) => `[${h.id}] ${clip(h.statement, 200)} (${HYPOTHESIS_STATUS_LABEL[h.status]})`),
     experiments: w.experiments.slice(-LIMITS.experiments).map((e) => {
       const result = w.results.find((r) => r.experimentId === e.id);
-      return `${clip(e.question, 160)} (${EXPERIMENT_STATUS_LABEL[e.status]}) · métrica: ${clip(e.metric, 80)} · éxito: ${clip(e.successCriterion, 100)}${result ? ` · resultado: ${OUTCOME_LABEL[result.outcome].toLowerCase()}` : ""}`;
+      return `[${e.id}] ${clip(e.question, 160)} (${EXPERIMENT_STATUS_LABEL[e.status]}) · métrica: ${clip(e.metric, 80)} · éxito: ${clip(e.successCriterion, 100)}${result ? ` · resultado: ${OUTCOME_LABEL[result.outcome].toLowerCase()}` : ""}`;
     }),
     tasks: {
       total: tasks.length,
       done: tasks.filter((t) => t.status === "done").length,
       open: openTasks.slice(0, LIMITS.openTasks).map(taskLine),
-      blocked: tasks.filter((t) => t.status === "blocked").slice(0, LIMITS.blockedTasks).map((t) => `${clip(t.title, 120)}${t.blockedReason ? ` — ${clip(t.blockedReason, 160)}` : ""}`),
+      blocked: tasks.filter((t) => t.status === "blocked").slice(0, LIMITS.blockedTasks).map((t) => `[${t.id}] ${clip(t.title, 120)}${t.blockedReason ? ` — ${clip(t.blockedReason, 160)}` : ""}`),
       overdue: openTasks.filter((t) => t.dueDate && t.dueDate.slice(0, 10) < today.slice(0, 10)).map(taskLine),
     },
     evidenceCount: w.evidence.length,
@@ -157,16 +176,22 @@ Dueño/a: ${s.owner ?? "—"} · Mentor/es: ${s.mentors.length ? s.mentors.join(
 Quien conversa: ${s.viewerIsMentor ? "el mentor asignado" : s.viewerRole === "entrepreneur" ? "la persona emprendedora o colaboradora" : s.viewerRole}
 Etapa actual: ${s.stage.label} — «${s.stage.question}» · fase: ${s.phase.label}
 Siguiente paso (le toca ${turn}): ${s.next.text} [pantalla /${s.next.page}]
+${renderJourney(s.journey, s.viewerIsMentor)}
 
 Diagnóstico vivo: ${c.total} hallazgos vigentes (${c.confirmed} confirmados, ${c.proposed} propuestos sin revisar, ${c.needsClarification} por aclarar, ${c.openQuestions} preguntas abiertas)
 Resumen: ${s.diagnosis.summary ? `${s.diagnosis.summaryConfirmed ? "CONFIRMADO" : "BORRADOR sin confirmar"} — ${s.diagnosis.summary}` : "todavía no hay resumen"}
 Problema priorizado: ${s.diagnosis.prioritizedProblem ?? "ninguno todavía"}
 Hallazgos principales:
 ${list(s.diagnosis.highlights, "sin hallazgos")}
+Problemas del diagnóstico:
+${list(s.diagnosis.problems, "ninguno registrado")}
+Hallazgos por revisar:
+${list(s.diagnosis.pendingReview, "ninguno")}
 
 Sesiones próximas:
 ${list(s.sessions.upcoming, "ninguna")}
 Última sesión realizada: ${s.sessions.lastCompleted ?? "ninguna"}
+Relación de mentoría: ${s.relation ?? "todavía no se abrió (se abre sola al guardar el primer acuerdo u objetivo)"}
 Acuerdo de mentoría: ${s.agreement ?? "sin acuerdo"}
 Objetivos del ciclo:
 ${list(s.goals, "sin objetivos")}
@@ -181,6 +206,8 @@ ${list(s.tasks.blocked, "ninguna")}
 Vencidas:
 ${list(s.tasks.overdue, "ninguna")}
 Evidencia registrada: ${s.evidenceCount}
+Evaluaciones de ciclo: ${s.evaluations.length ? s.evaluations.join("; ") : "ninguna"}
+Los textos entre corchetes son ids: úsalos tal cual en las herramientas.
 Acciones que esta persona puede hacer en el proyecto: ${s.permissions.join(", ") || "solo lectura"}
 </project_state>`;
 }

@@ -43,11 +43,14 @@ describe("despachador de herramientas y workflows de RAX (RAX-00..RAX-15)", () =
       rejectionCriterion: "< 2 de 15",
     });
 
+    // Sin hipótesis aprobada, solo se formula la hipótesis: el experimento se diseña después de la aprobación del mentor.
     expect(result.ok).toBe(true);
-    expect(result.proposals).toHaveLength(2);
+    expect(result.proposals).toHaveLength(1);
     expect(result.proposals[0].type).toBe("hypothesis");
-    expect(result.proposals[1].type).toBe("experiment");
-    expect(result.proposals[1].description).toContain("Cartas de intención");
+    expect(result.proposals[0].metadata).toMatchObject({ segment: "Restaurantes de comida rápida" });
+
+    const notApproved = await executeWorkflowTool(entrepreneur, project.id, "design_experiment", { hypothesisId: "hyp_inexistente", hypothesisStatement: "x" });
+    expect(notApproved.ok).toBe(false);
   });
 
   it("ejecuta el workflow RAX-08 (propuesta de tareas) y RAX-04 (diagnóstico)", async () => {

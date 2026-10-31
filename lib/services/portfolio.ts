@@ -5,7 +5,7 @@ import type {
   MentorshipStage,
   Project,
 } from "@/types/domain";
-import type { ServiceDeps } from "./base";
+import { sysRepo, type ServiceDeps } from "./base";
 
 export interface PortfolioProjectSummary {
   relationId: string;
@@ -318,7 +318,7 @@ export async function dismissIntervention(
   };
 
   await d.repo.mentorInterventions.insert(intervention);
-  await d.repo.auditEvents.insert({
+  await sysRepo(d).auditEvents.insert({
     id: d.newId("audit"),
     actorId: d.actor.id,
     action: "intervention.dismissed",

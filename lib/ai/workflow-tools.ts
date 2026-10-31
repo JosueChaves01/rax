@@ -1,7 +1,9 @@
 import "server-only";
 import type { AiProposalItem } from "@/lib/n8n/contracts";
 import type { ServiceDeps } from "@/lib/services/base";
-import { guard } from "@/lib/services/base";
+import { guard, relationOf } from "@/lib/services/base";
+import { can } from "@/lib/authz";
+import { parseStepParams, STEP_ACTION_IDS, STEP_ACTIONS, stepActionTitle } from "./step-actions";
 
 /** Definición estándar de herramientas JSON Schema para OpenRouter / Claude Tool Calling */
 export interface WorkflowToolDefinition {
@@ -76,19 +78,29 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
   },
   {
     name: "design_experiment",
-    description: "Workflow RAX-12: Diseña una hipótesis comprobable y su experimento con métrica ex-ante y criterios de éxito y descarte antes de ejecutar.",
+    description: "Workflow RAX-12: Sin hypothesisId, formula una HIPÓTESIS comprobable (queda en borrador hasta que se envía al mentor). Con hypothesisId de una hipótesis ya aprobada, diseña su EXPERIMENTO con métrica y criterios de éxito y descarte fijados antes de empezar.",
     parameters: {
       type: "object",
       properties: {
-        hypothesisStatement: { type: "string", description: "Afirmación concreta a comprobar" },
-        segment: { type: "string", description: "Segmento de clientes o usuarios objetivo" },
+        hypothesisId: { type: "string", description: "Id de la hipótesis aprobada sobre la que se diseña el experimento. Omitir para proponer una hipótesis nueva." },
+        hypothesisStatement: { type: "string", description: "Afirmación concreta y observable a comprobar (mínimo 25 caracteres, sin promesas vagas de éxito)" },
+        segment: { type: "string", description: "Persona o segmento involucrado" },
+        whyItMatters: { type: "string", description: "Por qué importa comprobarla ahora" },
+        currentEvidence: { type: "string", description: "Qué evidencia hay hoy" },
+        evaluationCriterion: { type: "string", description: "Cómo se va a evaluar" },
+        relatedItemId: { type: "string", description: "Id del problema del diagnóstico al que responde" },
         question: { type: "string", description: "Pregunta que el experimento responderá" },
-        method: { type: "string", description: "Metodología del experimento (entrevistas, preventa, landing, prototipo)" },
-        metric: { type: "string", description: "Métrica observable (ej. tasa de conversión, cartas de intención)" },
-        successCriterion: { type: "string", description: "Criterio de éxito numérico fijado antes de mirar resultados" },
-        rejectionCriterion: { type: "string", description: "Criterio de descarte numérico fijado antes de mirar resultados" },
+        method: { type: "string", description: "Metodología (entrevistas, preventa, landing, prototipo, ejercicio)" },
+        participants: { type: "string", description: "Participantes o fuentes y cuántos" },
+        activities: { type: "array", items: { type: "string" }, description: "Actividades concretas" },
+        durationDays: { type: "number", description: "Duración en días" },
+        metric: { type: "string", description: "Métrica o señal observable" },
+        successCriterion: { type: "string", description: "Criterio de éxito fijado antes de mirar resultados" },
+        rejectionCriterion: { type: "string", description: "Criterio de descarte fijado antes de mirar resultados" },
+        evidencePlan: { type: "string", description: "Qué evidencia se va a recopilar" },
+        risks: { type: "string", description: "Riesgos del experimento" },
       },
-      required: ["hypothesisStatement", "segment", "question", "method", "metric", "successCriterion", "rejectionCriterion"],
+      required: ["hypothesisStatement"],
     },
   },
   {
@@ -106,6 +118,9 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
               title: { type: "string", description: "Título del objetivo o meta de aprendizaje" },
               description: { type: "string", description: "Descripción del resultado observable esperado y cómo verificarlo" },
               priority: { type: "string", enum: ["high", "medium", "low"], description: "Prioridad del objetivo" },
+              kind: { type: "string", enum: ["metric", "qualitative", "capability", "strategic"], description: "Tipo de objetivo" },
+              baseline: { type: "string", description: "Punto de partida actual" },
+              targetResult: { type: "string", description: "Resultado esperado al final del ciclo" },
             },
             required: ["title"],
           },
@@ -218,8 +233,43 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
         goalsTotal: { type: "number", description: "Total de metas planificadas" },
         maturityLevel: { type: "string", description: "Nivel de madurez actual de la iniciativa" },
         summary: { type: "string", description: "Resumen evaluativo del ciclo" },
+        autonomy: { type: "string", enum: ["nascent", "developing", "autonomous"], description: "Autonomía alcanzada por la persona" },
+        decision: { type: "string", enum: ["renew", "close", "new_stage"], description: "Propuesta de cierre: renovar, cerrar o pasar a una nueva etapa" },
+        nextCycleFocus: { type: "string", description: "Foco del próximo ciclo, si sigue" },
       },
       required: ["goalsAchieved", "goalsTotal", "summary"],
+    },
+  },
+  {
+    name: "propose_step_action",
+    description: "Propone dar un paso del recorrido del proyecto (ver «Recorrido» en <project_state>). Genera una tarjeta que la persona aplica con un clic; nada cambia hasta entonces. Usa los ids que aparecen entre corchetes en <project_state>. Acciones: " +
+      STEP_ACTION_IDS.map((id) => `${id} (${STEP_ACTIONS[id].needs})`).join("; "),
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: STEP_ACTION_IDS, description: "Paso a dar" },
+        targetId: { type: "string", description: "Id del elemento sobre el que actúa (hipótesis, experimento, hallazgo, tarea, sesión o acuerdo)" },
+        text: { type: "string", description: "Texto principal: resumen, acuerdo, justificación, nota, lo observado o la valoración" },
+        kind: { type: "string", description: "first_review|second_review para request_review; tipo de nota para add_session_note" },
+        decision: { type: "string", description: "approve|return|discard (hipótesis); continue|reformulate|deepen|pause|discard (segunda revisión); confirm|reject (hallazgo); renew|close|new_stage (ciclo)" },
+        rank: { type: "number", description: "Orden de prioridad (1 = primero)" },
+        outcome: { type: "string", enum: ["positive", "negative", "mixed", "inconclusive"], description: "Resultado contra los criterios fijados" },
+        metricValue: { type: "string", description: "Valor observado de la métrica" },
+        learnings: { type: "string", description: "Aprendizajes" },
+        limitations: { type: "string", description: "Limitaciones del resultado" },
+        title: { type: "string", description: "Título de la evidencia" },
+        url: { type: "string", description: "Enlace de la evidencia" },
+        status: { type: "string", enum: ["todo", "doing", "done", "blocked"], description: "Nuevo estado de la tarea" },
+        scope: { type: "string", description: "Alcance del acuerdo" },
+        frequency: { type: "string", enum: ["weekly", "biweekly", "monthly", "on_demand"], description: "Frecuencia de sesiones" },
+        sessionDurationMinutes: { type: "number", description: "Duración de cada sesión en minutos (15 a 240)" },
+        expectedDurationWeeks: { type: "number", description: "Duración del ciclo en semanas (1 a 104)" },
+        mentorCommitments: { type: "string", description: "Compromisos del mentor" },
+        entrepreneurCommitments: { type: "string", description: "Compromisos del emprendedor" },
+        scheduledAt: { type: "string", description: "Fecha de la sesión (YYYY-MM-DD o ISO)" },
+        autonomy: { type: "string", enum: ["nascent", "developing", "autonomous"], description: "Autonomía (evaluación de ciclo)" },
+      },
+      required: ["action"],
     },
   },
   {
@@ -340,33 +390,65 @@ export async function executeWorkflowTool(
     }
 
     case "design_experiment": {
-      const statement = String(args.hypothesisStatement || "Hipótesis a validar");
-      const question = String(args.question || "");
-      const method = String(args.method || "");
-      const metric = String(args.metric || "");
-      const successCriterion = String(args.successCriterion || "");
-      const rejectionCriterion = String(args.rejectionCriterion || "");
+      const text = (k: string) => (typeof args[k] === "string" ? String(args[k]).trim() : "");
+      const statement = text("hypothesisStatement") || "Hipótesis a comprobar";
+      const hypothesisId = text("hypothesisId");
 
-      const proposals: AiProposalItem[] = [
-        makeProposal({
-          type: "hypothesis",
-          title: statement,
-          description: `Segmento: ${String(args.segment || "General")}. Pregunta: ${question}`,
-          needsHumanApproval: true,
-        }),
-        makeProposal({
-          type: "experiment",
-          title: `Experimento: ${question || statement}`,
-          description: `Método: ${method}. Métrica: ${metric}. Criterio de Éxito: ${successCriterion}. Criterio de Descarte: ${rejectionCriterion}`,
-          needsHumanApproval: true,
-        }),
-      ];
+      if (!hypothesisId) {
+        return {
+          ok: true,
+          toolName,
+          summary: "Se formuló la hipótesis. Queda en borrador al aplicarla; después se envía al mentor para su aprobación y recién ahí se diseña el experimento.",
+          proposals: [
+            makeProposal({
+              type: "hypothesis",
+              title: statement,
+              description: [text("segment") && `Segmento: ${text("segment")}`, text("evaluationCriterion") && `Cómo se evalúa: ${text("evaluationCriterion")}`].filter(Boolean).join(". ") || undefined,
+              metadata: {
+                segment: text("segment"),
+                whyItMatters: text("whyItMatters"),
+                currentEvidence: text("currentEvidence"),
+                evaluationCriterion: text("evaluationCriterion") || text("successCriterion"),
+                relatedItemId: text("relatedItemId"),
+              },
+            }),
+          ],
+        };
+      }
 
+      const hyp = await d.repo.hypotheses.get(hypothesisId);
+      if (!hyp || hyp.projectId !== projectId) {
+        return { ok: false, toolName, summary: `No existe la hipótesis ${hypothesisId} en este proyecto.`, proposals: [] };
+      }
+      if (!["approved", "testing", "inconclusive", "supported", "weakened"].includes(hyp.status)) {
+        return { ok: false, toolName, summary: "Esa hipótesis todavía no está aprobada por el mentor: no se puede diseñar su experimento.", proposals: [] };
+      }
+      const question = text("question") || statement;
+      const activities = Array.isArray(args.activities) ? args.activities.filter((a): a is string => typeof a === "string") : [];
       return {
         ok: true,
         toolName,
-        summary: `Se formuló la hipótesis y se estructuró el diseño del experimento ex-ante (Workflow RAX-12).`,
-        proposals,
+        summary: "Se diseñó el experimento con criterios ex-ante (Workflow RAX-12).",
+        proposals: [
+          makeProposal({
+            type: "experiment",
+            title: `Experimento: ${question}`.slice(0, 300),
+            description: `Método: ${text("method")}. Métrica: ${text("metric")}. Criterio de Éxito: ${text("successCriterion")}. Criterio de Descarte: ${text("rejectionCriterion")}`,
+            metadata: {
+              hypothesisId,
+              question,
+              method: text("method"),
+              participants: text("participants"),
+              activities,
+              durationDays: typeof args.durationDays === "number" ? args.durationDays : undefined,
+              metric: text("metric"),
+              successCriterion: text("successCriterion"),
+              rejectionCriterion: text("rejectionCriterion"),
+              evidencePlan: text("evidencePlan"),
+              risks: text("risks"),
+            },
+          }),
+        ],
       };
     }
 
@@ -378,6 +460,7 @@ export async function executeWorkflowTool(
           title: String(g.title || "Nuevo objetivo"),
           description: String(g.description || (g.priority ? `Prioridad: ${g.priority}` : "")),
           needsHumanApproval: true,
+          metadata: { priority: g.priority, kind: g.kind, baseline: g.baseline, targetResult: g.targetResult },
         }),
       );
 
@@ -508,21 +591,42 @@ export async function executeWorkflowTool(
       const achieved = Number(args.goalsAchieved) || 0;
       const total = Number(args.goalsTotal) || 0;
       const summary = String(args.summary || "");
-
-      const proposals: AiProposalItem[] = [
-        makeProposal({
-          type: "goal",
-          title: `Evaluación de Ciclo: ${achieved}/${total} objetivos logrados`,
-          description: summary,
-          needsHumanApproval: true,
-        }),
-      ];
+      const params = parseStepParams({ action: "evaluate_cycle", text: summary, decision: args.decision, autonomy: args.autonomy, nextCycleFocus: args.nextCycleFocus })!;
 
       return {
         ok: true,
         toolName,
-        summary: `Evaluación del ciclo de mentoría completada (Workflow RAX-14).`,
-        proposals,
+        summary: `Evaluación del ciclo preparada (${achieved}/${total} objetivos logrados). Se registra cuando la persona la aplica (Workflow RAX-14).`,
+        proposals: [
+          makeProposal({
+            type: "flow_action",
+            title: `${stepActionTitle(params)} (${achieved}/${total} objetivos)`,
+            description: summary,
+            metadata: { ...params },
+          }),
+        ],
+      };
+    }
+
+    case "propose_step_action": {
+      const params = parseStepParams(args);
+      if (!params) return { ok: false, toolName, summary: "Acción desconocida: elige una de la lista de propose_step_action.", proposals: [] };
+      const rel = await relationOf(d, projectId);
+      const permission = STEP_ACTIONS[params.action].permission;
+      if (!can(d.actor, permission, rel)) {
+        return {
+          ok: false,
+          toolName,
+          summary: `No propuesto: «${STEP_ACTIONS[params.action].label}» no lo puede hacer quien conversa (${permission}). Explícale a quién le corresponde y cómo pedírselo.`,
+          proposals: [],
+        };
+      }
+      const title = stepActionTitle(params);
+      return {
+        ok: true,
+        toolName,
+        summary: `Paso propuesto: ${title}. Se da cuando la persona aplica la tarjeta.`,
+        proposals: [makeProposal({ type: "flow_action", title, description: params.text?.slice(0, 600), metadata: { ...params } })],
       };
     }
 

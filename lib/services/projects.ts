@@ -120,6 +120,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
     hypotheses,
     experiments,
     hasPrioritizedProblem: items.some((i) => isCurrent(i) && i.category === "problem" && !!i.priority),
+    diagnosisItemCount: items.filter(isCurrent).length,
   });
 
   const activeMentorshipRelation =
@@ -151,6 +152,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
       [
         "project.update",
         "conversation.write",
+        "agent.chat",
         "diagnosis.edit",
         "diagnosis.confirm_summary",
         "diagnosis.comment",

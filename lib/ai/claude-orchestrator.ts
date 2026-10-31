@@ -3,6 +3,7 @@ import type { AgentArtifact, AgentMessage, AgentThreadMemory, KnowledgeCitation,
 import type { KnowledgeContextResult } from "./knowledge-retrieval";
 import { extractArtifacts } from "./artifact-parser";
 import type { ServiceDeps } from "@/lib/services/base";
+import { STEP_ACTIONS, stepActionTitle, type StepActionParams } from "./step-actions";
 import { executeWorkflowTool, makeProposal, RAX_WORKFLOW_TOOLS, type WorkflowToolDefinition } from "./workflow-tools";
 import type { AiProposalItem } from "@/lib/n8n/contracts";
 import { renderPlatformGuide, PLATFORM_PAGES, PROJECT_PAGES } from "./platform-guide";
@@ -119,22 +120,30 @@ ${chunksXml}
 
 /** Qué hace el agente en cada etapa. Se incluyen las cuatro: la conversación puede tocar cualquiera. */
 const STAGE_PLAYBOOK = `<stage_playbook>
-Tu forma de ayudar depende de la etapa ACTUAL del proyecto (ver <project_state>):
+Tu objetivo es llevar a la persona por TODO el recorrido del proyecto, del paso cero a la conclusión, desde esta conversación.
+- En cada turno ubícate con «Recorrido» en <project_state>: di en qué paso está (por ejemplo «estás en el paso 6 de 17») cuando oriente, y guíala hacia el paso actual.
+- Cuando el paso actual le toca a quien conversa y ya tienes los datos, propónlo con la herramienta indicada (casi siempre propose_step_action). Si falta información para darlo, pídela primero con 1 o 2 preguntas.
+- Si el paso le toca a otra persona (mentor, emprendedor o administración), dilo con claridad y propone lo que sí puede avanzar mientras tanto.
+- Nunca afirmes que un paso se dio porque lo propusiste: se da cuando la persona aplica la tarjeta. El estado del turno siguiente te lo confirmará.
+
+Cómo ayudar en cada etapa:
 1. «Entender» — ¿Qué sé, qué supongo y qué me falta?
    - Haz 1 o 2 preguntas por turno para separar hechos de supuestos. Lo que la persona no sabe es una pregunta abierta, no un error.
-   - Cuando aporte información nueva, usa extract_diagnosis_items. Cuando ya se cubrieron los temas principales o pide un resumen, usa update_context_memory.
-   - El paso a «Orientar» ocurre cuando la persona confirma el resumen en /diagnostico y pide la primera revisión al mentor.
+   - Cuando aporte información nueva, usa extract_diagnosis_items. Asegúrate de que quede al menos un problema (categoría problem): es lo que después se prioriza.
+   - Cuando ya se cubrieron los temas principales o pide un resumen, usa update_context_memory (o propose_step_action set_summary). Luego propone confirm_summary y, con mentor asignado, request_review first_review.
 2. «Orientar» — ¿Qué investigamos primero?
-   - Ayuda a preparar la primera revisión (generate_mentor_briefing), a priorizar el problema, a definir el acuerdo y los objetivos (propose_goals).
-   - Al mentor: puntos ciegos, preguntas para la sesión, temas de agenda. Al emprendedor: qué llevar a la sesión.
+   - Al mentor: prepara la primera revisión (generate_mentor_briefing), registra notas (add_session_note) y ciérrala con el acuerdo (complete_first_review).
+   - Priorizar el problema (prioritize_problem) lo puede hacer la persona dueña o el mentor, con justificación.
+   - Acuerdo (save_agreement, confirm_agreement) y objetivos (propose_goals) son opcionales pero recomendados para el ciclo.
 3. «Probar» — ¿Cómo lo comprobamos en pequeño?
-   - Formula hipótesis comprobables y experimentos con métrica y criterios de éxito y descarte fijados ANTES de mirar resultados (design_experiment).
-   - Divide el experimento en tareas pequeñas y observables (propose_tasks). Si hay tareas bloqueadas o vencidas, analiza la causa sin juzgar (diagnose_task_delays).
-   - Recuerda que el mentor aprueba las hipótesis antes de experimentar.
+   - Formula la hipótesis con design_experiment sin hypothesisId y propone submit_hypothesis. El mentor la decide con decide_hypothesis.
+   - Con la hipótesis aprobada, diseña el experimento con design_experiment y su hypothesisId (métrica, criterios de éxito y descarte, participantes y plan de evidencia ANTES de empezar), y propone start_experiment.
+   - Divide la ejecución en tareas (propose_tasks), registra avances (set_task_status) y evidencia (add_evidence). Si hay tareas bloqueadas o vencidas, analiza la causa sin juzgar (diagnose_task_delays).
 4. «Decidir» — ¿Qué hacemos con lo que pasó?
-   - Contrasta resultados con los criterios fijados, separa lo observado de lo interpretado y prepara la segunda revisión (synthesize_session, evaluate_mentorship_cycle).
-   - La decisión (continuar, reformular, profundizar, pausar o descartar) la toma el mentor con la persona; tú la preparas, no la tomas.
-Si la persona pregunta por algo de otra etapa, respóndele igual y aclárale en qué etapa está y qué le falta para llegar.
+   - Registra el resultado contra los criterios fijados (record_result), separando lo observado de lo interpretado, y propone request_review second_review.
+   - Al mentor: prepara la decisión y propone mentor_decision (continuar, reformular, profundizar, pausar o descartar) con justificación. La decisión es del mentor; tú la preparas.
+   - Para cerrar, evaluate_mentorship_cycle registra la evaluación del ciclo (requiere al menos un objetivo).
+Si la persona pregunta por algo de otra etapa, respóndele igual y aclárale en qué paso está y qué le falta para llegar.
 </stage_playbook>`;
 
 /**
@@ -203,7 +212,8 @@ Usa herramientas cuando la persona quiera estructurar algo en el proyecto; para 
 - diagnose_task_delays (RAX-09): causas de bloqueos, sin juicios morales.
 - recommend_resources (RAX-11): recursos y plantillas.
 - design_experiment (RAX-12): hipótesis y experimento con criterios ex-ante. En aprendizaje, ejercicios de autoevaluación (Técnica Feynman).
-- evaluate_mentorship_cycle (RAX-14) y query_project_metrics (RAX-15): evaluar el ciclo y consultar métricas.${field ? "\n- draft_field_value: redactar el borrador del campo de formulario indicado en <current_screen>. Úsala siempre en este turno." : ""}
+- evaluate_mentorship_cycle (RAX-14) y query_project_metrics (RAX-15): evaluar el ciclo y consultar métricas.
+- propose_step_action: dar cualquier paso del recorrido (confirmar resumen, pedir revisiones, priorizar, decidir hipótesis, iniciar experimentos, registrar resultados y evidencia, decisión del mentor, acuerdo, sesiones). Usa los ids entre corchetes de <project_state>.${field ? "\n- draft_field_value: redactar el borrador del campo de formulario indicado en <current_screen>. Úsala siempre en este turno." : ""}
 Solo propone lo que esta persona puede hacer (ver «Acciones que esta persona puede hacer» en <project_state>). Después de usar una herramienta, explica en una o dos frases qué propusiste y que puede aplicarlo desde las tarjetas.
 </session_and_tool_guidelines>
 
@@ -405,12 +415,33 @@ function simulatedPlatformAnswer(input: ClaudeTurnInput): string | null {
   if (s) {
     lines.push(`«${s.projectName}» está en la etapa **${s.stage.label}** (${s.phase.label.toLowerCase()}): ${s.stage.question}`);
     lines.push(`**Lo que sigue:** ${s.next.text} (pantalla /${s.next.page}).`);
+    const step = s.journey.steps[s.journey.currentIndex];
+    lines.push(
+      step
+        ? `**Recorrido:** paso ${s.journey.currentIndex + 1} de ${s.journey.steps.length} — ${step.label}.`
+        : "**Recorrido:** el ciclo está completo; queda evaluarlo con tu mentor si todavía no lo hicieron.",
+    );
     if (s.tasks.blocked.length) lines.push(`Tienes ${s.tasks.blocked.length} tarea(s) bloqueada(s): ${s.tasks.blocked.slice(0, 2).join("; ")}.`);
     if (s.tasks.overdue.length) lines.push(`Y ${s.tasks.overdue.length} vencida(s).`);
   }
   if (page) lines.push(`**${page.label}**: ${page.what}`);
   if (!lines.length) return null;
   return lines.join("\n\n");
+}
+
+/** Sin modelo, la simulación solo ofrece los pasos que no necesitan redacción (confirmar, pedir revisión). */
+function simulatedStepProposal(input: ClaudeTurnInput): AiProposalItem | null {
+  const s = input.projectState;
+  const step = s?.journey.steps[s.journey.currentIndex];
+  if (!s || !step) return null;
+  const simple: Record<string, StepActionParams> = {
+    confirm_summary: { action: "confirm_summary" },
+    request_first_review: { action: "request_review", kind: "first_review" },
+    request_second_review: { action: "request_review", kind: "second_review" },
+  };
+  const params = simple[step.id];
+  if (!params || !s.permissions.includes(STEP_ACTIONS[params.action].permission)) return null;
+  return makeProposal({ type: "flow_action", title: stepActionTitle(params), metadata: { ...params } });
 }
 
 function generateSimulatedClaudeTurn(input: ClaudeTurnInput): ClaudeTurnResult {
@@ -511,6 +542,11 @@ Para iniciar el diagnóstico:
     }
   } else if (simulatedPlatformAnswer(input)) {
     reply = simulatedPlatformAnswer(input)!;
+    const step = simulatedStepProposal(input);
+    if (step) {
+      proposals.push(step);
+      reply += "\n\nTe dejé ese paso listo como tarjeta: se da cuando lo apliques.";
+    }
   } else if (isLearningContext) {
     if (input.role === "mentor" && /sesi[oó]n|tutor[ií]a|clase|ense[ñn]ar|preparar|preparame|prep[aá]rame|agenda/i.test(query)) {
       // El mentor no edita el diagnóstico: se le proponen temas para la agenda de su próxima sesión.
