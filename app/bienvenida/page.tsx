@@ -6,11 +6,13 @@ import { OnboardingForm } from "./onboarding-form";
 
 export const metadata = { title: "Bienvenida · RAX" };
 
-export default async function WelcomePage() {
+export default async function WelcomePage({ searchParams }: { searchParams: Promise<{ repostular?: string }> }) {
   const actor = await getActor();
   if (!actor) redirect("/entrar");
-  if (homeFor(actor) !== "/bienvenida") redirect(homeFor(actor));
-  const mode = actor.role === "admin" ? "admin" : actor.role === "mentor" ? "mentor" : "choose";
+  // Un mentor rechazado vuelve acá para mandar una solicitud nueva.
+  const reapply = (await searchParams).repostular === "1" && actor.role !== "mentor" && actor.mentorStatus === "rejected";
+  if (!reapply && homeFor(actor) !== "/bienvenida") redirect(homeFor(actor));
+  const mode = reapply ? "mentor" : actor.role === "admin" ? "admin" : actor.role === "mentor" ? "mentor" : "choose";
   return (
     <main className="ambient min-h-dvh px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-2xl">
@@ -24,7 +26,7 @@ export default async function WelcomePage() {
             </button>
           </form>
         </div>
-        <OnboardingForm mode={mode} defaultName={actor.name} />
+        <OnboardingForm mode={mode} defaultName={actor.name} reapply={reapply} />
       </div>
     </main>
   );
