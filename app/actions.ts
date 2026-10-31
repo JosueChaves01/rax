@@ -32,7 +32,7 @@ import { getDeps, homeFor } from "@/lib/runtime";
 import { createUserClient } from "@/lib/supabase/server";
 import { appUrl, missingConfig } from "@/lib/supabase/config";
 import { completeOnboarding } from "@/lib/services/onboarding";
-import { isDomainError } from "@/lib/errors";
+import { isDomainError, validation } from "@/lib/errors";
 import { audit, guard, sysRepo, type ServiceDeps } from "@/lib/services/base";
 import type { ItemChange } from "@/features/diagnosis/rules";
 import { createProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
@@ -560,9 +560,35 @@ export const improveDocumentWithAIAction = async (input: {
   return { ok: false as const, error: "La mejora con IA estará disponible cuando esta pantalla use el agente principal con un proyecto autorizado." };
 };
 
-export const evaluateExerciseAction = async (exerciseText: string): Promise<{ ok: true; score: string; feedback: string } | { ok: false; error: string }> => {
-  void exerciseText;
-  return { ok: false as const, error: "La evaluación estará disponible cuando PREP se integre como capacidad del agente principal con un proyecto autorizado." };
+/**
+ * Evalúa un ejercicio con el mismo agente del chat del proyecto (OpenRouter directo, sin n8n).
+ * Si la IA no está disponible no se inventa una nota: se devuelve el motivo.
+ */
+export const evaluateExerciseAction = async (
+  projectId: string,
+  exerciseText: string,
+): Promise<{ ok: true; score: string; feedback: string } | { ok: false; error: string }> => {
+  const text = exerciseText.trim().slice(0, 8000);
+  if (!text) return { ok: false, error: "Escribe o pega tu ejercicio para evaluarlo." };
+  const res = await run(projectId, async (d) => {
+    const { project } = await guard(d, V.parse(V.Ids, projectId), "agent.chat");
+    const knowledge = await getProjectKnowledgeContext(d.repo, project.id, text);
+    return executeClaudeAgentTurn({
+      project,
+      userMessage: `Evalúa este ejercicio como tutor. Empieza tu respuesta con una línea exacta «Puntaje: N/10» y luego da retroalimentación concreta: qué está bien, qué corregir y un siguiente paso.\n\n${text}`,
+      history: [],
+      knowledge,
+      role: d.actor.role,
+      sessionContext: { location: "evaluation", pageTitle: "Aprendizaje · Evaluación de ejercicio" },
+    });
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+  const turn = res.data!;
+  if (turn.cacheStatus === "simulated") {
+    return { ok: false, error: "La IA no está disponible en este momento (sin clave o sin cupo en OpenRouter), así que no se puede evaluar el ejercicio." };
+  }
+  const match = turn.reply.match(/puntaje:\s*([\d.,]+\s*\/\s*10)/i);
+  return { ok: true, score: match ? match[1].replace(/\s+/g, "") : "—", feedback: turn.reply.replace(/^.*puntaje:.*$/im, "").trim() };
 };
 
 export const completeExplorationAction = async (input: {
@@ -1419,6 +1445,32 @@ export async function applyAiProposalAction(projectId: string, proposal: unknown
         }
       }
       return { ok: true as const, type: "diagnosis_item" as const, id: diag.id, title: diag.title };
+    }
+
+    if (item.type === "agenda_topic") {
+      // El mentor lo guarda como pregunta en su próxima sesión; el emprendedor, como tarea para llevar a la sesión.
+      if (d.actor.role === "mentor") {
+        const sessions = await d.repo.mentorSessions.list({ projectId });
+        const next = sessions
+          .filter((s) => s.mentorId === d.actor.id && s.status !== "completed")
+          .sort((a, b) => (a.scheduledAt ?? a.createdAt).localeCompare(b.scheduledAt ?? b.createdAt))[0];
+        if (!next) throw validation("Programa una sesión para guardar este tema en su agenda.");
+        await guard(d, projectId, "mentor.note");
+        // Se inserta sin addNote para no marcar como iniciada una sesión que todavía no ocurrió.
+        const note = await d.repo.sessionNotes.insert({
+          id: d.newId("note"),
+          sessionId: next.id,
+          projectId,
+          authorId: d.actor.id,
+          kind: "question",
+          body: [item.title, item.description].filter(Boolean).join("\n").slice(0, 2000),
+          isPrivate: false,
+          createdAt: d.now(),
+        });
+        return { ok: true as const, type: "agenda_topic" as const, id: note.id, title: item.title };
+      }
+      const task = await createTask(d, projectId, { title: `Llevar a la sesión: ${item.title}`.slice(0, 300), dueDate: undefined, actionType: "research" });
+      return { ok: true as const, type: "agenda_topic" as const, id: task.id, title: task.title };
     }
 
     if (item.type === "goal") {

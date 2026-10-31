@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cx } from "@/shared/ui/primitives";
-import { loadMainAgentThreadAction, sendMainAgentMessageAction, evaluateExerciseAction } from "@/app/actions";
+import { loadMainAgentThreadAction, sendClaudeAgentMessageAction, evaluateExerciseAction } from "@/app/actions";
 
 type TabKind = "asignados" | "en-progreso" | "completados";
 
@@ -31,7 +31,7 @@ export default function LearningClient({ projects }: { projects: Array<{ id: str
         id: entry.id,
         sender: entry.author === "user" ? "user" : "ai",
         text: entry.content,
-        provider: entry.author === "assistant" && entry.status === "complete" ? "Agente principal" : undefined,
+        provider: entry.author === "assistant" && entry.status === "complete" ? "Agente RAX" : undefined,
       })));
     });
     return () => { active = false; };
@@ -50,19 +50,22 @@ export default function LearningClient({ projects }: { projects: Array<{ id: str
     setIsLoading(true);
 
     try {
-      const res = await sendMainAgentMessageAction({ projectId, stage: "learning", section: "PREP", message: prompt });
-      const agentResult = res.ok ? res.data : undefined;
-      const replyText = !res.ok
-        ? res.error
-        : !agentResult
-          ? "El agente no devolvió respuesta."
-          : agentResult.ok
-            ? agentResult.reply
-            : agentResult.message;
-      if (res.ok && agentResult?.userMessage && agentResult.assistantMessage) {
+      // Mismo agente que el chat del proyecto (OpenRouter directo); el hilo es el del actor en este proyecto.
+      const res = await sendClaudeAgentMessageAction({
+        projectId,
+        message: prompt,
+        sessionContext: { location: "global_assistant", pageTitle: "Aprendizaje · Tutor de ejercicios" },
+      });
+      if (res.ok && res.data) {
+        const { userMessage, assistantMessage, cacheStatus } = res.data;
         setChatMessages((prev) => [...prev,
-          { id: agentResult.userMessage.id, sender: "user", text: agentResult.userMessage.content },
-          { id: agentResult.assistantMessage.id, sender: "ai", text: replyText, provider: agentResult.ok ? "Agente principal" : undefined },
+          { id: userMessage.id, sender: "user", text: userMessage.content },
+          {
+            id: assistantMessage.id,
+            sender: "ai",
+            text: assistantMessage.content,
+            provider: cacheStatus === "simulated" ? "Respuesta simulada (IA no disponible)" : "Agente RAX",
+          },
         ]);
       } else if (!res.ok) {
         setChatMessages((prev) => [...prev, { sender: "ai", text: res.error }]);
@@ -93,7 +96,7 @@ export default function LearningClient({ projects }: { projects: Array<{ id: str
     setIsEvaluating(true);
     setEvaluationError(null);
     try {
-      const res = await evaluateExerciseAction(exerciseText);
+      const res = await evaluateExerciseAction(projectId, exerciseText);
       if (res.ok) {
         setEvaluation({ score: res.score, feedback: res.feedback });
         setShowAiModal(true);
@@ -164,10 +167,10 @@ export default function LearningClient({ projects }: { projects: Array<{ id: str
 
             <div>
               <h2 className="text-xl font-bold text-slate-900">
-                PREP — Respuesta a objeciones
+                Ejercicio de práctica
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Módulo de comunicación comercial y defensa de valor
+                {projects.find((p) => p.id === projectId)?.name ?? "Elige un proyecto"} · el tutor evalúa según el objetivo del proyecto
               </p>
             </div>
 
@@ -191,7 +194,7 @@ export default function LearningClient({ projects }: { projects: Array<{ id: str
                 Resumen conceptual
               </h3>
               <p className="text-xs text-slate-700 leading-relaxed">
-                Aprende a estructurar respuestas claras y persuasivas ante dudas o cuestionamientos de clientes usando el marco: Punto, Razón, Ejemplo y Punto de cierre.
+                Pídele al tutor un ejercicio en el chat («Dar un ejercicio similar»), resuélvelo aquí y envíalo a evaluar. El tutor usa el contexto, las instrucciones y los documentos del proyecto.
               </p>
             </div>
 
@@ -203,22 +206,21 @@ export default function LearningClient({ projects }: { projects: Array<{ id: str
                 </h3>
                 <button
                   type="button"
-                  disabled
+                  disabled={!projectId || !exerciseText.trim() || isEvaluating}
                   onClick={handleEvaluate}
-                  title="PREP aún no está integrado como capacidad del agente principal."
                   className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  Evaluación PREP no disponible
+                  {isEvaluating ? "Evaluando…" : "Evaluar con IA"}
                 </button>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Escribe una respuesta a la objeción típica de un cliente: «Tu servicio parece caro frente a alternativas de software gratuitas».
+                Pega tu código o escribe tu respuesta al ejercicio.
               </p>
               <textarea
                 rows={3}
                 value={exerciseText}
                 onChange={(e) => setExerciseText(e.target.value)}
-                placeholder="Escribe aquí tu respuesta aplicando el método PREP (Punto, Razón, Ejemplo, Punto)..."
+                placeholder="Por ejemplo, un componente de React con useState..."
                 className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-white leading-relaxed focus:outline-none focus:border-blue-600"
               />
               {evaluationError && (
@@ -246,7 +248,7 @@ export default function LearningClient({ projects }: { projects: Array<{ id: str
             ) : (
               <div className="flex items-center gap-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
                 <span className="text-base">🤖</span>
-                <span>La evaluación estará disponible cuando PREP se integre al agente principal con un proyecto autorizado.</span>
+                <span>Todavía no evaluaste ningún ejercicio en esta sesión.</span>
               </div>
             )}
           </div>
