@@ -27,7 +27,17 @@ export default async function ProjectsPage() {
   }
 
   const projects = await listMyProjects(d);
-  const workspaces = await Promise.all(projects.map((p) => getWorkspace(d, p.id)));
+  // Un proyecto dañado no puede tumbar el inicio: se omite y queda en el log.
+  const workspaces = (
+    await Promise.all(
+      projects.map((p) =>
+        getWorkspace(d, p.id).catch((e) => {
+          console.error("[rax] no se pudo cargar el proyecto en el inicio:", p.id, e instanceof Error ? e.message : e);
+          return null;
+        }),
+      ),
+    )
+  ).filter((w): w is NonNullable<typeof w> => w !== null);
   const isMentor = d.actor.role === "mentor";
 
   if (isMentor) {

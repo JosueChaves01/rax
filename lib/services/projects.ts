@@ -1,4 +1,4 @@
-import type { InitiativeNature, MentorOnboarding, MentorshipAgreement, MentorshipGoal, Project, ProjectStatus } from "@/types/domain";
+import type { Diagnosis, InitiativeNature, MentorOnboarding, MentorshipAgreement, MentorshipGoal, Project, ProjectStatus } from "@/types/domain";
 import { can } from "@/lib/authz";
 import { validation } from "@/lib/errors";
 import { derivePhase } from "@/features/projects/phase";
@@ -74,6 +74,17 @@ export async function touch(d: ServiceDeps, projectId: string) {
   await sysRepo(d).projects.update(projectId, { updatedAt: d.now() });
 }
 
+/** Crea el diagnóstico vacío que le falta a un proyecto. Si no se puede guardar, devuelve uno en memoria. */
+async function ensureDiagnosis(d: ServiceDeps, projectId: string, fallbackDate: string): Promise<Diagnosis> {
+  const empty: Diagnosis = { id: d.newId("dx"), projectId, status: "exploring", updatedAt: fallbackDate };
+  try {
+    return await sysRepo(d).diagnoses.insert({ ...empty, updatedAt: d.now() });
+  } catch (e) {
+    console.warn("[rax] proyecto sin diagnóstico y no se pudo crear:", projectId, e instanceof Error ? e.message : e);
+    return empty;
+  }
+}
+
 /** Vista agregada del espacio de trabajo. Los permisos se calculan aquí, en el servidor. */
 export async function getWorkspace(d: ServiceDeps, projectId: string) {
   const { project, rel } = await guard(d, projectId, "project.read");
@@ -99,7 +110,8 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
       r.roadmapMilestones.list(where),
       r.cycleEvaluations.list(where),
     ]);
-  const diagnosis = diagnoses[0];
+  // Un proyecto cuyo armado inicial quedó a medias puede no tener diagnóstico: se repara en vez de romper la vista.
+  const diagnosis = diagnoses[0] ?? (await ensureDiagnosis(d, project.id, project.updatedAt));
   const status = deriveDiagnosisStatus(diagnosis, items, sessions, hypotheses);
   const phase = derivePhase({
     messages,
