@@ -5,6 +5,9 @@ import Link from "next/link";
 import { cx, formatDate } from "@/shared/ui/primitives";
 import type { MentorSession, MentorshipGoal, Project } from "@/types/domain";
 import { generatePreSessionBriefingAction } from "@/app/actions";
+import { DocumentsTab, NotesTab, TasksTab, useSessionWorkspace } from "@/shared/ui/session-tabs";
+
+type Tab = "agenda" | "notas" | "documentos" | "tareas";
 
 interface SessionsViewProps {
   initialSessions: MentorSession[];
@@ -19,10 +22,19 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
   );
   const [isPending, startTransition] = useTransition();
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("agenda");
 
   const activeSession = sessions.find((s) => s.id === selectedSessionId) || sessions[0];
   const activeProject = projects.find((p) => p.id === activeSession?.projectId);
   const activeGoals = goals.filter((g) => g.status !== "discarded");
+  const workspace = useSessionWorkspace(activeSession?.projectId, activeSession?.id);
+  const counts: Partial<Record<Tab, number>> = workspace.data
+    ? {
+        notas: workspace.data.notes.length,
+        documentos: workspace.data.documents.length + workspace.data.evidence.length,
+        tareas: workspace.data.tasks.filter((t) => t.status !== "done").length,
+      }
+    : {};
 
   // La agenda se muestra solo cuando existe en el briefing persistido de la sesión.
   const agendaList = activeSession?.preSessionBriefing?.suggestedAgenda?.length
@@ -96,7 +108,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
         </div>
 
         {/* Pestañas: [Agenda] | [Notas] | [Documentos] | [Tareas] */}
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0">
+        <div role="tablist" aria-label="Secciones de la sesión" className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0 overflow-x-auto">
           {(
             [
               ["agenda", "Agenda"],
@@ -104,20 +116,21 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
               ["documentos", "Documentos"],
               ["tareas", "Tareas"],
             ] as const
-          ).map(([tab, label]) => (
+          ).map(([key, label]) => (
             <button
-              key={tab}
+              key={key}
               type="button"
-              disabled={tab !== "agenda"}
-              title={tab !== "agenda" ? "Esta vista todavía no está disponible." : undefined}
+              role="tab"
+              aria-selected={tab === key}
+              disabled={!activeSession}
+              onClick={() => setTab(key)}
               className={cx(
-                "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
-                tab === "agenda"
-                  ? "bg-white text-slate-900 shadow-2xs"
-                  : "text-slate-500 hover:text-slate-900"
+                "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50",
+                tab === key ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
               )}
             >
               {label}
+              {counts[key] ? <span className="ml-1 text-[10px] text-slate-400">{counts[key]}</span> : null}
             </button>
           ))}
         </div>
@@ -129,8 +142,24 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
         </div>
       )}
 
+      {tab !== "agenda" && activeSession && (
+        <div role="tabpanel">
+          {workspace.error ? (
+            <div className="p-4 text-xs rounded-xl bg-red-50 border border-red-200 text-red-800">{workspace.error}</div>
+          ) : !workspace.data ? (
+            <div className="h-48 rounded-2xl bg-white border border-slate-200/80 animate-pulse" aria-busy="true" />
+          ) : tab === "notas" ? (
+            <NotesTab ws={workspace.data} onChanged={workspace.reload} />
+          ) : tab === "documentos" ? (
+            <DocumentsTab ws={workspace.data} onChanged={workspace.reload} />
+          ) : (
+            <TasksTab ws={workspace.data} onChanged={workspace.reload} />
+          )}
+        </div>
+      )}
+
       {/* 2. Distribución en 2 Columnas (Panel 6 del Mock) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className={cx("grid grid-cols-1 lg:grid-cols-12 gap-6", tab !== "agenda" && "hidden")} role="tabpanel">
         {/* Columna Izquierda: Agenda propuesta por IA (7 cols) */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 shadow-xs flex flex-col justify-between">
           <div className="space-y-5">

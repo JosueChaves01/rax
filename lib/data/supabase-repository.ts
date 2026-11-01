@@ -1,6 +1,7 @@
 import type {
   AuditEvent,
   AgentMessage,
+  AgentSession,
   AgentThread,
   Comment,
   Conversation,
@@ -656,6 +657,17 @@ const agentThreadSpec: Spec<AgentThread> = {
     title: ["title", same], isPinned: ["is_pinned", same],
     status: ["status", same], lastErrorCode: ["last_error_code", nul], lastErrorMessage: ["last_error_message", nul],
     memory: ["memory", nul],
+    // Solo se escribe cuando el hilo tiene sesión: sin la migración de sesiones la columna no existe.
+    sessionId: ["session_id", nul],
+    createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
+  },
+};
+
+const agentSessionSpec: Spec<AgentSession> = {
+  table: "agent_sessions",
+  fields: {
+    id: ["id", same], projectId: ["project_id", same], creatorId: ["creator_id", same],
+    title: ["title", same], goal: ["goal", same], notes: ["notes", nul], status: ["status", same],
     createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
   },
 };
@@ -704,6 +716,7 @@ class HistoryTable extends PgTable<DiagnosisItemHistory> {
 
 export function createPgRepository(db: Db): Repository {
   return {
+    agentSessions: new PgTable(db, agentSessionSpec),
     agentThreads: new PgTable(db, agentThreadSpec),
     agentMessages: new PgTable(db, agentMessageSpec),
     profiles: new PgTable(db, profile),

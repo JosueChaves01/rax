@@ -178,8 +178,37 @@ export interface AgentThread {
   lastErrorMessage?: string;
   /** Memoria compacta del hilo (resumen de mensajes viejos, decisiones, preguntas abiertas). */
   memory?: AgentThreadMemory;
+  /** Sesión del proyecto a la que pertenece el hilo (Proyecto → Sesión → Hilo). */
+  sessionId?: Id;
   createdAt: ISODate;
   updatedAt: ISODate;
+}
+
+/**
+ * Sesión del asistente: agrupa los hilos de un mismo frente de trabajo dentro de un proyecto
+ * (como las sesiones de un proyecto en Claude). Sus notas las mantiene el agente y las comparten
+ * todos los hilos de la sesión.
+ */
+export type AgentSessionStatus = "active" | "archived";
+export interface AgentSession {
+  id: Id;
+  projectId: Id;
+  creatorId: Id;
+  title: string;
+  /** Para qué es esta sesión, en palabras de la persona o del agente. */
+  goal: string;
+  notes?: AgentSessionNotes;
+  status: AgentSessionStatus;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export interface AgentSessionNotes {
+  summary: string;
+  decisions: string[];
+  openQuestions: string[];
+  nextSteps: string[];
+  updatedAt?: ISODate;
 }
 
 /** Estado persistente de un hilo: lo que ya salió de la ventana de mensajes recientes. */

@@ -52,7 +52,7 @@ export interface ProjectStateSnapshot {
   relation: string | null;
   mentors: string[];
   owner: string | null;
-  sessions: { upcoming: string[]; lastCompleted: string | null };
+  sessions: { upcoming: string[]; lastCompleted: string | null; recentNotes: string[] };
   evaluations: string[];
   agreement: string | null;
   goals: string[];
@@ -63,7 +63,17 @@ export interface ProjectStateSnapshot {
   permissions: string[];
 }
 
-const LIMITS = { highlights: 12, goals: 8, hypotheses: 6, experiments: 6, openTasks: 10, blockedTasks: 6, upcoming: 3, problems: 8, pendingReview: 8 } as const;
+const LIMITS = { highlights: 12, goals: 8, hypotheses: 6, experiments: 6, openTasks: 10, blockedTasks: 6, upcoming: 3, sessionNotes: 8, problems: 8, pendingReview: 8 } as const;
+
+const NOTE_KIND_LABEL: Record<string, string> = {
+  observation: "Observación",
+  question: "Pregunta",
+  suggestion: "Sugerencia",
+  agreement: "Acuerdo",
+  commitment: "Compromiso",
+  blocker: "Bloqueo",
+  decision: "Decisión",
+};
 
 const clip = (s: string | undefined | null, n: number) => {
   const t = (s ?? "").replace(/\s+/g, " ").trim();
@@ -139,7 +149,15 @@ export function buildProjectState(w: Workspace, viewerRole: Role, today: string)
     evaluations: w.cycleEvaluations.map((e) => `Ciclo ${e.cycleNumber}: decisión ${e.decision}`),
     mentors: w.mentors.map(name),
     owner: w.people[w.project.ownerId]?.name ?? null,
-    sessions: { upcoming, lastCompleted: lastCompleted ? sessionLine(lastCompleted) : null },
+    sessions: {
+      upcoming,
+      lastCompleted: lastCompleted ? sessionLine(lastCompleted) : null,
+      // Notas visibles para quien conversa (las privadas de otra persona ya vienen filtradas).
+      recentNotes: [...(w.notes ?? [])]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, LIMITS.sessionNotes)
+        .map((n) => `[sesión ${n.sessionId}] ${NOTE_KIND_LABEL[n.kind] ?? n.kind}: ${clip(n.body, 200)} (${day(n.createdAt)})`),
+    },
     agreement: agreement
       ? `[${agreement.id}] ${AGREEMENT_STATUS_LABEL[agreement.status]} · frecuencia ${AGREEMENT_FREQUENCY_LABEL[agreement.frequency].toLowerCase()}, ${agreement.sessionDurationMinutes} min · alcance: ${clip(agreement.scope, 200)}`
       : null,
@@ -191,6 +209,8 @@ ${list(s.diagnosis.pendingReview, "ninguno")}
 Sesiones próximas:
 ${list(s.sessions.upcoming, "ninguna")}
 Última sesión realizada: ${s.sessions.lastCompleted ?? "ninguna"}
+Notas recientes de las sesiones de mentoría:
+${list(s.sessions.recentNotes ?? [], "ninguna")}
 Relación de mentoría: ${s.relation ?? "todavía no se abrió (se abre sola al guardar el primer acuerdo u objetivo)"}
 Acuerdo de mentoría: ${s.agreement ?? "sin acuerdo"}
 Objetivos del ciclo:

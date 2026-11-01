@@ -3,10 +3,11 @@ import { BACKEND, closeWorlds, world, INTERVIEW } from "./helpers";
 import { createProject, getWorkspace } from "@/lib/services/projects";
 import { sendMessage } from "@/lib/services/conversation";
 import { addComment, addItem, changeItem, confirmSummary } from "@/lib/services/diagnosis";
-import { addNote, completeFirstReview, completeSecondReview, requestReview, startSession } from "@/lib/services/mentoring";
+import { addNote, completeFirstReview, completeSecondReview, getMentorSessionWorkspace, requestReview, startSession } from "@/lib/services/mentoring";
 import { assignMentor, revokeMentor } from "@/lib/services/admin";
 import {
   addEvidence,
+  createTask,
   approveHypothesis,
   createExperiment,
   markExperimentReady,
@@ -406,5 +407,35 @@ describe("Escenario H · actualización concurrente", () => {
     // Con la versión actual, la edición entra.
     await changeItem(d, problem.id, { kind: "edit", content: "versión nueva" }, current!.version);
     expect((await repo.diagnosisItems.get(problem.id))?.priority?.rank).toBe(1);
+  });
+});
+
+describe("Pestañas de una sesión de mentoría", () => {
+  it("muestra notas, documentos y tareas con los permisos de cada quien", async () => {
+    const { as, id } = await world();
+    const d = as("ent1");
+    const m = as("men1");
+    const p = await projectWithInterview(d);
+    await confirmSummary(d, p.id);
+    await assignMentor(as("adm"), p.id, id("men1"));
+    const s = await requestReview(d, p.id, "first_review");
+
+    await addNote(m, s.id, "agreement", "Hablar con 5 clientes antes de la próxima sesión");
+    await addNote(m, s.id, "observation", "Nota solo para la mentora", undefined, true);
+    await createTask(d, p.id, { title: "Entrevistar a 5 clientes" });
+
+    const forMentor = await getMentorSessionWorkspace(m, s.id);
+    expect(forMentor.notes.map((n) => n.body)).toHaveLength(2);
+    expect(forMentor.permissions.canNote).toBe(true);
+    expect(forMentor.tasks.map((t) => t.title)).toContain("Entrevistar a 5 clientes");
+
+    const forEntrepreneur = await getMentorSessionWorkspace(d, s.id);
+    expect(forEntrepreneur.notes.map((n) => n.body)).toEqual(["Hablar con 5 clientes antes de la próxima sesión"]);
+    expect(forEntrepreneur.permissions.canNote).toBe(false);
+    expect(forEntrepreneur.permissions.canManageTasks).toBe(true);
+    expect(forEntrepreneur.permissions.canAddDocuments).toBe(true);
+    expect(forEntrepreneur.notes[0].authorName).toBe("Mentora Asignada");
+
+    await expect(getMentorSessionWorkspace(as("ent2"), s.id)).rejects.toThrow();
   });
 });

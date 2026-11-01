@@ -38,6 +38,7 @@ import { createProject, setConversationSharing, setProjectStatus } from "@/lib/s
 import { addComment, addItem, changeItem, confirmSummary, editSummary } from "@/lib/services/diagnosis";
 import {
   addNote,
+  getMentorSessionWorkspace,
   addNotesBatch,
   adoptPostSessionCommitments,
   completeFirstReview,
@@ -110,6 +111,12 @@ import {
   listProjectThreads,
   renameAgentThread,
 } from "@/lib/services/agent-chat";
+import {
+  archiveAgentThread,
+  createAgentSession,
+  listProjectSessions,
+  updateAgentSession,
+} from "@/lib/services/agent-sessions";
 import {
   addProjectDocument,
   deleteProjectDocument,
@@ -356,6 +363,9 @@ export const completeSessionAction = async (projectId: string, sessionId: string
   run(projectId, async (d) => {
     return completeSession(d, V.parse(V.Ids, sessionId), summary);
   });
+
+export const getMentorSessionWorkspaceAction = async (projectId: string, sessionId: string) =>
+  run(projectId, async (d) => getMentorSessionWorkspace(d, V.parse(V.Ids, sessionId)));
 
 export const addNoteAction = async (
   projectId: string,
@@ -1282,9 +1292,47 @@ export async function listProjectThreadsAction(projectId: string) {
   });
 }
 
-export async function createProjectThreadAction(projectId: string, title?: string) {
+export async function createProjectThreadAction(projectId: string, title?: string, sessionId?: string) {
   return run(projectId, async (d) => {
-    return createAgentThread(d, projectId, title);
+    return createAgentThread(d, projectId, title, sessionId ? V.parse(V.Ids, sessionId) : undefined);
+  });
+}
+
+export async function archiveProjectThreadAction(projectId: string, threadId: string) {
+  return run(projectId, async (d) => {
+    return archiveAgentThread(d, V.parse(V.Ids, threadId));
+  });
+}
+
+/* ── Sesiones del asistente: Proyecto → Sesión → Hilo ── */
+
+export async function listProjectSessionsAction(projectId: string) {
+  return run(projectId, async (d) => listProjectSessions(d, projectId));
+}
+
+/** Crea una sesión con su primer hilo, listo para conversar. */
+export async function createProjectSessionAction(projectId: string, input: { title?: string; goal?: string; threadTitle?: string }) {
+  return run(projectId, async (d) => {
+    const session = await createAgentSession(d, projectId, {
+      title: typeof input.title === "string" ? input.title.slice(0, 200) : undefined,
+      goal: typeof input.goal === "string" ? input.goal.slice(0, 2000) : undefined,
+    });
+    const thread = await createAgentThread(d, projectId, typeof input.threadTitle === "string" ? input.threadTitle : "Nuevo chat", session.id);
+    return { session, thread };
+  });
+}
+
+export async function updateProjectSessionAction(
+  projectId: string,
+  sessionId: string,
+  patch: { title?: string; goal?: string; status?: "active" | "archived" },
+) {
+  return run(projectId, async (d) => {
+    return updateAgentSession(d, V.parse(V.Ids, sessionId), {
+      title: typeof patch.title === "string" ? patch.title : undefined,
+      goal: typeof patch.goal === "string" ? patch.goal : undefined,
+      status: patch.status === "active" || patch.status === "archived" ? patch.status : undefined,
+    });
   });
 }
 
@@ -1385,6 +1433,8 @@ export async function sendClaudeAgentMessageAction(input: {
       cacheStatus: result.cacheStatus ?? "simulated",
       cachedTokens: result.cachedTokens ?? 0,
       unavailable: result.unavailable ?? null,
+      sessionId: thread.sessionId ?? null,
+      sessionUpdated: result.sessionUpdated === true,
     };
   });
 }

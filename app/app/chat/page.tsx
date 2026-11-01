@@ -5,7 +5,7 @@ import ChatClient from "./chat-client";
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ project?: string; thread?: string }>;
+  searchParams?: Promise<{ project?: string; session?: string; thread?: string }>;
 }) {
   const d = await getDeps();
   if (!d) redirect("/entrar");
@@ -14,8 +14,11 @@ export default async function ChatPage({
 
   return (
     <ChatClient
-      projects={projects.map(({ id, name }) => ({ id, name }))}
+      projects={[...projects]
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .map(({ id, name, description, updatedAt }) => ({ id, name, description, updatedAt }))}
       initialProjectId={sp?.project}
+      initialSessionId={sp?.session}
       initialThreadId={sp?.thread}
     />
   );

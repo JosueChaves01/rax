@@ -20,10 +20,10 @@ export interface PlatformPage {
 /** Páginas generales (fuera de un proyecto). */
 export const PLATFORM_PAGES: PlatformPage[] = [
   { path: "/app", label: "Mis proyectos / Bandeja", what: "Emprendedor: sus proyectos, cada uno con las 4 etapas, a quién le toca y el siguiente paso; desde aquí crea un proyecto nuevo. Mentor: la bandeja de revisiones e hipótesis por aprobar, más vieja primero, y sus proyectos.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/chat", label: "Asistente IA", what: "Chat con el agente, con varios hilos por proyecto, instrucciones del proyecto y base de conocimiento (documentos). Desde aquí se puede llevar todo el ciclo.", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/chat", label: "Asistente IA", what: "Chat con el agente organizado como Proyecto → Sesión → Hilo: cada proyecto tiene sesiones de trabajo (con objetivo y notas que mantiene el agente) y cada sesión tiene varios hilos de conversación. Incluye instrucciones del proyecto y base de conocimiento (documentos). Desde aquí se puede llevar todo el ciclo.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/mentor", label: "Emprendedores", what: "Cartera del mentor: proyectos asignados, cupo y estado de cada uno.", roles: ["mentor"] },
   { path: "/app/tareas", label: "Tareas", what: "Tareas de un proyecto (se elige arriba), con estado, fecha y bloqueos.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/sesiones", label: "Sesiones", what: "Sesiones de mentoría programadas y realizadas, con notas, preguntas y compromisos; incluye una vista de calendario (/app/calendario).", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/sesiones", label: "Sesiones", what: "Sesiones de mentoría programadas y realizadas, con pestañas de Agenda, Notas (las registra el mentor), Documentos (conocimiento y evidencia del proyecto) y Tareas; incluye una vista de calendario (/app/calendario).", roles: ["entrepreneur", "mentor"] },
   { path: "/app/documentos", label: "Documentos", what: "Apoyo: documentos de trabajo de los proyectos, editables y mejorables con IA.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/aprendizaje", label: "Aprendizaje", what: "Apoyo: tutor de ejercicios; el agente propone ejercicios según el objetivo del proyecto y los evalúa con puntaje y retroalimentación.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/mentor/recursos", label: "Recursos", what: "Apoyo: biblioteca de recursos y plantillas metodológicas del mentor.", roles: ["mentor"] },

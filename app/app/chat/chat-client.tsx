@@ -1,65 +1,105 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "@/shared/ui/primitives";
-import { PROPOSAL_TYPE_LABEL } from "@/lib/ai/step-actions";
-import type { AgentArtifact, AgentThread, KnowledgeCitation } from "@/types/domain";
+import type { AgentArtifact, AgentMessage, AgentThread } from "@/types/domain";
+import type { ProjectSessionsView } from "@/lib/services/agent-sessions";
 import {
   applyAiProposalAction,
+  archiveProjectThreadAction,
+  createProjectSessionAction,
   createProjectThreadAction,
   getProjectKnowledgeStatsAction,
-  listProjectThreadsAction,
+  listProjectSessionsAction,
   loadThreadMessagesAction,
   promoteDecisionToKnowledgeAction,
   renameProjectThreadAction,
   sendClaudeAgentMessageAction,
+  updateProjectSessionAction,
 } from "@/app/actions";
 import { ChatInput } from "./chat-input";
-import { FormattedText } from "./formatted-text";
-import { ProjectSidebar } from "./project-sidebar";
 import { ProjectInstructionsModal } from "./project-instructions-modal";
 import { ProjectKnowledgePanel } from "./project-knowledge-panel";
 import { ArtifactViewer } from "./artifact-viewer";
+import { ProjectsGrid } from "./projects-grid";
+import { ProjectOverview } from "./project-overview";
+import { SessionSidebar } from "./session-sidebar";
+import { ThreadMessages, type MessageView } from "./thread-messages";
 
-interface MessageView {
-  id: string;
-  sender: "user" | "ai";
-  senderName: string;
-  text: string;
-  time: string;
-  chips?: string[];
-  artifacts?: AgentArtifact[];
-  citations?: KnowledgeCitation[];
-  proposals?: Array<Record<string, unknown>>;
-  cachedPromptUsed?: boolean;
-  cacheStatus?: string;
-  cachedTokens?: number;
+/** Dónde está la persona: lista de proyectos → proyecto → sesión → hilo. Se refleja en la URL. */
+interface Route {
+  projectId?: string;
+  sessionId?: string;
+  threadId?: string;
+}
+
+/** Sesión virtual cuando la base todavía no tiene la tabla de sesiones (ver lib/services/agent-sessions). */
+const VIRTUAL_SESSION_ID = "general";
+
+function urlOf(r: Route): string {
+  const p = new URLSearchParams();
+  if (r.projectId) p.set("project", r.projectId);
+  if (r.sessionId) p.set("session", r.sessionId);
+  if (r.threadId) p.set("thread", r.threadId);
+  const qs = p.toString();
+  return qs ? `/app/chat?${qs}` : "/app/chat";
+}
+
+function readUrl(): Route {
+  const p = new URLSearchParams(window.location.search);
+  return { projectId: p.get("project") ?? undefined, sessionId: p.get("session") ?? undefined, threadId: p.get("thread") ?? undefined };
+}
+
+const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+function toView(m: AgentMessage): MessageView {
+  return {
+    id: m.id,
+    sender: m.author === "user" ? "user" : "ai",
+    senderName: m.author === "user" ? "Tú" : "RAX Copilot",
+    text: m.content,
+    time: time(m.createdAt),
+    artifacts: m.artifacts,
+    citations: m.citations,
+    proposals: m.proposals,
+    cacheStatus: m.status === "failed" ? "unavailable" : undefined,
+  };
+}
+
+/** Título corto de una sesión a partir del primer mensaje. */
+function titleFrom(text: string): string {
+  const line = text.replace(/\s+/g, " ").trim();
+  return line.length > 60 ? `${line.slice(0, 57).trimEnd()}…` : line || "Nueva sesión";
 }
 
 export default function ChatClient({
   projects,
   initialProjectId,
+  initialSessionId,
   initialThreadId,
 }: {
-  projects: Array<{ id: string; name: string }>;
+  projects: Array<{ id: string; name: string; description?: string; updatedAt?: string }>;
   initialProjectId?: string;
+  initialSessionId?: string;
   initialThreadId?: string;
 }) {
-  const [projectId, setProjectId] = useState(() => {
-    if (initialProjectId && projects.some((p) => p.id === initialProjectId)) {
-      return initialProjectId;
-    }
-    return projects[0]?.id ?? "";
+  const [route, setRoute] = useState<Route>(() => {
+    const valid = initialProjectId && projects.some((p) => p.id === initialProjectId);
+    if (valid) return { projectId: initialProjectId, sessionId: initialSessionId, threadId: initialThreadId };
+    // Con un solo proyecto no hace falta pasar por la lista.
+    return projects.length === 1 ? { projectId: projects[0].id } : {};
   });
-  const [threads, setThreads] = useState<AgentThread[]>([]);
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [sessionsView, setSessionsView] = useState<ProjectSessionsView | null>(null);
+  const [loadingSessions, setLoadingSessions] = useState(false);
   const [messages, setMessages] = useState<MessageView[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [appliedProposals, setAppliedProposals] = useState<Set<string>>(new Set());
   const [applyingProposalTitle, setApplyingProposalTitle] = useState<string | null>(null);
 
-  // Claude Projects context & artifacts
   const [activeArtifact, setActiveArtifact] = useState<AgentArtifact | null>(null);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [isKnowledgeOpen, setIsKnowledgeOpen] = useState(false);
@@ -69,16 +109,64 @@ export default function ChatClient({
     evaluation: { mode: "in_context" | "rag"; percentOfLimit: number };
   } | null>(null);
 
-  // Modal para promover decisión a Project Knowledge
   const [saveModalMessage, setSaveModalMessage] = useState<MessageView | null>(null);
   const [saveDecisionTitle, setSaveDecisionTitle] = useState("");
   const [isSavingDecision, setIsSavingDecision] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  /** Hilo recién creado desde aquí: sus mensajes ya están en pantalla y no hay que recargarlos. */
+  const freshThreadRef = useRef<string | null>(null);
+  const routeRef = useRef(route);
+  routeRef.current = route;
+
+  const projectId = route.projectId ?? "";
+  const activeProject = projects.find((p) => p.id === projectId);
+  const sessions = useMemo(() => sessionsView?.sessions ?? [], [sessionsView]);
+  const activeSession = sessions.find((s) => s.id === route.sessionId);
+  const activeThread = activeSession?.threads.find((t) => t.id === route.threadId);
+
+  /* ── Navegación ── */
+
+  const go = useCallback((next: Route, opts: { replace?: boolean } = {}) => {
+    if (next.threadId !== freshThreadRef.current) freshThreadRef.current = null;
+    setRoute(next);
+    setActiveArtifact(null);
+    setIsSidebarOpen(false);
+    if (typeof window === "undefined") return;
+    const url = urlOf(next);
+    if (opts.replace) window.history.replaceState(null, "", url);
+    else window.history.pushState(null, "", url);
+  }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+    // La URL inicial puede haber cambiado (proyecto único, proyecto inválido): dejarla igual al estado.
+    window.history.replaceState(null, "", urlOf(routeRef.current));
+    const onPop = () => {
+      const r = readUrl();
+      setRoute(r.projectId && projects.some((p) => p.id === r.projectId) ? r : {});
+      setActiveArtifact(null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [projects]);
+
+  /* ── Datos ── */
+
+  const loadSessions = useCallback(async (pId: string) => {
+    setLoadingSessions(true);
+    try {
+      const res = await listProjectSessionsAction(pId);
+      if (routeRef.current.projectId !== pId) return null;
+      if (res.ok && res.data) {
+        setSessionsView(res.data);
+        return res.data;
+      }
+      setNotice(!res.ok ? res.error : "No se pudieron cargar las sesiones.");
+      return null;
+    } finally {
+      setLoadingSessions(false);
+    }
+  }, []);
 
   const loadKnowledgeStats = useCallback(async (pId: string) => {
     const res = await getProjectKnowledgeStatsAction(pId);
@@ -88,195 +176,102 @@ export default function ChatClient({
     }
   }, []);
 
-  const loadThreadsForProject = useCallback(
-    async (pId: string, preferredThreadId?: string) => {
-      if (!pId) {
-        setThreads([]);
-        setActiveThreadId(null);
-        setMessages([]);
+  // Al cambiar de proyecto: sesiones, instrucciones y conocimiento.
+  useEffect(() => {
+    setSessionsView(null);
+    setStats(null);
+    setCustomInstructions("");
+    if (!projectId) return;
+    loadSessions(projectId);
+    loadKnowledgeStats(projectId);
+  }, [projectId, loadSessions, loadKnowledgeStats]);
+
+  // Completar la ruta cuando ya hay sesiones: el hilo sin sesión busca su sesión; la sesión sin hilo abre el más reciente.
+  useEffect(() => {
+    if (!sessionsView || !route.projectId) return;
+    if (route.threadId && route.threadId === freshThreadRef.current) return; // recién creado; la lista se está recargando
+    if (route.threadId && !route.sessionId) {
+      const owner = sessionsView.sessions.find((s) => s.threads.some((t) => t.id === route.threadId));
+      go({ ...route, sessionId: owner?.id ?? sessionsView.sessions[0]?.id, threadId: owner ? route.threadId : undefined }, { replace: true });
+      return;
+    }
+    if (route.sessionId) {
+      const s = sessionsView.sessions.find((x) => x.id === route.sessionId);
+      if (!s) {
+        go({ projectId: route.projectId }, { replace: true });
         return;
       }
-
-      const res = await listProjectThreadsAction(pId);
-      let currentThreads = res.ok && res.data ? res.data : [];
-
-      if (currentThreads.length === 0) {
-        const created = await createProjectThreadAction(pId, "Chat principal");
-        if (created.ok && created.data) {
-          currentThreads = [created.data];
-        }
+      if (!route.threadId || !s.threads.some((t) => t.id === route.threadId)) {
+        if (s.threads[0]) go({ ...route, threadId: s.threads[0].id }, { replace: true });
       }
+    }
+  }, [sessionsView, route, go]);
 
-      setThreads(currentThreads);
-      const targetId = preferredThreadId || initialThreadId;
-      const selected =
-        targetId && currentThreads.some((t) => t.id === targetId)
-          ? targetId
-          : (currentThreads[0]?.id ?? null);
-      setActiveThreadId(selected);
-
-      if (selected) {
-        const msgRes = await loadThreadMessagesAction(pId, selected);
-        if (msgRes.ok && msgRes.data) {
-          setMessages(
-            msgRes.data.messages.map((m) => ({
-              id: m.id,
-              sender: m.author === "user" ? "user" : "ai",
-              senderName: m.author === "user" ? "Tú" : "RAX Copilot",
-              text: m.content,
-              time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              artifacts: m.artifacts,
-              citations: m.citations,
-              proposals: m.proposals,
-              cacheStatus: m.status === "failed" ? "unavailable" : undefined,
-            })),
-          );
-        }
-      } else {
-        setMessages([]);
-      }
-    },
-    [initialThreadId],
-  );
+  // Mensajes del hilo abierto.
+  useEffect(() => {
+    const threadId = route.threadId;
+    if (!projectId || !threadId) {
+      setMessages([]);
+      setLoadingMessages(false);
+      return;
+    }
+    if (freshThreadRef.current === threadId) {
+      setLoadingMessages(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingMessages(true);
+    setMessages([]);
+    loadThreadMessagesAction(projectId, threadId)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok && res.data) setMessages(res.data.messages.map(toView));
+        else setNotice(!res.ok ? res.error : "No se pudo abrir el hilo.");
+      })
+      .finally(() => !cancelled && setLoadingMessages(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, route.threadId]);
 
   useEffect(() => {
-    if (projectId) {
-      loadThreadsForProject(projectId);
-      loadKnowledgeStats(projectId);
-    }
-  }, [projectId, loadThreadsForProject, loadKnowledgeStats]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isLoading]);
 
-  const handleSelectProject = (newProjectId: string) => {
-    setProjectId(newProjectId);
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `/app/chat?project=${newProjectId}`);
-    }
-  };
+  /* ── Acciones ── */
 
-  const handleSelectThread = async (threadId: string) => {
-    setActiveThreadId(threadId);
-    setActiveArtifact(null);
-    if (!projectId) return;
-
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `/app/chat?project=${projectId}&thread=${threadId}`);
-    }
-
-    const res = await loadThreadMessagesAction(projectId, threadId);
-    if (res.ok && res.data) {
-      setMessages(
-        res.data.messages.map((m) => ({
-          id: m.id,
-          sender: m.author === "user" ? "user" : "ai",
-          senderName: m.author === "user" ? "Tú" : "RAX Copilot",
-          text: m.content,
-          time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          artifacts: m.artifacts,
-          citations: m.citations,
-          proposals: m.proposals,
-          cacheStatus: m.status === "failed" ? "unavailable" : undefined,
-        })),
-      );
-    }
-  };
-
-  const handleNewThread = async () => {
-    if (!projectId) return;
-    const res = await createProjectThreadAction(projectId, "Nuevo chat");
-    if (res.ok && res.data) {
-      setThreads((prev) => [res.data!, ...prev]);
-      setActiveThreadId(res.data.id);
-      setMessages([]);
-      setActiveArtifact(null);
-    }
-  };
-
-  const handleRenameThread = async (threadId: string, newTitle: string) => {
-    if (!projectId) return;
-    const res = await renameProjectThreadAction(projectId, threadId, newTitle);
-    if (res.ok && res.data) {
-      setThreads((prev) => prev.map((t) => (t.id === threadId ? res.data! : t)));
-    }
-  };
-
-  const handleApplyProposal = async (proposal: Record<string, unknown>) => {
-    if (!projectId || typeof proposal.title !== "string") return;
-    setApplyingProposalTitle(proposal.title);
-    try {
-      const res = await applyAiProposalAction(projectId, proposal);
-      if (res.ok) {
-        setAppliedProposals((prev) => new Set(prev).add(String(proposal.title)));
-      } else {
-        alert(res.error);
-      }
-    } finally {
-      setApplyingProposalTitle(null);
-    }
-  };
-
-  const sendMessageToAgent = async (textToSend: string) => {
-    if (!textToSend.trim() || isLoading) return;
-    if (!projectId) return;
-
+  const sendMessageToAgent = async (textToSend: string, explicitThreadId?: string) => {
+    const threadId = explicitThreadId ?? route.threadId;
+    if (!textToSend.trim() || isLoading || !projectId || !threadId) return;
     setIsLoading(true);
-
+    setNotice(null);
     try {
       const res = await sendClaudeAgentMessageAction({
         projectId,
-        threadId: activeThreadId ?? undefined,
+        threadId,
         message: textToSend.trim(),
-        sessionContext: {
-          location: "global_assistant",
-          pageTitle: "Asistente de IA General de RAX",
-        },
+        sessionContext: { location: "global_assistant", pageTitle: "Asistente de IA de RAX (/app/chat)" },
       });
-
       if (res.ok && res.data) {
-        const { userMessage, assistantMessage, artifacts, citations, proposals, threadId } = res.data;
-
-        if (threadId !== activeThreadId) {
-          setActiveThreadId(threadId);
-          await loadThreadsForProject(projectId);
-        }
-
+        const { userMessage, assistantMessage, artifacts, citations, proposals } = res.data;
         setMessages((prev) => [
           ...prev,
+          toView(userMessage),
           {
-            id: userMessage.id,
-            sender: "user",
-            senderName: "Tú",
-            text: userMessage.content,
-            time: new Date(userMessage.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          },
-          {
-            id: assistantMessage.id,
-            sender: "ai",
-            senderName: "RAX Copilot",
-            text: assistantMessage.content,
-            time: new Date(assistantMessage.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            ...toView(assistantMessage),
             artifacts,
             citations,
             proposals,
-            cachedPromptUsed: res.data?.cachedPromptUsed,
-            cacheStatus: res.data?.cacheStatus,
-            cachedTokens: res.data?.cachedTokens,
+            cachedPromptUsed: res.data!.cachedPromptUsed,
+            cacheStatus: res.data!.unavailable ? "unavailable" : res.data!.cacheStatus,
+            cachedTokens: res.data!.cachedTokens,
           },
         ]);
-
-        // Si la respuesta generó artefactos, abrir automáticamente el primero en el visor lateral
-        if (artifacts && artifacts.length > 0) {
-          setActiveArtifact(artifacts[0]);
-        }
+        if (artifacts && artifacts.length > 0) setActiveArtifact(artifacts[0]);
       } else {
         setMessages((prev) => [
           ...prev,
-          {
-            id: `err-${Date.now()}`,
-            sender: "ai",
-            senderName: "RAX Copilot",
-            text: !res.ok ? res.error : "No se pudo procesar la respuesta.",
-            time: "Aviso",
-          },
+          { id: `err-${Date.now()}`, sender: "ai", senderName: "RAX Copilot", text: !res.ok ? res.error : "No se pudo procesar la respuesta.", time: "Aviso" },
         ]);
       }
     } catch (err: unknown) {
@@ -292,6 +287,111 @@ export default function ChatClient({
       ]);
     } finally {
       setIsLoading(false);
+      // Títulos automáticos, notas que escribió el agente y orden por actividad.
+      await loadSessions(projectId);
+      freshThreadRef.current = null;
+    }
+  };
+
+  /** Abre un hilo nuevo (vacío) y deja la pantalla lista para escribir. */
+  const openFreshThread = (sessionId: string, thread: AgentThread) => {
+    freshThreadRef.current = thread.id;
+    setMessages([]);
+    go({ projectId, sessionId, threadId: thread.id });
+  };
+
+  const handleStartSession = async (firstMessage: string) => {
+    if (!projectId || isStarting) return;
+    setIsStarting(true);
+    setNotice(null);
+    try {
+      let sessionId: string;
+      let thread: AgentThread;
+      if (sessionsView && !sessionsView.supported) {
+        const res = await createProjectThreadAction(projectId, "Nuevo chat");
+        if (!res.ok || !res.data) throw new Error(!res.ok ? res.error : "No se pudo crear el hilo.");
+        sessionId = VIRTUAL_SESSION_ID;
+        thread = res.data;
+      } else {
+        const res = await createProjectSessionAction(projectId, { title: titleFrom(firstMessage) });
+        if (!res.ok || !res.data) throw new Error(!res.ok ? res.error : "No se pudo crear la sesión.");
+        sessionId = res.data.session.id;
+        thread = res.data.thread;
+      }
+      openFreshThread(sessionId, thread);
+      await sendMessageToAgent(firstMessage, thread.id);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleNewEmptySession = async () => {
+    if (!projectId) return;
+    setIsStarting(true);
+    try {
+      const res = await createProjectSessionAction(projectId, { title: "Nueva sesión" });
+      if (!res.ok || !res.data) {
+        setNotice(!res.ok ? res.error : "No se pudo crear la sesión.");
+        return;
+      }
+      openFreshThread(res.data.session.id, res.data.thread);
+      await loadSessions(projectId);
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleNewThread = async () => {
+    if (!projectId || !activeSession) return;
+    const res = await createProjectThreadAction(projectId, "Nuevo chat", activeSession.virtual ? undefined : activeSession.id);
+    if (!res.ok || !res.data) {
+      setNotice(!res.ok ? res.error : "No se pudo crear el hilo.");
+      return;
+    }
+    openFreshThread(activeSession.id, res.data);
+    await loadSessions(projectId);
+  };
+
+  const handleRenameThread = async (threadId: string, title: string) => {
+    const res = await renameProjectThreadAction(projectId, threadId, title);
+    if (!res.ok) setNotice(res.error);
+    await loadSessions(projectId);
+  };
+
+  const handleArchiveThread = async (thread: AgentThread) => {
+    if (!window.confirm(`¿Archivar el hilo «${thread.title}»? Dejará de aparecer en la sesión.`)) return;
+    const res = await archiveProjectThreadAction(projectId, thread.id);
+    if (!res.ok) {
+      setNotice(res.error);
+      return;
+    }
+    const view = await loadSessions(projectId);
+    if (thread.id === route.threadId) {
+      const s = view?.sessions.find((x) => x.id === route.sessionId);
+      if (s?.threads[0]) go({ projectId, sessionId: s.id, threadId: s.threads[0].id }, { replace: true });
+      else go({ projectId }, { replace: true });
+    }
+  };
+
+  const handleUpdateSession = async (patch: { title?: string; goal?: string; status?: "active" | "archived" }) => {
+    if (!activeSession || activeSession.virtual) return;
+    const res = await updateProjectSessionAction(projectId, activeSession.id, patch);
+    if (!res.ok) setNotice(res.error);
+    await loadSessions(projectId);
+    if (patch.status === "archived") go({ projectId });
+  };
+
+  const handleApplyProposal = async (proposal: Record<string, unknown>) => {
+    if (!projectId || typeof proposal.title !== "string") return;
+    setApplyingProposalTitle(proposal.title);
+    try {
+      const res = await applyAiProposalAction(projectId, proposal);
+      if (res.ok) setAppliedProposals((prev) => new Set(prev).add(String(proposal.title)));
+      else setNotice(res.error);
+    } finally {
+      setApplyingProposalTitle(null);
     }
   };
 
@@ -314,403 +414,269 @@ export default function ChatClient({
     }
   };
 
-  const activeProject = projects.find((p) => p.id === projectId);
-  const activeThread = threads.find((t) => t.id === activeThreadId);
+  /* ── Vistas ── */
+
+  const inThread = !!(route.projectId && route.sessionId);
+  const knowledgeMode = knowledgeStats?.evaluation.mode ?? "in_context";
+
+  let content: React.ReactNode;
+  if (!activeProject) {
+    content = <ProjectsGrid projects={projects} onOpen={(id) => go({ projectId: id })} />;
+  } else if (!inThread) {
+    content = (
+      <ProjectOverview
+        project={activeProject}
+        sessions={sessions}
+        sessionsSupported={sessionsView?.supported ?? true}
+        loading={loadingSessions}
+        isStarting={isStarting}
+        instructions={customInstructions}
+        knowledgeTokens={knowledgeStats?.totalTokens ?? 0}
+        knowledgeMode={knowledgeMode}
+        canGoBack={projects.length > 1}
+        onBack={() => go({})}
+        onStartSession={handleStartSession}
+        onNewEmptySession={handleNewEmptySession}
+        onOpenSession={(sessionId) => go({ projectId, sessionId })}
+        onOpenThread={(sessionId, threadId) => go({ projectId, sessionId, threadId })}
+        onOpenInstructions={() => setIsInstructionsOpen(true)}
+        onOpenKnowledge={() => setIsKnowledgeOpen(true)}
+      />
+    );
+  } else {
+    content = (
+      <div className="flex h-full min-w-0">
+        {isSidebarOpen && <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/40" onClick={() => setIsSidebarOpen(false)} aria-hidden="true" />}
+        <div
+          className={cx(
+            "fixed inset-y-0 left-0 z-50 h-dvh bg-white shadow-2xl transition-transform duration-200 ease-out",
+            "lg:static lg:z-auto lg:h-full lg:shadow-none lg:translate-x-0 lg:transition-none",
+            isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+        >
+          {activeSession ? (
+            <SessionSidebar
+              key={activeSession.id}
+              projectName={activeProject.name}
+              session={activeSession}
+              otherSessions={sessions.filter((s) => s.id !== activeSession.id)}
+              activeThreadId={route.threadId ?? null}
+              sessionsSupported={sessionsView?.supported ?? true}
+              onBackToProject={() => go({ projectId })}
+              onSelectThread={(threadId) => go({ projectId, sessionId: activeSession.id, threadId })}
+              onNewThread={handleNewThread}
+              onRenameThread={handleRenameThread}
+              onArchiveThread={handleArchiveThread}
+              onOpenSession={(sessionId) => go({ projectId, sessionId })}
+              onUpdateSession={handleUpdateSession}
+              onOpenInstructions={() => {
+                setIsSidebarOpen(false);
+                setIsInstructionsOpen(true);
+              }}
+              onOpenKnowledge={() => {
+                setIsSidebarOpen(false);
+                setIsKnowledgeOpen(true);
+              }}
+              onClose={() => setIsSidebarOpen(false)}
+              knowledgeTokens={knowledgeStats?.totalTokens ?? 0}
+            />
+          ) : (
+            <div className="w-72 h-full p-4 space-y-2 border-r border-slate-200 bg-slate-50/70" aria-busy="true">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-10 rounded-xl bg-white animate-pulse" />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Conversación */}
+        <div className="@container flex-1 flex flex-col min-w-0 bg-white">
+          <div className="px-2.5 py-2 @lg:px-4 @lg:py-3 border-b border-slate-200/80 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen(true)}
+                className="lg:hidden w-9 h-9 shrink-0 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center"
+                aria-label="Abrir sesión e hilos"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <div className="min-w-0">
+                <nav aria-label="Ubicación" className="flex items-center gap-1 text-[0.6875rem] text-slate-400 min-w-0">
+                  <button type="button" onClick={() => go({ projectId })} className="truncate max-w-[9rem] hover:text-slate-700">
+                    {activeProject.name}
+                  </button>
+                  <span aria-hidden="true">›</span>
+                  <span className="truncate max-w-[10rem] @lg:max-w-xs">{activeSession?.title ?? "Sesión"}</span>
+                </nav>
+                <h1 className="text-sm font-bold text-slate-900 truncate">{activeThread?.title ?? "Nuevo chat"}</h1>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleNewThread}
+                disabled={!activeSession}
+                className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition disabled:opacity-50"
+                title="Nuevo hilo en esta sesión"
+              >
+                +<span className="hidden @lg:inline"> Nuevo hilo</span>
+              </button>
+              {activeArtifact && (
+                <button
+                  type="button"
+                  onClick={() => setActiveArtifact(null)}
+                  className="hidden lg:inline-flex px-2.5 py-1.5 text-xs font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg border border-orange-200 transition"
+                >
+                  Cerrar artefacto
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 @lg:p-6 space-y-5 bg-slate-50/30">
+            {loadingMessages ? (
+              <div className="space-y-3" aria-busy="true">
+                <div className="h-12 w-2/3 rounded-2xl bg-white border border-slate-200/70 animate-pulse" />
+                <div className="h-20 w-4/5 ml-auto rounded-2xl bg-slate-200/50 animate-pulse" />
+              </div>
+            ) : messages.length === 0 && !isLoading ? (
+              <div className="min-h-full flex flex-col items-center justify-center text-center p-3 @lg:p-6 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-600 text-xl font-bold">⚡</div>
+                <h2 className="text-sm font-bold text-slate-800">Nuevo hilo en «{activeSession?.title ?? activeProject.name}»</h2>
+                <p className="text-xs text-slate-500 max-w-md leading-relaxed">
+                  El agente conoce el proyecto, sus instrucciones y conocimiento, las notas de esta sesión y lo que se habló en sus otros hilos.
+                </p>
+                <div className="flex flex-wrap justify-center gap-2 pt-2">
+                  {(
+                    [
+                      ["🎯 Supuestos críticos", "¿Cuáles son los supuestos más críticos de este proyecto?"],
+                      ["🧭 ¿Qué sigue?", "¿Cuál es el siguiente paso concreto en esta sesión?"],
+                      ["📝 Resumen de la sesión", "Resume lo que llevamos en esta sesión y anota las decisiones y pendientes."],
+                    ] as const
+                  ).map(([label, prompt]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => sendMessageToAgent(prompt)}
+                      className="px-3 py-1.5 text-xs bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-700 shadow-2xs transition"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <ThreadMessages
+                messages={messages}
+                appliedProposals={appliedProposals}
+                applyingProposalTitle={applyingProposalTitle}
+                onApplyProposal={handleApplyProposal}
+                onOpenArtifact={setActiveArtifact}
+                onSaveToKnowledge={(m) => {
+                  setSaveModalMessage(m);
+                  setSaveDecisionTitle(`Decisión: ${m.text.slice(0, 30)}...`);
+                }}
+              />
+            )}
+
+            {isLoading && (
+              <div className="flex flex-col items-start space-y-1">
+                <span className="text-[10px] text-slate-400 font-mono px-1">RAX Copilot • pensando con el contexto de la sesión…</span>
+                <div className="bg-white text-slate-600 border border-slate-200/80 rounded-2xl p-3.5 text-xs flex items-center gap-2.5 shadow-2xs">
+                  <span className="w-2 h-2 rounded-full bg-orange-600 animate-ping" />
+                  <span>Generando respuesta…</span>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <ChatInput
+            onSend={(text) => sendMessageToAgent(text)}
+            isLoading={isLoading}
+            disabled={!route.threadId || loadingMessages}
+            placeholder="Escribe tu consulta o pide un artefacto…"
+          />
+        </div>
+
+        {activeArtifact && (
+          <ArtifactViewer
+            artifact={activeArtifact}
+            onClose={() => setActiveArtifact(null)}
+            onSaveToKnowledge={async (art) => {
+              await promoteDecisionToKnowledgeAction(projectId, { title: art.title, filename: `${art.identifier}.md`, content: art.content });
+              await loadKnowledgeStats(projectId);
+              setNotice("Artefacto guardado en el conocimiento del proyecto.");
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-[1600px] mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm flex h-[calc(100dvh-176px)] min-h-[420px] md:h-[calc(100vh-130px)] md:min-h-[640px] overflow-hidden">
-      {/* 1. Panel Lateral Izquierdo: Proyectos e Hilos.
-          En escritorio queda fijo a la izquierda; en móvil es un cajón que se abre con el botón ☰. */}
-      {isSidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-50 bg-slate-950/40"
-          onClick={() => setIsSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-      <div
-        className={cx(
-          "fixed inset-y-0 left-0 z-50 h-dvh bg-white shadow-2xl transition-transform duration-200 ease-out",
-          "lg:static lg:z-auto lg:h-full lg:shadow-none lg:translate-x-0 lg:transition-none",
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full",
-        )}
-      >
-        <ProjectSidebar
-          projects={projects}
-          activeProjectId={projectId}
-          onSelectProject={handleSelectProject}
-          threads={threads}
-          activeThreadId={activeThreadId}
-          onSelectThread={(id) => {
-            handleSelectThread(id);
-            setIsSidebarOpen(false);
-          }}
-          onNewThread={() => {
-            handleNewThread();
-            setIsSidebarOpen(false);
-          }}
-          onRenameThread={handleRenameThread}
-          onOpenInstructions={() => {
-            setIsSidebarOpen(false);
-            setIsInstructionsOpen(true);
-          }}
-          onOpenKnowledge={() => {
-            setIsSidebarOpen(false);
-            setIsKnowledgeOpen(true);
-          }}
-          onClose={() => setIsSidebarOpen(false)}
-          knowledgeTokens={knowledgeStats?.totalTokens ?? 0}
-          knowledgeMode={knowledgeStats?.evaluation.mode ?? "in_context"}
-        />
-      </div>
+    <div className="relative max-w-[1600px] mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm h-[calc(100dvh-176px)] min-h-[420px] md:h-[calc(100vh-130px)] md:min-h-[640px] overflow-hidden">
+      {content}
 
-      {/* 2. Área Central de Conversación */}
-      <div className="@container flex-1 flex flex-col min-w-0 bg-white">
-        {/* Header superior del chat */}
-        <div className="p-2.5 @lg:p-3.5 border-b border-slate-200/80 flex items-center justify-between gap-2 bg-white shrink-0">
-          <div className="flex items-center gap-2 @lg:gap-2.5 min-w-0">
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden w-9 h-9 shrink-0 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center"
-              aria-label="Abrir proyectos y chats"
-              title="Proyectos y chats"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <div className="hidden @lg:flex w-8 h-8 rounded-xl bg-orange-100 text-orange-600 items-center justify-center font-bold text-xs uppercase shrink-0">
-              ⚡
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xs @lg:text-sm font-bold text-slate-900 truncate flex items-center gap-2">
-                <span className="truncate">{activeThread?.title || "Conversación"}</span>
-                <span
-                  className={`hidden @lg:inline-flex text-[0.625rem] font-bold px-2 py-0.5 rounded-full ${knowledgeStats?.evaluation.mode === "rag"
-                    ? "bg-purple-100 text-purple-800"
-                    : "bg-emerald-100 text-emerald-800"
-                    }`}
-                >
-                  {knowledgeStats?.evaluation.mode === "rag"
-                    ? "Modo RAG Activo"
-                    : "In-Context + Prompt Caching"}
-                </span>
-              </h1>
-              <p className="text-[11px] text-slate-400 truncate">
-                Proyecto: <strong className="text-slate-600">{activeProject?.name ?? "..."}</strong> · Hilo aislado
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => setIsInstructionsOpen(true)}
-              title="Instrucciones del Proyecto"
-              aria-label="Instrucciones del Proyecto"
-              className="px-2 @lg:px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
-            >
-              ⚙️<span className="hidden @lg:inline"> Instrucciones</span>
-            </button>
-            <button
-              onClick={() => setIsKnowledgeOpen(true)}
-              title="Base de Conocimiento"
-              aria-label="Base de Conocimiento"
-              className="px-2 @lg:px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
-            >
-              📚<span className="hidden @lg:inline"> Conocimiento</span>
-            </button>
-            {activeArtifact && (
-              <button
-                onClick={() => setActiveArtifact(null)}
-                className="hidden lg:inline-flex px-2.5 py-1 text-xs font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg border border-orange-200 transition"
-              >
-                Cerrar Artefacto
-              </button>
-            )}
-          </div>
+      {notice && (
+        <div role="status" className="absolute left-1/2 -translate-x-1/2 bottom-24 z-40 max-w-[90%] px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs shadow-lg flex items-center gap-3">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice(null)} className="text-slate-300 hover:text-white" aria-label="Cerrar aviso">
+            ✕
+          </button>
         </div>
-
-        {/* Mensajes del Hilo */}
-        <div className="flex-1 overflow-y-auto p-3 @lg:p-6 space-y-5 bg-slate-50/30">
-          {messages.length === 0 ? (
-            <div className="min-h-full flex flex-col items-center justify-center text-center p-3 @lg:p-6 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-600 text-xl font-bold">
-                ⚡
-              </div>
-              <h2 className="text-sm font-bold text-slate-800">
-                Nuevo chat en «{activeProject?.name}»
-              </h2>
-              <p className="text-xs text-slate-500 max-w-md leading-relaxed">
-                Este chat opera con las directrices de este proyecto y su base de conocimiento compartida.
-                El historial permanece estrictamente aislado de otros chats.
-              </p>
-              <div className="flex flex-wrap justify-center gap-2 pt-2">
-                <button
-                  onClick={() => sendMessageToAgent("¿Cuáles son los supuestos más críticos de este proyecto?")}
-                  className="px-3 py-1.5 text-xs bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-700 shadow-2xs transition"
-                >
-                  🎯 Supuestos críticos
-                </button>
-                <button
-                  onClick={() => sendMessageToAgent("Crea una calculadora interactiva para nuestro experimento en HTML y Tailwind")}
-                  className="px-3 py-1.5 text-xs bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-700 shadow-2xs transition"
-                >
-                  ⚡ Diseñar artefacto interactivo
-                </button>
-                <button
-                  onClick={() => sendMessageToAgent("Genera un diagrama de embudo en Mermaid")}
-                  className="px-3 py-1.5 text-xs bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-700 shadow-2xs transition"
-                >
-                  📊 Diagrama de embudo
-                </button>
-              </div>
-            </div>
-          ) : (
-            messages.map((m) => (
-              <div
-                key={m.id}
-                className={cx("flex flex-col group", m.sender === "user" ? "items-end" : "items-start")}
-              >
-                <div className="flex flex-wrap items-center gap-1.5 mb-1 px-1 text-[10px] text-slate-400 font-mono">
-                  <span>{m.senderName}</span>
-                  <span>•</span>
-                  <span>{m.time}</span>
-                  {m.cacheStatus === "hit" && (
-                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded font-sans font-semibold inline-flex items-center gap-1">
-                      ⚡ Prompt Cache Hit ({m.cachedTokens ? `${m.cachedTokens.toLocaleString()} tokens` : "activo"})
-                    </span>
-                  )}
-                  {m.cacheStatus === "write" && (
-                    <span className="text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded font-sans font-semibold inline-flex items-center gap-1">
-                      💾 Prompt Cache Escrito
-                    </span>
-                  )}
-                  {m.cacheStatus === "unavailable" && (
-                    <span className="text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded font-sans font-semibold inline-flex items-center gap-1">
-                      IA no disponible
-                    </span>
-                  )}
-                  {m.cacheStatus === "simulated" && (
-                    <span className="text-slate-500 bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 rounded font-sans font-medium inline-flex items-center gap-1">
-                      🧪 Simulado
-                    </span>
-                  )}
-                </div>
-
-                <div
-                  className={cx(
-                    "max-w-[92%] @lg:max-w-[80%] p-3 @lg:p-4 rounded-2xl text-xs leading-relaxed",
-                    m.sender === "user"
-                      ? "bg-slate-900 text-white rounded-br-xs shadow-xs"
-                      : "bg-white text-slate-900 border border-slate-200/80 shadow-2xs rounded-bl-xs",
-                  )}
-                >
-                  <FormattedText content={m.text} isUser={m.sender === "user"} />
-
-                  {/* Tarjetas de Artefactos generados */}
-                  {m.artifacts && m.artifacts.length > 0 && (
-                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                      <div className="text-[0.6875rem] font-bold uppercase tracking-wider text-orange-600 flex items-center gap-1">
-                        <span>Artefacto generado:</span>
-                      </div>
-                      {m.artifacts.map((art) => (
-                        <div
-                          key={art.id}
-                          onClick={() => setActiveArtifact(art)}
-                          className="p-3 bg-orange-50/50 hover:bg-orange-100/60 border border-orange-200/80 rounded-xl flex items-center justify-between cursor-pointer transition"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="p-1.5 rounded-lg bg-orange-500 text-white">
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                              </svg>
-                            </span>
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-900 text-xs truncate">{art.title}</p>
-                              <p className="text-[0.625rem] text-slate-500 font-mono">{art.identifier} · {art.type.split(".").pop()}</p>
-                            </div>
-                          </div>
-                          <span className="text-xs font-semibold text-orange-600 shrink-0">
-                            <span className="hidden @lg:inline">Abrir en Panel </span>
-                            <span className="@lg:hidden">Abrir </span>→
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Citas de Fuentes Consultadas en Conocimiento */}
-                  {m.citations && m.citations.length > 0 && (
-                    <div className="mt-3 border-t border-slate-100 pt-2 flex flex-wrap items-center gap-1 text-[0.6875rem] text-slate-500">
-                      <span className="font-semibold text-slate-700">Fuentes consultadas:</span>
-                      {m.citations.map((c, idx) => (
-                        <span
-                          key={idx}
-                          title={c.snippet}
-                          className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-mono text-[0.625rem] border border-slate-200"
-                        >
-                          📄 {c.filename}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Acciones propuestas para el proyecto (Workflows RAX-00..RAX-15) */}
-                  {m.proposals && m.proposals.length > 0 && (
-                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                      <div className="text-[0.6875rem] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                        <span>⚡ Acciones propuestas para el proyecto:</span>
-                      </div>
-                      {m.proposals.map((prop, idx) => {
-                        const title = typeof prop.title === "string" ? prop.title : `Propuesta ${idx + 1}`;
-                        const desc = typeof prop.description === "string" ? prop.description : undefined;
-                        const rawType = typeof prop.type === "string" ? prop.type : "acción";
-                        const isApplied = appliedProposals.has(title);
-                        const isApplying = applyingProposalTitle === title;
-
-                        return (
-                          <div
-                            key={idx}
-                            className="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl flex flex-col @lg:flex-row items-stretch @lg:items-center justify-between gap-2 @lg:gap-3 text-xs"
-                          >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[0.625rem] font-bold uppercase px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-800">
-                                  {PROPOSAL_TYPE_LABEL[rawType] ?? rawType.replace("_", " ")}
-                                </span>
-                                <span className="font-semibold text-slate-800 truncate">{title}</span>
-                              </div>
-                              {desc && <p className="text-[0.6875rem] text-slate-500 mt-1 leading-snug">{desc}</p>}
-                            </div>
-
-                            <button
-                              onClick={() => handleApplyProposal(prop)}
-                              disabled={isApplied || isApplying}
-                              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isApplied
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
-                                : "bg-orange-600 hover:bg-orange-700 text-white shadow-2xs cursor-pointer"
-                                }`}
-                            >
-                              {isApplied ? "✓ Aplicado" : isApplying ? "Aplicando..." : "Aplicar al Proyecto"}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Acción: Guardar en el conocimiento del proyecto */}
-                {m.sender === "ai" && (
-                  <div className="mt-1 flex items-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition px-1">
-                    <button
-                      onClick={() => {
-                        setSaveModalMessage(m);
-                        setSaveDecisionTitle(`Decisión: ${m.text.slice(0, 30)}...`);
-                      }}
-                      className="text-[0.6875rem] font-medium text-slate-400 hover:text-orange-600 flex items-center gap-1 transition"
-                    >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                      </svg>
-                      Guardar en Conocimiento del Proyecto
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-
-          {isLoading && (
-            <div className="flex flex-col items-start space-y-1">
-              <span className="text-[10px] text-slate-400 font-mono px-1">Claude Agent • razonando con el contexto...</span>
-              <div className="bg-white text-slate-600 border border-slate-200/80 rounded-2xl p-3.5 text-xs flex items-center gap-2.5 shadow-2xs">
-                <span className="w-2 h-2 rounded-full bg-orange-600 animate-ping" />
-                <span>Generando respuesta con instrucciones y conocimiento del proyecto...</span>
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Inferior */}
-        <ChatInput
-          onSend={sendMessageToAgent}
-          isLoading={isLoading}
-          disabled={!projectId}
-          placeholder="Escribe tu consulta o pide un artefacto…"
-        />
-      </div>
-
-      {/* 3. Panel Lateral Derecho: Visor de Artefactos */}
-      {activeArtifact && (
-        <ArtifactViewer
-          artifact={activeArtifact}
-          onClose={() => setActiveArtifact(null)}
-          onSaveToKnowledge={async (art) => {
-            if (!projectId) return;
-            await promoteDecisionToKnowledgeAction(projectId, {
-              title: art.title,
-              filename: `${art.identifier}.md`,
-              content: art.content,
-            });
-            await loadKnowledgeStats(projectId);
-            alert("Artefacto guardado en la base de conocimientos del proyecto.");
-          }}
-        />
       )}
 
-      {/* Modales */}
-      <ProjectInstructionsModal
-        projectId={projectId}
-        projectName={activeProject?.name ?? ""}
-        initialInstructions={customInstructions}
-        isOpen={isInstructionsOpen}
-        onClose={() => setIsInstructionsOpen(false)}
-        onSaved={(inst) => {
-          setCustomInstructions(inst);
-          loadKnowledgeStats(projectId);
-        }}
-      />
+      {activeProject && (
+        <>
+          <ProjectInstructionsModal
+            key={`instr-${projectId}-${customInstructions.length}`}
+            projectId={projectId}
+            projectName={activeProject.name}
+            initialInstructions={customInstructions}
+            isOpen={isInstructionsOpen}
+            onClose={() => setIsInstructionsOpen(false)}
+            onSaved={(inst) => {
+              setCustomInstructions(inst);
+              loadKnowledgeStats(projectId);
+            }}
+          />
+          <ProjectKnowledgePanel
+            projectId={projectId}
+            projectName={activeProject.name}
+            isOpen={isKnowledgeOpen}
+            onClose={() => setIsKnowledgeOpen(false)}
+            onKnowledgeUpdated={() => loadKnowledgeStats(projectId)}
+          />
+        </>
+      )}
 
-      <ProjectKnowledgePanel
-        projectId={projectId}
-        projectName={activeProject?.name ?? ""}
-        isOpen={isKnowledgeOpen}
-        onClose={() => setIsKnowledgeOpen(false)}
-        onKnowledgeUpdated={() => loadKnowledgeStats(projectId)}
-      />
-
-      {/* Modal Rápido: Promover Decisión a Conocimiento */}
       {saveModalMessage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4">
-            <h3 className="text-sm font-bold text-slate-900">Guardar en Conocimiento del Proyecto</h3>
+            <h3 className="text-sm font-bold text-slate-900">Guardar en el conocimiento del proyecto</h3>
             <p className="text-xs text-slate-500">
-              Esta conclusión se convertirá en un documento persistente de este proyecto y estará disponible
-              para todos los chats futuros.
+              Esta conclusión se convertirá en un documento del proyecto y estará disponible en todas las sesiones.
             </p>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Título de la Decisión:</label>
+              <label htmlFor="decision-title" className="block text-xs font-semibold text-slate-700 mb-1">
+                Título
+              </label>
               <input
+                id="decision-title"
                 type="text"
                 value={saveDecisionTitle}
                 onChange={(e) => setSaveDecisionTitle(e.target.value)}
                 className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white"
-                placeholder="Ej. Criterio de Pricing Validado"
+                placeholder="Ej. Criterio de precio validado"
               />
             </div>
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 max-h-36 overflow-y-auto text-xs text-slate-600 font-mono">
-              {saveModalMessage.text}
-            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 max-h-36 overflow-y-auto text-xs text-slate-600 font-mono">{saveModalMessage.text}</div>
             <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setSaveModalMessage(null)}
-                className="px-3.5 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl"
-              >
+              <button type="button" onClick={() => setSaveModalMessage(null)} className="px-3.5 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl">
                 Cancelar
               </button>
               <button
@@ -719,7 +685,7 @@ export default function ChatClient({
                 disabled={isSavingDecision || !saveDecisionTitle.trim()}
                 className="px-4 py-2 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 rounded-xl shadow-xs"
               >
-                {isSavingDecision ? "Guardando..." : "Confirmar y Compartir"}
+                {isSavingDecision ? "Guardando..." : "Guardar"}
               </button>
             </div>
           </div>
