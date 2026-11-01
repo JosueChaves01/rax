@@ -70,7 +70,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-6xl">
       {/* Cabecera */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -103,7 +103,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
       <section aria-label="Métricas de cartera" className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs uppercase tracking-wider text-muted">Proyectos activos</p>
-          <p className="display mt-2 text-4xl">{portfolio.stats.totalActiveProjects}</p>
+          <p className="display mt-2 text-4xl text-slate-900">{portfolio.stats.totalActiveProjects}</p>
           <p className="mt-1 text-xs text-faint">Emprendimientos en seguimiento</p>
         </Card>
         <Card className="p-4">
@@ -112,8 +112,8 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
           <p className="mt-1 text-xs text-faint">Con bloqueos o sin sesión</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase tracking-wider text-cyan">Próximas sesiones</p>
-          <p className="display mt-2 text-4xl text-cyan">{portfolio.stats.upcomingSessionsCount}</p>
+          <p className="text-xs uppercase tracking-wider text-blue-700">Próximas sesiones</p>
+          <p className="display mt-2 text-4xl text-blue-700">{portfolio.stats.upcomingSessionsCount}</p>
           <p className="mt-1 text-xs text-faint">Encuentros agendados</p>
         </Card>
         <Card className="p-4">
@@ -127,7 +127,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
       <section aria-label="Bandeja de intervenciones prioritarias" className="mt-12">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="display text-2xl">Bandeja «Mi próxima intervención»</h2>
+            <h2 className="display text-2xl text-slate-900">Bandeja «Mi próxima intervención»</h2>
             <p className="text-sm text-muted">
               Recomendaciones del sistema justificadas en hechos observados para anticipar bloqueos y preparar encuentros.
             </p>
@@ -138,7 +138,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
         </div>
 
         {interventions.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-line bg-panel/50 p-6 text-center">
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center">
             <p className="font-semibold text-ok">✓ Toda tu cartera está al día</p>
             <p className="mt-1 text-xs text-muted">
               No hay bloqueos operativos sin diagnosticar, acuerdos pendientes ni sesiones próximas desatendidas.
@@ -150,7 +150,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
               const isExpanded = expandedIntervention === int.id;
               return (
                 <li key={int.id}>
-                  <Card className="overflow-hidden border-line transition-colors hover:border-line-strong">
+                  <Card className="overflow-hidden border-slate-200 transition-colors hover:border-slate-300">
                     <div className="p-5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -158,7 +158,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
                             {INTERVENTION_URGENCY_LABEL[int.urgency]}
                           </Tag>
                           <Tag>{INTERVENTION_CATEGORY_LABEL[int.category]}</Tag>
-                          <span className="font-semibold text-ink">{int.projectName}</span>
+                          <span className="font-semibold text-slate-900">{int.projectName}</span>
                         </div>
                         <span className="font-mono text-[0.6875rem] text-faint">
                           {formatDate(int.createdAt)}
@@ -167,7 +167,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
 
                       <div className="mt-3 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                         <div className="min-w-0">
-                          <h3 className="text-base font-semibold">{int.title}</h3>
+                          <h3 className="text-base font-semibold text-slate-900">{int.title}</h3>
                           <p className="mt-1 text-sm text-muted line-clamp-2">
                             {int.explanation.suggestedAction}
                           </p>
@@ -176,7 +176,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
                           <button
                             type="button"
                             onClick={() => setExpandedIntervention(isExpanded ? null : int.id)}
-                            className="text-xs text-highlight hover:underline"
+                            className="text-xs font-semibold text-blue-600 hover:underline"
                           >
                             {isExpanded ? "Ocultar justificación" : "Ver justificación"}
                           </button>
@@ -199,22 +199,22 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
 
                       {/* Explicación expandida */}
                       {isExpanded && (
-                        <div className="mt-4 rounded-xl border border-line-strong bg-bg/50 p-4 text-xs space-y-2">
+                        <div className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-4 text-xs space-y-2">
                           <div>
-                            <span className="font-semibold text-ink">¿Qué ocurrió?: </span>
+                            <span className="font-semibold text-slate-900">¿Qué ocurrió?: </span>
                             <span className="text-muted">{int.explanation.whatHappened}</span>
                           </div>
                           <div>
-                            <span className="font-semibold text-ink">¿Por qué importa?: </span>
+                            <span className="font-semibold text-slate-900">¿Por qué importa?: </span>
                             <span className="text-muted">{int.explanation.whyItMatters}</span>
                           </div>
                           <div>
-                            <span className="font-semibold text-ink">Datos que lo sustentan: </span>
+                            <span className="font-semibold text-slate-900">Datos que lo sustentan: </span>
                             <span className="text-muted">{int.explanation.supportingData}</span>
                           </div>
-                          <div className="pt-2 border-t border-line">
-                            <span className="font-semibold text-accent">Acción sugerida: </span>
-                            <span className="text-ink">{int.explanation.suggestedAction}</span>
+                          <div className="pt-2 border-t border-slate-200">
+                            <span className="font-semibold text-blue-700">Acción sugerida: </span>
+                            <span className="text-slate-900">{int.explanation.suggestedAction}</span>
                           </div>
                         </div>
                       )}
@@ -231,7 +231,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
       <section aria-label="Cartera de proyectos" className="mt-14">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="display text-2xl">Cartera de emprendimientos</h2>
+            <h2 className="display text-2xl text-slate-900">Cartera de emprendimientos</h2>
             <p className="text-sm text-muted">
               Visibilidad integral sobre la salud, acuerdos, ejecución y próximas reuniones de cada cliente.
             </p>
@@ -241,7 +241,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="rounded-xl border border-line-strong bg-panel px-3 py-1.5 text-xs text-ink focus:outline-none"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="urgency">Mayor urgencia primero</option>
               <option value="name">Nombre alfabético</option>
@@ -265,7 +265,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
                   key={p.relationId}
                   className={cx(
                     "p-6 flex flex-col justify-between transition-colors",
-                    hasAlert ? "border-highlight/50 bg-highlight/5" : "hover:border-accent/50",
+                    hasAlert ? "border-amber-200 bg-amber-50/60" : "hover:border-blue-300",
                   )}
                 >
                   <div>
@@ -280,7 +280,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
                       )}
                     </div>
 
-                    <h3 className="display mt-3 text-2xl">{p.projectName}</h3>
+                    <h3 className="display mt-3 text-2xl text-slate-900">{p.projectName}</h3>
                     <p className="text-xs text-muted">Emprendedor/a: {p.entrepreneurName}</p>
 
                     {/* Señales de salud activas */}
@@ -289,7 +289,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
                         {p.signals.map((sig, idx) => (
                           <span
                             key={idx}
-                            className="inline-block rounded-md bg-panel border border-line px-2 py-0.5 text-[0.6875rem] text-muted"
+                            className="inline-block rounded-md bg-white border border-slate-200 px-2 py-0.5 text-[0.6875rem] text-muted"
                           >
                             ⚠️ {sig}
                           </span>
@@ -307,7 +307,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
                     </div>
 
                     {/* Resumen de ejecución de tareas */}
-                    <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-line bg-panel p-3 text-center text-xs">
+                    <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-center text-xs">
                       <div>
                         <span className="block font-mono text-base font-semibold">{p.totalTasksCount}</span>
                         <span className="text-faint text-[0.6875rem]">Total tareas</span>
@@ -317,7 +317,7 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
                         <span className="text-faint text-[0.6875rem]">Completadas</span>
                       </div>
                       <div>
-                        <span className={cx("block font-mono text-base font-semibold", p.blockedTasksCount > 0 ? "text-danger" : "text-ink")}>
+                        <span className={cx("block font-mono text-base font-semibold", p.blockedTasksCount > 0 ? "text-danger" : "text-slate-900")}>
                           {p.blockedTasksCount}
                         </span>
                         <span className="text-faint text-[0.6875rem]">Bloqueadas</span>
@@ -337,10 +337,10 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
                   </div>
 
                   {/* Botones de acción */}
-                  <div className="mt-6 flex items-center justify-between gap-2 pt-4 border-t border-line">
+                  <div className="mt-6 flex items-center justify-between gap-2 pt-4 border-t border-slate-200">
                     <Link
                       href={`/app/p/${p.projectId}/orientar`}
-                      className="text-xs font-semibold text-highlight hover:underline"
+                      className="text-xs font-semibold text-blue-600 hover:underline"
                     >
                       Sesiones y notas →
                     </Link>
@@ -356,6 +356,6 @@ export function PortfolioView({ portfolio, mentorName }: Props) {
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }
