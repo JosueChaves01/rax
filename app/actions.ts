@@ -1473,6 +1473,7 @@ export async function sendClaudeAgentMessageAction(input: {
       unavailable: result.unavailable ?? null,
       sessionId: thread.sessionId ?? null,
       sessionUpdated: result.sessionUpdated === true,
+      followUps: assistantMessage.status === "failed" ? [] : (result.followUps ?? []),
     };
   });
 }

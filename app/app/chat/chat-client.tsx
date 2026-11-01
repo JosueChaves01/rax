@@ -24,6 +24,7 @@ import { ArtifactViewer } from "./artifact-viewer";
 import { ProjectsGrid } from "./projects-grid";
 import { ProjectOverview } from "./project-overview";
 import { SessionSidebar } from "./session-sidebar";
+import { FollowUpChips } from "./follow-up-chips";
 import { ThreadMessages, type MessageView } from "./thread-messages";
 
 /** Borrar el proyecto es el único paso que no se deshace desde la pantalla: se confirma aparte. */
@@ -270,6 +271,7 @@ export default function ChatClient({
             cachedPromptUsed: res.data!.cachedPromptUsed,
             cacheStatus: res.data!.unavailable ? "unavailable" : res.data!.cacheStatus,
             cachedTokens: res.data!.cachedTokens,
+            followUps: res.data!.followUps,
           },
         ]);
         // Los documentos se descargan desde su tarjeta; el panel se abre solo para los demás artefactos.
@@ -599,6 +601,10 @@ export default function ChatClient({
                   setSaveDecisionTitle(`Decisión: ${m.text.slice(0, 30)}...`);
                 }}
               />
+            )}
+
+            {!isLoading && !loadingMessages && messages.at(-1)?.sender === "ai" && (
+              <FollowUpChips suggestions={messages.at(-1)?.followUps} onPick={(text) => sendMessageToAgent(text)} />
             )}
 
             {isLoading && (
