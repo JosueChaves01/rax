@@ -279,3 +279,15 @@ export const CycleEvaluationInput = z.object({
   decision: CycleDecision,
   nextCycleFocus: str(2000).optional(),
 });
+
+/** Síntesis pos-sesión corregida o escrita a mano. */
+export const SynthesisEdit = z.object({
+  summary: z.string().min(1).max(3000),
+  agreedDecisions: z.array(z.string().max(400)).max(15),
+  entrepreneurCommitments: z
+    .array(z.object({ title: z.string().max(200), actionType: ActionType.optional(), dueDate: z.string().max(40).optional() }))
+    .max(15),
+  mentorCommitments: z.array(z.object({ title: z.string().max(200), dueDate: z.string().max(40).optional() })).max(15),
+  nextSteps: z.string().max(1000).optional(),
+  suggestedNextSessionInDays: z.number().int().min(1).max(90).optional(),
+});

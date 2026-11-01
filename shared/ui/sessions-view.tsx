@@ -14,9 +14,11 @@ interface SessionsViewProps {
   initialSessions: MentorSession[];
   projects: Project[];
   goals: MentorshipGoal[];
+  /** Quien mira: solo el mentor de la sesión prepara el briefing y la agenda. */
+  viewerId: string;
 }
 
-export function SessionsView({ initialSessions, projects, goals }: SessionsViewProps) {
+export function SessionsView({ initialSessions, projects, goals, viewerId }: SessionsViewProps) {
   const [sessions, setSessions] = useState<MentorSession[]>(initialSessions);
   const [selectedSessionId, setSelectedSessionId] = useState<string>(
     initialSessions[0]?.id || ""
@@ -176,14 +178,18 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
                   Estructurada en bloques de tiempo (timeboxes)
                 </p>
               </div>
-              <button
-                type="button"
-                disabled={isPending || !activeSession}
-                onClick={handleGenerateAgendaWithN8n}
-                className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer disabled:opacity-50"
-              >
-                {isPending ? "Generando…" : "↻ Regenerar agenda"}
-              </button>
+              {activeSession?.mentorId === viewerId ? (
+                <button
+                  type="button"
+                  disabled={isPending || !activeSession}
+                  onClick={handleGenerateAgendaWithN8n}
+                  className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  {isPending ? "Generando…" : "↻ Regenerar agenda"}
+                </button>
+              ) : (
+                <span className="text-[11px] text-slate-500">La prepara el mentor</span>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -206,7 +212,7 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
               ) : (
                 <div className="p-8 text-center text-slate-500 text-xs border border-dashed border-slate-200 rounded-xl">
                   {activeSession
-                    ? "No se ha generado una agenda aún. Pulsa «Regenerar agenda» para preparar una propuesta a partir del contexto del proyecto."
+                    ? (activeSession?.mentorId === viewerId ? "No se ha generado una agenda aún. Pulsa «Regenerar agenda» para preparar una propuesta a partir del contexto del proyecto." : "El mentor todavía no preparó la agenda de esta sesión.")
                     : "No hay una sesión activa seleccionada."}
                 </div>
               )}

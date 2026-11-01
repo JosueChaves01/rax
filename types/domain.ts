@@ -455,6 +455,11 @@ export interface PostSessionSynthesis {
   }>;
   nextSteps?: string;
   suggestedNextSessionInDays?: number;
+  /** De dónde salió: la transcripción de la llamada, las notas o escrita a mano. */
+  basedOn?: "transcript" | "notes" | "manual";
+  /** Última corrección hecha por una persona. */
+  editedAt?: ISODate;
+  editedBy?: Id;
 }
 
 export interface MentorSession {
@@ -889,6 +894,7 @@ export type AuditAction =
   | "session.started"
   | "session.briefing_generated"
   | "session.synthesis_generated"
+  | "session.synthesis_edited"
   | "session.commitments_adopted"
   | "session.completed"
   | "session.call_started"
