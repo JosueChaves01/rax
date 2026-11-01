@@ -218,7 +218,11 @@ export const PostSessionSynthesisSchema = z.object({
   agreedDecisions: z.array(z.string().max(400)).max(10).default([]),
   entrepreneurCommitments: z.array(PostSessionCommitmentSchema).max(10).default([]),
   mentorCommitments: z.array(MentorCommitmentSchema).max(10).default([]),
-  nextSteps: z.string().max(1000).optional(),
+  // Algunos modelos gratuitos devuelven los próximos pasos como lista: se acepta y se une en texto.
+  nextSteps: z
+    .preprocess((v) => (Array.isArray(v) ? v.map(String).join("\n") : v), z.string())
+    .transform((v) => v.slice(0, 1000))
+    .optional(),
   suggestedNextSessionInDays: z.number().int().min(1).max(90).optional(),
 });
 

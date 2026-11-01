@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { Component, useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { SessionCall } from "@/types/domain";
@@ -277,8 +277,35 @@ function InCall({ state, onDone, onActive }: { state: CallState; onDone: () => v
   );
 }
 
+/** Si algo de la llamada falla en el navegador, se avisa aquí y el resto de la página sigue funcionando. */
+class CallErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    console.error("[llamada] Error en la interfaz de la llamada:", error);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <Notice tone="error">
+        La llamada tuvo un problema en este navegador ({this.state.error.message}). Lo transcrito ya quedó guardado; recarga la página para ver la transcripción y la síntesis.
+      </Notice>
+    );
+  }
+}
+
 /** Llamada con transcripción dentro de una sesión de mentoría. */
-export function SessionCallPanel({ sessionId, className }: { sessionId: string; className?: string }) {
+export function SessionCallPanel(props: { sessionId: string; className?: string }) {
+  return (
+    <CallErrorBoundary>
+      <SessionCallPanelInner {...props} />
+    </CallErrorBoundary>
+  );
+}
+
+function SessionCallPanelInner({ sessionId, className }: { sessionId: string; className?: string }) {
   const router = useRouter();
   const [state, setState] = useState<CallState | null>(null);
   const [error, setError] = useState<string | null>(null);
