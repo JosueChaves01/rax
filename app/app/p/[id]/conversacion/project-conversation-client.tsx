@@ -14,6 +14,7 @@ import {
   sendClaudeAgentMessageAction,
 } from "@/app/actions";
 import { FormattedText } from "@/app/app/chat/formatted-text";
+import { DocumentCard, isDocumentArtifact } from "@/app/app/chat/document-card";
 
 interface MessageView {
   id: string;
@@ -453,6 +454,15 @@ export function ProjectConversationClient({
                     )}
                   >
                     <FormattedText content={m.text} isUser={mine} />
+
+                    {/* Documentos descargables (PDF / Word) generados por el agente */}
+                    {m.artifacts?.some(isDocumentArtifact) && (
+                      <div className="pt-2 border-t border-slate-200/60 space-y-2">
+                        {m.artifacts.filter(isDocumentArtifact).map((art) => (
+                          <DocumentCard key={art.id} artifact={art} messageId={m.id} />
+                        ))}
+                      </div>
+                    )}
 
                     {/* Citaciones de conocimiento si las hay */}
                     {m.citations && m.citations.length > 0 && (

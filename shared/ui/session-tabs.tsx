@@ -296,6 +296,15 @@ export function DocumentsTab({ ws, onChanged }: { ws: SessionWorkspace; onChange
                   <span className="text-xs text-slate-400 shrink-0">{open === doc.id ? "Ocultar" : "Ver"}</span>
                 </button>
                 {open === doc.id && (
+                  <div className="px-3 pb-1 flex gap-2 text-[11px] font-semibold">
+                    {(["pdf", "docx"] as const).map((f) => (
+                      <a key={f} href={`/api/documentos?proyecto=${encodeURIComponent(session.projectId)}&documento=${encodeURIComponent(doc.id)}&formato=${f}`} download className="text-orange-700 hover:underline">
+                        ↓ {f === "pdf" ? "PDF" : "Word"}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {open === doc.id && (
                   <pre className="px-3 pb-3 text-[11px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
                     {doc.preview}
                     {doc.preview.length >= 600 ? "…" : ""}

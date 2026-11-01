@@ -4,6 +4,7 @@ import { cx } from "@/shared/ui/primitives";
 import { PROPOSAL_TYPE_LABEL } from "@/lib/ai/step-actions";
 import type { AgentArtifact, KnowledgeCitation } from "@/types/domain";
 import { FormattedText } from "./formatted-text";
+import { DocumentCard, isDocumentArtifact } from "./document-card";
 
 export interface MessageView {
   id: string;
@@ -33,7 +34,7 @@ export function ThreadMessages({
   appliedProposals: Set<string>;
   applyingProposalTitle: string | null;
   onApplyProposal: (proposal: Record<string, unknown>) => void;
-  onOpenArtifact: (artifact: AgentArtifact) => void;
+  onOpenArtifact: (artifact: AgentArtifact, messageId: string) => void;
   onSaveToKnowledge: (message: MessageView) => void;
 }) {
   return (
@@ -79,16 +80,25 @@ export function ThreadMessages({
                 >
                   <FormattedText content={m.text} isUser={m.sender === "user"} />
 
+                  {/* Documentos descargables (PDF / Word) */}
+                  {m.artifacts?.some(isDocumentArtifact) && (
+                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                      {m.artifacts.filter(isDocumentArtifact).map((art) => (
+                        <DocumentCard key={art.id} artifact={art} messageId={m.id} onOpen={() => onOpenArtifact(art, m.id)} />
+                      ))}
+                    </div>
+                  )}
+
                   {/* Tarjetas de Artefactos generados */}
-                  {m.artifacts && m.artifacts.length > 0 && (
+                  {m.artifacts && m.artifacts.some((a) => !isDocumentArtifact(a)) && (
                     <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                       <div className="text-[0.6875rem] font-bold uppercase tracking-wider text-orange-600 flex items-center gap-1">
                         <span>Artefacto generado:</span>
                       </div>
-                      {m.artifacts.map((art) => (
+                      {m.artifacts.filter((a) => !isDocumentArtifact(a)).map((art) => (
                         <div
                           key={art.id}
-                          onClick={() => onOpenArtifact(art)}
+                          onClick={() => onOpenArtifact(art, m.id)}
                           className="p-3 bg-orange-50/50 hover:bg-orange-100/60 border border-orange-200/80 rounded-xl flex items-center justify-between cursor-pointer transition"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">

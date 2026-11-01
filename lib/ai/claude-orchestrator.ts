@@ -11,6 +11,9 @@ import { renderProjectState, type ProjectStateSnapshot } from "./project-state";
 import { foldDeterministic, MEMORY_SYSTEM_PROMPT, parseMemoryOutput, renderMemoryInput, renderThreadMemory, withSummary } from "./thread-memory";
 import { chatWithFallback, type ChatMessage, type ChatUsage } from "./openrouter-chat";
 import { readSessionThread, renderSessionState, updateSessionNotes, type SessionAgentContext } from "@/lib/services/agent-sessions";
+import { createAgentDocument } from "@/lib/services/agent-documents";
+import { isDocumentFormat, DOCUMENT_FORMAT_LABEL, type DocumentFormat } from "@/lib/documents/types";
+import { simulatedDocumentContent, writeDocumentWithAi } from "./document-writer";
 
 /**
  * Pistas de la pantalla desde la que se conversa. Vienen del navegador, así que solo orientan el tono
@@ -223,6 +226,7 @@ Usa herramientas cuando la persona quiera estructurar algo en el proyecto; para 
 - evaluate_mentorship_cycle (RAX-14) y query_project_metrics (RAX-15): evaluar el ciclo y consultar métricas.
 - update_session_notes: guardar en la sesión su objetivo, un resumen, decisiones de la persona, preguntas abiertas y próximos pasos. Úsala cuando la persona tome una decisión, defina qué quiere lograr en la sesión, pida «anota/recuerda esto» o al cerrar un tema. Se guarda directo (no es una tarjeta) y la ven todos los hilos de la sesión.
 - read_session_thread: leer los mensajes recientes de otro hilo de esta sesión (usa su id de <session_state>) cuando la persona se refiera a algo que se habló allí.
+- generate_document: crear un documento descargable (PDF o Word) sobre un tema: plan, informe, guía de estudio, resumen de decisiones, propuesta, acta de sesión, etc. Úsala cuando la persona pida un PDF, un Word, un documento o un archivo para descargar. Pon add_to_project en true cuando lo pida o cuando sea material de referencia del proyecto (plan, informe, guía, resumen); en false si es algo puntual o una prueba. El documento se redacta aparte con el contexto del proyecto: no lo copies en tu respuesta, solo di qué contiene y si quedó en el proyecto.
 - propose_step_action: dar cualquier paso del recorrido (confirmar resumen, pedir revisiones, priorizar, decidir hipótesis, iniciar experimentos, registrar resultados y evidencia, decisión del mentor, acuerdo, sesiones). Usa los ids entre corchetes de <project_state>.${field ? "\n- draft_field_value: redactar el borrador del campo de formulario indicado en <current_screen>. Úsala siempre en este turno." : ""}
 Solo propone lo que esta persona puede hacer (ver «Acciones que esta persona puede hacer» en <project_state>). Después de usar una herramienta, explica en una o dos frases qué propusiste y que puede aplicarlo desde las tarjetas.
 </session_and_tool_guidelines>
@@ -296,9 +300,26 @@ const READ_SESSION_THREAD_TOOL: WorkflowToolDefinition = {
   },
 };
 
+const GENERATE_DOCUMENT_TOOL: WorkflowToolDefinition = {
+  name: "generate_document",
+  description:
+    "Genera un documento descargable en PDF o Word (.docx) sobre un tema, redactado con el contexto del proyecto. Opcionalmente lo agrega al conocimiento del proyecto.",
+  parameters: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "Título del documento" },
+      topic: { type: "string", description: "Tema y alcance: qué debe cubrir el documento" },
+      format: { type: "string", enum: ["pdf", "docx"], description: "pdf para PDF, docx para Word. Si la persona no lo dice, pdf." },
+      instructions: { type: "string", description: "Indicaciones de la persona: público, extensión, tono, secciones obligatorias" },
+      add_to_project: { type: "boolean", description: "true para guardarlo también en los documentos (conocimiento) del proyecto" },
+    },
+    required: ["title", "topic"],
+  },
+};
+
 function toolsFor(input: ClaudeTurnInput): WorkflowToolDefinition[] {
   if (!input.deps) return [];
-  const base = input.sessionContext?.field ? [DRAFT_FIELD_TOOL, ...RAX_WORKFLOW_TOOLS] : RAX_WORKFLOW_TOOLS;
+  const base = input.sessionContext?.field ? [DRAFT_FIELD_TOOL, ...RAX_WORKFLOW_TOOLS] : [GENERATE_DOCUMENT_TOOL, ...RAX_WORKFLOW_TOOLS];
   if (!input.session || !input.thread?.id) return base;
   return [SESSION_NOTES_TOOL, ...(input.session.siblings.length ? [READ_SESSION_THREAD_TOOL] : []), ...base];
 }
@@ -310,7 +331,8 @@ async function runTool(
   input: ClaudeTurnInput,
   name: string,
   args: Record<string, unknown>,
-): Promise<{ summary: string; proposals: AiProposalItem[]; data?: unknown; sessionUpdated?: boolean }> {
+): Promise<{ summary: string; proposals: AiProposalItem[]; data?: unknown; sessionUpdated?: boolean; artifacts?: AgentArtifact[] }> {
+  if (name === "generate_document" && input.deps) return generateDocumentTool(input, args);
   if (name === "update_session_notes" && input.session && input.deps) {
     const updated = await updateSessionNotes(input.deps, input.session.id, {
       goal: typeof args.goal === "string" ? args.goal : undefined,
@@ -339,6 +361,48 @@ async function runTool(
   }
   const result = await executeWorkflowTool(input.deps!, input.project.id, name, args);
   return { summary: result.summary, proposals: result.proposals, data: result.data };
+}
+
+/** Contexto para redactar un documento: el proyecto, su estado, sus documentos y lo último que se habló. */
+function documentContext(input: ClaudeTurnInput): string {
+  const { project } = input;
+  const recent = [...input.history.slice(-6), { author: "user" as const, content: input.userMessage }]
+    .map((m) => `${m.author === "assistant" ? "Agente" : "Persona"}: ${m.content.slice(0, 1200)}`)
+    .join("\n");
+  return [
+    `Proyecto: «${project.name}»${project.description ? ` — ${project.description}` : ""}`,
+    isLearningProject(project)
+      ? "Es un proyecto de APRENDIZAJE: el documento es pedagógico (explicaciones, ejemplos, ejercicios); no hables de clientes, ventas ni validación comercial."
+      : "Es una iniciativa emprendedora.",
+    input.projectState ? renderProjectState(input.projectState).slice(0, 5000) : "",
+    input.session?.notes?.summary ? `Resumen de la sesión: ${input.session.notes.summary.slice(0, 1500)}` : "",
+    renderKnowledge(input.knowledge).slice(0, 12000),
+    `<recent_conversation>\n${recent}\n</recent_conversation>`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+async function generateDocumentTool(input: ClaudeTurnInput, args: Record<string, unknown>) {
+  const title = (typeof args.title === "string" && args.title.trim()) || "Documento";
+  const topic = (typeof args.topic === "string" && args.topic.trim()) || title;
+  const instructions = typeof args.instructions === "string" && args.instructions.trim() ? args.instructions.trim() : undefined;
+  const format: DocumentFormat = isDocumentFormat(args.format) ? args.format : "pdf";
+  const addToProject = args.add_to_project === true;
+
+  const written = await writeDocumentWithAi({ title, topic, instructions, context: documentContext(input) });
+  if (!written && process.env.OPENROUTER_API_KEY) {
+    return { summary: `No pude redactar «${title}»: la IA no respondió. Prueba de nuevo en un momento.`, proposals: [], data: { ok: false } };
+  }
+  const content = written?.content ?? simulatedDocumentContent({ title, topic, instructions });
+  const created = await createAgentDocument(input.deps!, input.project.id, { title, format, content, addToProject });
+  const where = created.savedToProject ? " y lo agregué a los documentos del proyecto" : created.saveError ? `. ${created.saveError}` : "";
+  return {
+    summary: `Documento «${title}» (${DOCUMENT_FORMAT_LABEL[format]}) listo para descargar${where}.`,
+    proposals: [],
+    artifacts: [created.artifact],
+    data: { title, format, savedToProject: created.savedToProject, sections: content.split("\n").filter((l) => l.startsWith("## ")).map((l) => l.slice(3)) },
+  };
 }
 
 function cacheStatusOf(model: string, usage?: ChatUsage): { status: CacheStatus; cached: number } {
@@ -389,6 +453,7 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
 
   let completion = first.completion;
   const proposals: AiProposalItem[] = [];
+  const toolArtifacts: AgentArtifact[] = [];
   const toolNotes: string[] = [];
   let sessionUpdated = false;
 
@@ -401,6 +466,7 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
         const args = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>;
         const result = await runTool(input, call.function.name, args);
         proposals.push(...result.proposals);
+        if (result.artifacts) toolArtifacts.push(...result.artifacts);
         if (result.sessionUpdated) sessionUpdated = true;
         // Leer otro hilo es parte del razonamiento: no se anuncia como resultado.
         if (call.function.name !== "read_session_thread") toolNotes.push(result.summary);
@@ -426,18 +492,25 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
     });
     if (second.ok && second.completion.content.trim()) {
       completion = { ...second.completion, toolCalls: [], usage: completion.usage };
+      // Los documentos siempre dejan su nota: es lo que confirma qué se generó y dónde quedó.
+      const docNotes = toolArtifacts.length ? toolNotes.filter((n) => n.startsWith("Documento «")) : [];
       toolNotes.length = 0;
+      toolNotes.push(...docNotes);
     }
   }
 
   const { cleanText, artifacts } = extractArtifacts(completion.content);
   const notes = toolNotes.length ? `\n\n${toolNotes.map((n) => `📌 **${n}**`).join("\n")}` : "";
-  const fallbackText = proposals.length ? "Preparé estas propuestas a partir de lo que conversamos." : "No pude generar una respuesta útil esta vez. ¿Puedes reformular la pregunta?";
+  const fallbackText = toolArtifacts.length
+    ? "Aquí está el documento."
+    : proposals.length
+      ? "Preparé estas propuestas a partir de lo que conversamos."
+      : "No pude generar una respuesta útil esta vez. ¿Puedes reformular la pregunta?";
   const cache = cacheStatusOf(completion.model, completion.usage);
 
   return {
     reply: `${cleanText.trim() || fallbackText}${notes}`,
-    artifacts,
+    artifacts: [...toolArtifacts, ...artifacts],
     citations: input.knowledge.citations,
     proposals,
     mode: input.knowledge.mode,
@@ -518,8 +591,37 @@ function simulatedStepProposal(input: ClaudeTurnInput): AiProposalItem | null {
  * Sin IA, la simulación igual respeta las notas de la sesión: «anota que…», «recuerda que…» se
  * guarda de verdad como decisión de la sesión para que el flujo se pueda probar de punta a punta.
  */
+/** Pedido de documento en lenguaje natural («genera un PDF sobre…»), para el modo simulado. */
+export function parseDocumentRequest(message: string): { title: string; topic: string; format: DocumentFormat; addToProject: boolean } | null {
+  const text = message.trim();
+  if (!/\b(genera|gener[aá]|crea|cre[aá]|haz|hazme|prepara|prepar[aá]|arma|arm[aá]|redacta|redact[aá]|escribe|escrib[ií])\b/i.test(text)) return null;
+  const kind = text.match(/\b(pdf|word|docx|documento|informe|reporte)\b/i);
+  if (!kind) return null;
+  const format: DocumentFormat = /\b(word|docx)\b/i.test(text) ? "docx" : "pdf";
+  const about = text.match(/\b(?:sobre|acerca de|con el tema|del tema|de tema)\s+(.+?)(?:\s+y\s+(?:agr[eé]ga|gu[aá]rda|s[uú]be)lo.*)?[.?!]*$/i);
+  const topic = (about?.[1] ?? text.slice((kind.index ?? 0) + kind[0].length).replace(/^\s*(de|del|con)\s+/i, "")).trim().slice(0, 200) || "el proyecto";
+  const title = topic.charAt(0).toUpperCase() + topic.slice(1);
+  return { title: title.slice(0, 120), topic, format, addToProject: /\b(proyecto|gu[aá]rd|agr[eé]g|sub[ei])/i.test(text) };
+}
+
 async function simulatedTurnWithSession(input: ClaudeTurnInput): Promise<ClaudeTurnResult> {
   const base = generateSimulatedClaudeTurn(input);
+  const docRequest = input.deps && !input.sessionContext?.field ? parseDocumentRequest(input.userMessage) : null;
+  if (docRequest && input.deps) {
+    const created = await createAgentDocument(input.deps, input.project.id, {
+      title: docRequest.title,
+      format: docRequest.format,
+      content: simulatedDocumentContent(docRequest),
+      addToProject: docRequest.addToProject,
+    });
+    const where = created.savedToProject ? " También quedó en los documentos del proyecto." : "";
+    return {
+      ...base,
+      reply: `Preparé el documento «${docRequest.title}» en ${DOCUMENT_FORMAT_LABEL[docRequest.format]}. Puedes descargarlo en PDF o en Word desde la tarjeta.${where}\n\n(Modo simulado: el contenido es una plantilla; con la IA activa se redacta completo.)`,
+      artifacts: [created.artifact],
+      proposals: [],
+    };
+  }
   if (!input.session || !input.deps || !input.thread?.id) return base;
   const m = input.userMessage.trim().match(/^(?:anota|apunta|recuerda|registra|guarda)(?:\s+(?:en la sesi[oó]n|esto|que))*[:,]?\s+([\s\S]+)/i);
   if (!m) return base;

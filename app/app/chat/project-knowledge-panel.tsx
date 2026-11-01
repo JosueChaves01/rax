@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { projectDocumentUrl } from "./document-card";
 import type { ProjectDocumentFileType, ProjectKnowledgeDocument } from "@/types/domain";
 import {
   addProjectDocumentAction,
@@ -333,15 +334,28 @@ export function ProjectKnowledgePanel({
                       </p>
                     </div>
                   </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                  {(["pdf", "docx"] as const).map((f) => (
+                    <a
+                      key={f}
+                      href={projectDocumentUrl(projectId, doc.id, f)}
+                      download
+                      title={`Descargar como ${f === "pdf" ? "PDF" : "Word"}`}
+                      className="px-1.5 py-1 text-[0.625rem] font-semibold text-slate-500 hover:text-orange-700 hover:bg-orange-50 rounded-md transition"
+                    >
+                      ↓ {f === "pdf" ? "PDF" : "Word"}
+                    </a>
+                  ))}
                   <button
                     onClick={() => handleDelete(doc.id)}
                     title="Eliminar documento"
-                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shrink-0 ml-2"
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shrink-0"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
+                  </div>
                 </div>
               ))}
             </div>

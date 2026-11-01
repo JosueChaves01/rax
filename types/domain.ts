@@ -227,7 +227,9 @@ export type ArtifactType =
   | "image/svg+xml"
   | "application/vnd.ant.mermaid"
   | "application/vnd.ant.code"
-  | "application/vnd.ant.markdown";
+  | "application/vnd.ant.markdown"
+  /** Documento descargable (PDF o Word) generado por el agente: el contenido va en Markdown. */
+  | "application/vnd.rax.document";
 
 export interface AgentArtifact {
   id: string;
@@ -236,6 +238,12 @@ export interface AgentArtifact {
   type: ArtifactType;
   language?: string;
   content: string;
+  /** Solo documentos: formato pedido (ambos se pueden descargar). */
+  format?: "pdf" | "docx";
+  /** Solo documentos: subtítulo de la portada (proyecto y fecha). */
+  subtitle?: string;
+  /** Solo documentos: id en el conocimiento del proyecto, si se agregó. */
+  documentId?: string;
 }
 
 export interface KnowledgeCitation {
