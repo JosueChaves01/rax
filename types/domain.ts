@@ -475,6 +475,33 @@ export interface MentorSession {
   completedAt?: ISODate;
 }
 
+/** Llamada (WebRTC) entre el mentor de la sesión y la persona emprendedora, con transcripción. */
+export interface SessionCall {
+  id: Id;
+  sessionId: Id;
+  projectId: Id;
+  startedBy: Id;
+  status: "active" | "ended";
+  startedAt: ISODate;
+  endedAt?: ISODate;
+  endedBy?: Id;
+  /** Documento del proyecto con la transcripción completa (contexto del agente). */
+  transcriptDocumentId?: Id;
+  createdAt: ISODate;
+}
+
+/** Fragmento transcrito del micrófono de una persona (cada navegador transcribe su propia voz). */
+export interface SessionCallSegment {
+  id: Id;
+  callId: Id;
+  projectId: Id;
+  speakerId: Id;
+  body: string;
+  /** Milisegundos desde el inicio de la llamada. */
+  offsetMs: number;
+  createdAt: ISODate;
+}
+
 export interface MentorBriefing {
   generatedAt: ISODate;
   whatTheyBuild: string;
@@ -864,6 +891,8 @@ export type AuditAction =
   | "session.synthesis_generated"
   | "session.commitments_adopted"
   | "session.completed"
+  | "session.call_started"
+  | "session.call_ended"
   | "mentorship.cycle_evaluated"
   | "mentorship.closed"
   | "mentorship.renewed"

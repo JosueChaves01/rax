@@ -21,6 +21,8 @@ import type {
   Profile,
   Project,
   SessionNote,
+  SessionCall,
+  SessionCallSegment,
   RoadmapMilestone,
   Task,
   MentorResource,
@@ -667,6 +669,23 @@ const agentThreadSpec: Spec<AgentThread> = {
   },
 };
 
+const sessionCallSpec: Spec<SessionCall> = {
+  table: "session_calls",
+  fields: {
+    id: ["id", same], sessionId: ["session_id", same], projectId: ["project_id", same], startedBy: ["started_by", same],
+    status: ["status", same], startedAt: ["started_at", tsReq], endedAt: ["ended_at", ts], endedBy: ["ended_by", nul],
+    transcriptDocumentId: ["transcript_document_id", nul], createdAt: ["created_at", tsReq],
+  },
+};
+
+const sessionCallSegmentSpec: Spec<SessionCallSegment> = {
+  table: "session_call_segments",
+  fields: {
+    id: ["id", same], callId: ["call_id", same], projectId: ["project_id", same], speakerId: ["speaker_id", same],
+    body: ["body", same], offsetMs: ["offset_ms", same], createdAt: ["created_at", tsReq],
+  },
+};
+
 const agentSessionSpec: Spec<AgentSession> = {
   table: "agent_sessions",
   fields: {
@@ -721,6 +740,8 @@ class HistoryTable extends PgTable<DiagnosisItemHistory> {
 export function createPgRepository(db: Db): Repository {
   return {
     agentSessions: new PgTable(db, agentSessionSpec),
+    sessionCalls: new PgTable(db, sessionCallSpec),
+    sessionCallSegments: new PgTable(db, sessionCallSegmentSpec),
     agentThreads: new PgTable(db, agentThreadSpec),
     agentMessages: new PgTable(db, agentMessageSpec),
     profiles: new PgTable(db, profile),

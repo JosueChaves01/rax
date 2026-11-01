@@ -37,6 +37,7 @@ import {
 } from "@/features/labels";
 import { Button, Card, Field, Notice, Tag, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
+import { SessionCallPanel } from "@/shared/ui/session-call";
 
 type People = Record<string, { id: string; name: string; role: string }>;
 
@@ -407,6 +408,9 @@ export function SessionCard(props: {
           }}
         />
       )}
+
+      {/* Llamada con transcripción (mentor de la sesión y equipo del proyecto) */}
+      <SessionCallPanel sessionId={s.id} />
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. BRIEFING PRE-SESIÓN (4 CAPAS DE MEMORIA)                   */}
