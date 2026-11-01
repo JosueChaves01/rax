@@ -97,13 +97,13 @@ export function StageNav({ projectId, phase, badges }: { projectId: string; phas
   );
 }
 
-/** En el celular, Inicio y las 4 etapas van abajo, al alcance del pulgar. */
+/** En el celular, Inicio y las 4 etapas van abajo, al alcance del pulgar, encima de la navegación general. */
 export function MobileStageBar({ projectId, phase, badges }: { projectId: string; phase: ProjectPhase; badges: Badges }) {
   const { base, section } = useCurrent(projectId);
   return (
     <nav
       aria-label="Etapas del proyecto"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+      className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-slate-200 bg-white/95 backdrop-blur md:bottom-0 md:pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <ul className="grid grid-cols-5">
         {SECTIONS.filter((s) => s.id !== "archivo").map((s) => {

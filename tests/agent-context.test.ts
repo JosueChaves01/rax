@@ -41,7 +41,8 @@ describe("el agente conoce la plataforma", () => {
       expect(g).toContain("«Decidir»");
       expect(g).toContain("/validacion");
     }
-    expect(ent).toContain("/app/exploracion");
+    expect(ent).toContain("/app/chat");
+    expect(ent).not.toContain("/app/exploracion");
     expect(ent).not.toContain("/app/admin");
     expect(men).toContain("/app/mentor");
     expect(men).toContain("Aprobar, devolver o descartar hipótesis");

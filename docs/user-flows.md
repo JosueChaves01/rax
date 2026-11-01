@@ -34,8 +34,10 @@ El proyecto se navega por 4 etapas que agrupan las 10 fases (`features/projects/
 
 ## Entrada por rol
 
-- **Emprendedor**: `/app` lista sus proyectos con la etapa y a quién le toca.
-- **Mentor**: `/app` abre con la bandeja (`features/mentoring/inbox.ts`): revisiones pedidas e hipótesis por aprobar, más viejo primero, cada una con enlace a la acción. Debajo, sus proyectos y su cupo.
+- **Emprendedor**: `/app` muestra cada proyecto con sus 4 etapas, a quién le toca y el siguiente paso (`app/app/project-card.tsx`).
+- **Mentor**: `/app` abre con la bandeja (`features/mentoring/inbox.ts`): revisiones pedidas e hipótesis por aprobar, más viejo primero, cada una con enlace a la acción. Debajo, sus proyectos; la cartera con el cupo está en `/app/mentor`.
+- **Pendientes** (campana): lo que de verdad espera a la persona (`lib/services/pending.ts`): la bandeja del mentor, o los proyectos donde le toca al emprendedor y sus tareas abiertas.
+- **Menú**: según el rol (`shared/ui/nav-items.tsx`), ver [alcance.md](alcance.md).
 - **Postulante a mentor**: ve el estado de la solicitud y lo que envió.
 - **Administración**: `/app/admin` es un panel con contadores (proyectos esperando mentor, solicitudes, cupos libres) y pestañas (`?ver=asignaciones|solicitudes|personas|auditoria`). Los proyectos sin mentor van primero, con un mentor sugerido por rubro y cupo.
 

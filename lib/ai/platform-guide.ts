@@ -6,7 +6,8 @@ import { STAGES } from "@/features/projects/stages";
  * recorre un proyecto, qué hace cada rol y dónde está cada cosa. Es texto estable (no depende del
  * proyecto), así que va al inicio del prompt y aprovecha la caché del proveedor.
  *
- * Mantener alineado con features/projects/stages.ts, lib/authz.ts y la navegación (app-sidebar).
+ * Mantener alineado con features/projects/stages.ts, lib/authz.ts, la navegación (shared/ui/nav-items.tsx)
+ * y el alcance (docs/alcance.md).
  */
 
 export interface PlatformPage {
@@ -18,21 +19,16 @@ export interface PlatformPage {
 
 /** Páginas generales (fuera de un proyecto). */
 export const PLATFORM_PAGES: PlatformPage[] = [
-  { path: "/app", label: "Inicio", what: "Lista de proyectos con su etapa y a quién le toca moverlos. Para el mentor abre la bandeja de revisiones e hipótesis por aprobar.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/exploracion", label: "Exploración", what: "Asistente de alta de un proyecto nuevo: información básica, motivación, compatibilidad con un mentor y acuerdo inicial.", roles: ["entrepreneur"] },
-  { path: "/app/relaciones", label: "Relaciones / Mentoría", what: "Relaciones de mentoría del emprendedor: mentor, etapa de la relación, acuerdo y objetivos.", roles: ["entrepreneur"] },
+  { path: "/app", label: "Mis proyectos / Bandeja", what: "Emprendedor: sus proyectos, cada uno con las 4 etapas, a quién le toca y el siguiente paso; desde aquí crea un proyecto nuevo. Mentor: la bandeja de revisiones e hipótesis por aprobar, más vieja primero, y sus proyectos.", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/chat", label: "Asistente IA", what: "Chat con el agente, con varios hilos por proyecto, instrucciones del proyecto y base de conocimiento (documentos). Desde aquí se puede llevar todo el ciclo.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/mentor", label: "Emprendedores", what: "Cartera del mentor: proyectos asignados, cupo y estado de cada uno.", roles: ["mentor"] },
-  { path: "/app/sesiones", label: "Sesiones", what: "Sesiones de mentoría programadas y realizadas, con notas, preguntas y compromisos.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/calendario", label: "Calendario", what: "Vista de calendario de sesiones y fechas de tareas.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/tareas", label: "Tareas", what: "Todas las tareas de los proyectos, con estado, fecha y bloqueos.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/documentos", label: "Documentos", what: "Documentos de trabajo de los proyectos, editables y mejorables con IA.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/aprendizaje", label: "Aprendizaje", what: "Tutor de ejercicios: el agente propone ejercicios según el objetivo del proyecto y los evalúa con puntaje y retroalimentación.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/evaluacion", label: "Evaluación", what: "Evaluación de ciclo: cumplimiento de objetivos, autonomía y decisión de renovar, ajustar objetivos y continuar, o cerrar.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/mentor/recursos", label: "Recursos", what: "Biblioteca de recursos y plantillas metodológicas que el mentor recomienda.", roles: ["mentor", "entrepreneur"] },
-  { path: "/app/reportes", label: "Reportes", what: "Indicadores de avance de los proyectos.", roles: ["entrepreneur", "mentor", "admin"] },
-  { path: "/app/chat", label: "IA Assistant", what: "Chat con el agente, con varios hilos por proyecto, instrucciones del proyecto y base de conocimiento (documentos).", roles: ["entrepreneur", "mentor"] },
-  { path: "/configuracion", label: "Configuración", what: "Perfil y preferencias de la cuenta.", roles: ["entrepreneur", "mentor", "admin"] },
+  { path: "/app/tareas", label: "Tareas", what: "Tareas de un proyecto (se elige arriba), con estado, fecha y bloqueos.", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/sesiones", label: "Sesiones", what: "Sesiones de mentoría programadas y realizadas, con notas, preguntas y compromisos; incluye una vista de calendario (/app/calendario).", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/documentos", label: "Documentos", what: "Apoyo: documentos de trabajo de los proyectos, editables y mejorables con IA.", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/aprendizaje", label: "Aprendizaje", what: "Apoyo: tutor de ejercicios; el agente propone ejercicios según el objetivo del proyecto y los evalúa con puntaje y retroalimentación.", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/mentor/recursos", label: "Recursos", what: "Apoyo: biblioteca de recursos y plantillas metodológicas del mentor.", roles: ["mentor"] },
   { path: "/app/admin", label: "Operaciones", what: "Panel de administración: proyectos sin mentor, solicitudes de mentores, cupos, personas y auditoría.", roles: ["admin"] },
+  { path: "/app/reportes", label: "Reportes", what: "Indicadores agregados de la plataforma.", roles: ["admin"] },
 ];
 
 /** Páginas dentro de un proyecto (/app/p/[id]/...), agrupadas por etapa. */
@@ -54,7 +50,7 @@ const ROLE_GUIDE: Record<Role, string> = {
 - Conversar con el agente, revisar y corregir su diagnóstico, y confirmar el resumen (solo la dueña).
 - Pedir la revisión del mentor, proponer hipótesis, diseñar e iniciar experimentos, registrar resultados y evidencia.
 - Gestionar tareas, objetivos y el acuerdo junto con su mentor.
-No puede aprobar hipótesis ni tomar las decisiones del mentor: eso le corresponde a su mentor asignado.`,
+No elige mentor: lo asigna administración. No puede aprobar hipótesis ni tomar las decisiones del mentor: eso le corresponde a su mentor asignado.`,
   mentor: `La persona es MENTORA o TUTORA asignada al proyecto. Puede:
 - Ver el diagnóstico y el briefing (la conversación del emprendedor solo si la compartió).
 - Dejar notas y preguntas en sesiones, priorizar el problema, pedir aclaraciones.

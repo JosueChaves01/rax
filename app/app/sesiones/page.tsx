@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDeps } from "@/lib/runtime";
 import { listMyProjects } from "@/lib/services/projects";
@@ -23,10 +24,13 @@ export default async function SessionsPage() {
   ).flat();
 
   return (
-    <SessionsView
-      initialSessions={sessions}
-      projects={projects}
-      goals={goals}
-    />
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Link href="/app/calendario" className="text-xs font-semibold text-blue-600 hover:underline">
+          Ver en calendario →
+        </Link>
+      </div>
+      <SessionsView initialSessions={sessions} projects={projects} goals={goals} />
+    </div>
   );
 }
