@@ -1,7 +1,7 @@
 import { conflict, notFound } from "@/lib/errors";
 import type { Repository, Table } from "./repository";
 import { DEFAULT_MENTOR_RESOURCES } from "@/lib/resources/defaults";
-import type { MentorResource } from "@/types/domain";
+import type { MentorResource, Project } from "@/types/domain";
 
 /**
  * Implementación en memoria del repositorio. Se usa en las pruebas.
@@ -10,13 +10,16 @@ import type { MentorResource } from "@/types/domain";
 class MemoryTable<T extends { id: string }> implements Table<T> {
   private rows = new Map<string, T>();
 
+  /** `hidden`: filas que existen pero no se muestran (borrado lógico), como en el repositorio de Postgres. */
+  constructor(private readonly hidden?: (row: T) => boolean) {}
+
   async get(id: string) {
     const row = this.rows.get(id);
-    return row ? structuredClone(row) : undefined;
+    return row && !this.hidden?.(row) ? structuredClone(row) : undefined;
   }
 
   async list(where?: Partial<T>) {
-    const all = [...this.rows.values()];
+    const all = [...this.rows.values()].filter((r) => !this.hidden?.(r));
     const filtered = where
       ? all.filter((r) => Object.entries(where).every(([k, v]) => (r as Record<string, unknown>)[k] === v))
       : all;
@@ -48,7 +51,7 @@ export function createMemoryRepository(): Repository {
     agentThreads: new MemoryTable(),
     agentMessages: new MemoryTable(),
     profiles: new MemoryTable(),
-    projects: new MemoryTable(),
+    projects: new MemoryTable<Project>((p) => !!p.deletedAt),
     projectMembers: new MemoryTable(),
     mentorAssignments: new MemoryTable(),
     conversations: new MemoryTable(),

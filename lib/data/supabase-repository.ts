@@ -63,6 +63,8 @@ interface Spec<T> {
   readOnly?: string[];
   key?: (id: string) => Row;
   idOf?: (row: Row) => string;
+  /** Filas que existen pero no se muestran (borrado lógico). También aplica al repositorio del sistema. */
+  hidden?: (row: Row) => boolean;
 }
 
 function toRow<T>(spec: Spec<T>, entity: Partial<T>): Row {
@@ -109,12 +111,12 @@ class PgTable<T extends { id: string }> implements Table<T> {
 
   async get(id: string) {
     const rows = await this.db.select(this.spec.table, this.key(id));
-    return rows[0] ? fromRow(this.spec, rows[0]) : undefined;
+    return rows[0] && !this.spec.hidden?.(rows[0]) ? fromRow(this.spec, rows[0]) : undefined;
   }
 
   async list(where?: Partial<T>) {
     const rows = await this.db.select(this.spec.table, where ? matchOf(this.spec, where) : {});
-    return rows.map((r) => fromRow(this.spec, r));
+    return rows.filter((r) => !this.spec.hidden?.(r)).map((r) => fromRow(this.spec, r));
   }
 
   async insert(row: T) {
@@ -162,7 +164,9 @@ const project: Spec<Project> = {
     shareConversationWithMentor: ["share_conversation_with_mentor", same],
     createdAt: ["created_at", tsReq],
     updatedAt: ["updated_at", tsReq],
+    deletedAt: ["deleted_at", ts],
   },
+  hidden: (row) => row.deleted_at !== null && row.deleted_at !== undefined,
 };
 
 const member: Spec<ProjectMemberRow> = {

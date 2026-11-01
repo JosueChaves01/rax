@@ -17,6 +17,7 @@ import type { AiProposalItem } from "@/lib/n8n/contracts";
 import { parseStepParams, type StepActionParams } from "@/lib/ai/step-actions";
 import { notFound, validation } from "@/lib/errors";
 import { guard, type ServiceDeps } from "./base";
+import { deleteProject } from "./projects";
 import { addItem, changeItem, confirmSummary, editSummary } from "./diagnosis";
 import { addNote, completeFirstReview, completeSecondReview, completeSession, requestReview, scheduleSession } from "./mentoring";
 import {
@@ -223,6 +224,10 @@ async function runStepAction(d: ServiceDeps, projectId: string, p: StepActionPar
   const done = (id: string | undefined, notice: string): AppliedProposal => ({ ok: true, type: "flow_action", id, title, notice });
 
   switch (p.action) {
+    case "delete_project": {
+      const { name } = await deleteProject(d, projectId);
+      return done(projectId, `Proyecto «${name}» borrado. Ya no aparece para ti ni para tu mentor.`);
+    }
     case "set_summary": {
       if (!p.text) throw validation("Falta el texto del resumen.");
       await editSummary(d, projectId, p.text);

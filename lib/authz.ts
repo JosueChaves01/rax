@@ -8,6 +8,7 @@ import { forbidden } from "./errors";
 export type Action =
   | "project.read"
   | "project.update"
+  | "project.delete"
   | "conversation.write"
   | "agent.chat"
   | "diagnosis.edit"
@@ -49,6 +50,7 @@ type Who = "owner" | "collaborator" | "mentor";
 const MATRIX: Record<Exclude<Action, "admin.manage">, Who[]> = {
   "project.read": ["owner", "collaborator", "mentor"],
   "project.update": ["owner"],
+  "project.delete": ["owner"],
   "conversation.write": ["owner", "collaborator"],
   "agent.chat": ["owner", "collaborator", "mentor"],
   "diagnosis.edit": ["owner", "collaborator"],

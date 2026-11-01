@@ -69,6 +69,26 @@ export async function setConversationSharing(d: ServiceDeps, projectId: string, 
   await audit(d, "project.status_changed", { projectId, meta: { shareConversationWithMentor: share } });
 }
 
+/**
+ * Borra un proyecto (borrado lógico). Solo la persona dueña, para proyectos creados por error.
+ * Desde la pantalla se pide escribir el nombre; desde el chat, la confirmación es aplicar la tarjeta.
+ * Después nadie lo ve: ni el dueño, ni colaboradores, ni el mentor asignado (Cartera, bandeja), ni la
+ * administración. Los datos quedan en la base por si hubiera que recuperarlo a mano.
+ */
+export async function deleteProject(d: ServiceDeps, projectId: string, opts: { confirmName?: string } = {}) {
+  const { project } = await guard(d, projectId, "project.delete");
+  if (opts.confirmName !== undefined) {
+    const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+    if (norm(opts.confirmName) !== norm(project.name)) throw validation("Escribe el nombre exacto del proyecto para confirmar.");
+  }
+  const now = d.now();
+  // Lo escribe el sistema tras verificar el permiso: con RLS, la fila deja de ser visible en la misma
+  // sentencia y `update … returning` fallaría para quien la borra.
+  await sysRepo(d).projects.update(projectId, { deletedAt: now, updatedAt: now });
+  await audit(d, "project.deleted", { projectId, targetId: projectId, meta: { name: project.name } });
+  return { id: projectId, name: project.name };
+}
+
 /** Marca actividad reciente. La hace el sistema: también la provocan mentores, que no editan el proyecto. */
 export async function touch(d: ServiceDeps, projectId: string) {
   await sysRepo(d).projects.update(projectId, { updatedAt: d.now() });
@@ -151,6 +171,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
     (
       [
         "project.update",
+        "project.delete",
         "conversation.write",
         "agent.chat",
         "diagnosis.edit",

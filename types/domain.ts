@@ -127,6 +127,8 @@ export interface Project {
   shareConversationWithMentor: boolean;
   createdAt: ISODate;
   updatedAt: ISODate;
+  /** Borrado lógico: la persona dueña lo borró y ya no lo ve nadie. Los repositorios lo ocultan. */
+  deletedAt?: ISODate;
 }
 
 /* ───────────── Conversación ───────────── */
@@ -826,6 +828,7 @@ export interface CycleEvaluation {
 export type AuditAction =
   | "project.created"
   | "project.status_changed"
+  | "project.deleted"
   | "member.added"
   | "mentor.assigned"
   | "mentor.revoked"

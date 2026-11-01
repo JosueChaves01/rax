@@ -11,7 +11,8 @@ import { ProjectCard } from "./project-card";
 
 export const metadata = { title: "Inicio · RAX" };
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({ searchParams }: { searchParams?: Promise<{ borrado?: string }> }) {
+  const sp = (await searchParams) ?? {};
   const d = await getDeps();
   if (!d) redirect("/entrar");
   if (homeFor(d.actor) !== "/app") redirect(homeFor(d.actor));
@@ -139,6 +140,8 @@ export default async function ProjectsPage() {
           </Link>
         )}
       </header>
+
+      {sp.borrado === "1" && <Notice>Proyecto borrado. Ya no aparece para ti ni para tu mentor.</Notice>}
 
       {workspaces.length === 0 ? (
         <section className="mx-auto max-w-xl rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
