@@ -25,6 +25,7 @@ import { createTask } from "./validation";
 import { assertHypothesisTransition } from "@/features/hypotheses/rules";
 import { forbidden, notFound, validation } from "@/lib/errors";
 import { audit, guard, sysRepo, type ServiceDeps } from "./base";
+import { can } from "@/lib/authz";
 import { touch } from "./projects";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 
@@ -629,4 +630,44 @@ export async function completeSession(
   });
   await touch(d, s.projectId);
   return updated;
+}
+
+/**
+ * Lo que muestra una sesión de mentoría en sus pestañas (Notas, Documentos, Tareas), con los
+ * permisos de quien mira. Las notas privadas de otra persona no se devuelven.
+ */
+export async function getMentorSessionWorkspace(d: ServiceDeps, sessionId: string) {
+  const s = await loadSession(d, sessionId);
+  const { rel } = await guard(d, s.projectId, "project.read");
+  const [notes, tasks, docs, evidence] = await Promise.all([
+    d.repo.sessionNotes.list({ sessionId }),
+    d.repo.tasks.list({ projectId: s.projectId }),
+    d.repo.projectDocuments.list({ projectId: s.projectId }),
+    d.repo.evidence.list({ projectId: s.projectId }),
+  ]);
+  const people = new Map<string, string>();
+  for (const id of new Set([...notes.map((n) => n.authorId), ...tasks.map((t) => t.assigneeId)])) {
+    const p = await d.repo.profiles.get(id).catch(() => undefined);
+    if (p) people.set(id, p.name);
+  }
+  return {
+    session: s,
+    notes: notes
+      .filter((n) => !n.isPrivate || n.authorId === d.actor.id)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((n) => ({ ...n, authorName: people.get(n.authorId) ?? "Otra persona" })),
+    tasks: tasks
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((t) => ({ ...t, assigneeName: people.get(t.assigneeId) ?? "Sin asignar" })),
+    documents: docs
+      .filter((doc) => doc.content !== "")
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map(({ content, ...doc }) => ({ ...doc, preview: content.slice(0, 600) })),
+    evidence: evidence.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    permissions: {
+      canNote: s.mentorId === d.actor.id && s.status !== "completed" && can(d.actor, "mentor.note", rel),
+      canManageTasks: can(d.actor, "task.manage", rel),
+      canAddDocuments: rel.isOwner || rel.isCollaborator,
+    },
+  };
 }

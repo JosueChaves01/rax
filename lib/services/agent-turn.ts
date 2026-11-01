@@ -6,6 +6,7 @@ import { buildProjectState, type ProjectStateSnapshot } from "@/lib/ai/project-s
 import { conversationalMessages, messagesToFold, normalizeMemory, recentHistory } from "@/lib/ai/thread-memory";
 import { guard, sysRepo, type ServiceDeps } from "./base";
 import { getWorkspace } from "./projects";
+import { loadSessionAgentContext, type SessionAgentContext } from "./agent-sessions";
 import { appendAgentAssistantMessage, appendAgentUserMessage, authorizedThread, getOrCreateAgentThread, listAgentMessages } from "./agent-chat";
 
 export interface AgentTurnResult {
@@ -47,9 +48,10 @@ export async function runAgentTurn(
   const previous = input.ephemeral ? [] : await listAgentMessages(d, thread.id);
   const userMessage = input.ephemeral ? undefined : await appendAgentUserMessage(d, thread.id, input.message);
 
-  const [projectState, knowledge] = await Promise.all([
+  const [projectState, knowledge, session] = await Promise.all([
     loadProjectState(d, project.id),
     getProjectKnowledgeContext(d.repo, project.id, input.message),
+    input.ephemeral ? Promise.resolve(undefined) : loadSessionContext(d, thread),
   ]);
 
   const result = await executeClaudeAgentTurn({
@@ -61,7 +63,10 @@ export async function runAgentTurn(
     deps: d,
     sessionContext: input.sessionContext,
     projectState,
-    thread: input.ephemeral ? undefined : { title: thread.title, memory, totalMessages: conversationalMessages(previous).length },
+    thread: input.ephemeral
+      ? undefined
+      : { id: thread.id, title: thread.title, memory, totalMessages: conversationalMessages(previous).length, sessionId: thread.sessionId },
+    session,
   });
 
   if (input.ephemeral) return { thread, result };
@@ -80,6 +85,16 @@ export async function runAgentTurn(
   });
 
   return { thread, userMessage, assistantMessage, result };
+}
+
+/** Contexto de la sesión del hilo. Si falla (p. ej. falta la migración), el agente sigue sin él. */
+async function loadSessionContext(d: ServiceDeps, thread: AgentThread): Promise<SessionAgentContext | undefined> {
+  try {
+    return await loadSessionAgentContext(d, thread);
+  } catch (e) {
+    console.warn("[agent] No se pudo cargar la sesión del hilo:", e instanceof Error ? e.message : e);
+    return undefined;
+  }
 }
 
 /** Pliega en la memoria los mensajes que ya no entran en la ventana reciente. */

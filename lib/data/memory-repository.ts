@@ -44,6 +44,7 @@ class MemoryTable<T extends { id: string }> implements Table<T> {
 
 export function createMemoryRepository(): Repository {
   return {
+    agentSessions: new MemoryTable(),
     agentThreads: new MemoryTable(),
     agentMessages: new MemoryTable(),
     profiles: new MemoryTable(),
