@@ -52,7 +52,7 @@ export interface ProjectStateSnapshot {
   relation: string | null;
   mentors: string[];
   owner: string | null;
-  sessions: { upcoming: string[]; lastCompleted: string | null; recentNotes: string[] };
+  sessions: { upcoming: string[]; lastCompleted: string | null; recentNotes: string[]; lastSynthesis?: string | null };
   evaluations: string[];
   agreement: string | null;
   goals: string[];
@@ -157,6 +157,7 @@ export function buildProjectState(w: Workspace, viewerRole: Role, today: string)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, LIMITS.sessionNotes)
         .map((n) => `[sesión ${n.sessionId}] ${NOTE_KIND_LABEL[n.kind] ?? n.kind}: ${clip(n.body, 200)} (${day(n.createdAt)})`),
+      lastSynthesis: lastSynthesisLine(w.sessions),
     },
     agreement: agreement
       ? `[${agreement.id}] ${AGREEMENT_STATUS_LABEL[agreement.status]} · frecuencia ${AGREEMENT_FREQUENCY_LABEL[agreement.frequency].toLowerCase()}, ${agreement.sessionDurationMinutes} min · alcance: ${clip(agreement.scope, 200)}`
@@ -180,6 +181,24 @@ export function buildProjectState(w: Workspace, viewerRole: Role, today: string)
     evidenceCount: w.evidence.length,
     permissions: Object.entries(w.permissions).filter(([, allowed]) => allowed).map(([action]) => action),
   };
+}
+
+/**
+ * Síntesis pos-sesión más reciente (sale de las notas y de la transcripción de la llamada, si hubo).
+ * La transcripción completa está en el conocimiento del proyecto como «Transcripción de llamada…».
+ */
+function lastSynthesisLine(sessions: Workspace["sessions"]): string | null {
+  const s = [...sessions]
+    .filter((x) => x.postSessionSynthesis)
+    .sort((a, b) => b.postSessionSynthesis!.generatedAt.localeCompare(a.postSessionSynthesis!.generatedAt))[0];
+  const syn = s?.postSessionSynthesis;
+  if (!s || !syn) return null;
+  const parts = [`[sesión ${s.id}] ${SESSION_KIND_LABEL[s.kind]} · ${day(syn.generatedAt)} — ${clip(syn.summary, 600)}`];
+  if (syn.agreedDecisions.length) parts.push(`Acuerdos: ${syn.agreedDecisions.slice(0, 5).map((a) => clip(a, 140)).join("; ")}`);
+  if (syn.entrepreneurCommitments.length) parts.push(`Compromisos del emprendedor: ${syn.entrepreneurCommitments.slice(0, 6).map((c) => clip(c.title, 120)).join("; ")}`);
+  if (syn.mentorCommitments.length) parts.push(`Compromisos del mentor: ${syn.mentorCommitments.slice(0, 4).map((c) => clip(c.title, 120)).join("; ")}`);
+  if (syn.nextSteps) parts.push(`Próximos pasos: ${clip(syn.nextSteps, 300)}`);
+  return parts.join("\n    ");
 }
 
 const list = (xs: string[], empty: string) => (xs.length ? xs.map((x) => `  - ${x}`).join("\n") : `  ${empty}`);
@@ -211,6 +230,8 @@ ${list(s.sessions.upcoming, "ninguna")}
 Última sesión realizada: ${s.sessions.lastCompleted ?? "ninguna"}
 Notas recientes de las sesiones de mentoría:
 ${list(s.sessions.recentNotes ?? [], "ninguna")}
+Última síntesis pos-sesión (incluye lo hablado en la llamada si se transcribió; la transcripción completa está en el conocimiento del proyecto como «Transcripción de llamada…»):
+  ${s.sessions.lastSynthesis ?? "ninguna"}
 Relación de mentoría: ${s.relation ?? "todavía no se abrió (se abre sola al guardar el primer acuerdo u objetivo)"}
 Acuerdo de mentoría: ${s.agreement ?? "sin acuerdo"}
 Objetivos del ciclo:

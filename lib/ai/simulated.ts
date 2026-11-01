@@ -447,17 +447,27 @@ export class SimulatedProvider implements AiProvider {
       .filter((n) => n.kind === "agreement" || n.kind === "decision")
       .map((n) => n.body);
 
-    const commitmentsNotes = ctx.sessionNotes
-      .filter((n) => n.kind === "commitment")
-      .map((n) => n.body);
+    // Sin IA, de la transcripción se rescatan las frases donde alguien se compromete a algo.
+    const transcriptLines = (ctx.callTranscript ?? "").split("\n").filter((l) => /^\[\d/.test(l));
+    const COMMIT = /\b(voy a|vamos a|me comprometo|quedamos en|qued[oó] en|para la pr[oó]xima|hay que|tengo que|tienes que|tenés que)\b/i;
+    const transcriptCommitments = transcriptLines
+      .map((l) => l.replace(/^\[[\d:]+\]\s*/, ""))
+      .filter((l) => COMMIT.test(l))
+      .slice(-6);
+
+    const commitmentsNotes = [
+      ...ctx.sessionNotes.filter((n) => n.kind === "commitment").map((n) => n.body),
+      ...transcriptCommitments,
+    ];
 
     const generalNotes = ctx.sessionNotes
       .filter((n) => !n.isPrivate)
       .map((n) => `[${n.kind}] ${n.body}`)
       .join("\n");
 
-    const summary = ctx.sessionNotes.length
-      ? `Sesión enfocada en ${ctx.sessionKind}. Se revisaron avances, se destrabaron dificultades y se definieron los próximos pasos inmediatos.\n\nPuntos tratados:\n${generalNotes.slice(0, 800)}`
+    const callExcerpt = transcriptLines.slice(0, 8).map((l) => l.replace(/^\[[\d:]+\]\s*/, "")).join("\n");
+    const summary = ctx.sessionNotes.length || callExcerpt
+      ? `Sesión enfocada en ${ctx.sessionKind}. Se revisaron avances, se destrabaron dificultades y se definieron los próximos pasos inmediatos.${generalNotes ? `\n\nPuntos tratados:\n${generalNotes.slice(0, 800)}` : ""}${callExcerpt ? `\n\nDe la llamada (${transcriptLines.length} intervenciones transcritas):\n${callExcerpt.slice(0, 800)}` : ""}`
       : `Sesión de ${ctx.sessionKind} completada exitosamente.`;
 
     const entrepreneurCommitments = commitmentsNotes.length

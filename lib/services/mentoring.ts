@@ -28,6 +28,7 @@ import { audit, guard, sysRepo, type ServiceDeps } from "./base";
 import { can } from "@/lib/authz";
 import { touch } from "./projects";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
+import { sessionTranscriptForAi } from "./session-transcript";
 
 /**
  * El emprendedor solicita una revisión. La primera requiere el resumen confirmado;
@@ -513,11 +514,12 @@ export async function generatePostSessionSynthesis(
     throw forbidden("Esta sesión está asignada a otra persona.");
   }
 
-  const [sessionNotes, allRelations, diagnoses, diagnosisItems] = await Promise.all([
+  const [sessionNotes, allRelations, diagnoses, diagnosisItems, callTranscript] = await Promise.all([
     d.repo.sessionNotes.list({ sessionId }),
     d.repo.mentorshipRelations.list({ projectId: s.projectId }),
     d.repo.diagnoses.list({ projectId: s.projectId }),
     d.repo.diagnosisItems.list({ projectId: s.projectId }),
+    sessionTranscriptForAi(d, sessionId),
   ]);
 
   if (!project) throw notFound("Proyecto no encontrado.");
@@ -538,6 +540,7 @@ export async function generatePostSessionSynthesis(
     briefingAgenda: s.preSessionBriefing?.suggestedAgenda,
     goals: allGoals.map((g) => ({ id: g.id, title: g.title })),
     keyProblems: keyProblems.length > 0 ? keyProblems : undefined,
+    callTranscript,
   };
 
   let res: PostSessionSynthesisResult;
@@ -561,7 +564,7 @@ export async function generatePostSessionSynthesis(
   await audit(d, "session.synthesis_generated", {
     projectId: s.projectId,
     targetId: sessionId,
-    meta: { provider: res.provider },
+    meta: { provider: res.provider, fromCall: Boolean(callTranscript) },
   });
   await touch(d, s.projectId);
   return synthesis;

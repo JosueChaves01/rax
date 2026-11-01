@@ -22,6 +22,8 @@ import type {
   Project,
   ProjectMember,
   SessionNote,
+  SessionCall,
+  SessionCallSegment,
   RoadmapMilestone,
   Task,
   MentorResource,
@@ -52,6 +54,8 @@ export type ProjectMemberRow = ProjectMember & { id: string };
 
 export interface Repository {
   agentSessions: Table<AgentSession>;
+  sessionCalls: Table<SessionCall>;
+  sessionCallSegments: Table<SessionCallSegment>;
   agentThreads: Table<AgentThread>;
   agentMessages: Table<AgentMessage>;
   profiles: Table<Profile>;

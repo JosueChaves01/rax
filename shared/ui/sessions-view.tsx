@@ -6,6 +6,7 @@ import { cx, formatDate } from "@/shared/ui/primitives";
 import type { MentorSession, MentorshipGoal, Project } from "@/types/domain";
 import { generatePreSessionBriefingAction } from "@/app/actions";
 import { DocumentsTab, NotesTab, TasksTab, useSessionWorkspace } from "@/shared/ui/session-tabs";
+import { SessionCallPanel } from "@/shared/ui/session-call";
 
 type Tab = "agenda" | "notas" | "documentos" | "tareas";
 
@@ -141,6 +142,9 @@ export function SessionsView({ initialSessions, projects, goals }: SessionsViewP
           {actionNotice}
         </div>
       )}
+
+      {/* La llamada queda fuera de las pestañas: cambiar de pestaña no la corta. */}
+      {activeSession && <SessionCallPanel key={activeSession.id} sessionId={activeSession.id} />}
 
       {tab !== "agenda" && activeSession && (
         <div role="tabpanel">

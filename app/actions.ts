@@ -51,6 +51,7 @@ import {
   startSession,
   suggestFirstReview,
 } from "@/lib/services/mentoring";
+import { endCall, getCallTranscript, getSessionCallState, startCall } from "@/lib/services/session-calls";
 import {
   addEvidence,
   approveHypothesis,
@@ -368,6 +369,37 @@ export const adoptPostSessionCommitmentsAction = async (
 export const completeSessionAction = async (projectId: string, sessionId: string, summary?: string) =>
   run(projectId, async (d) => {
     return completeSession(d, V.parse(V.Ids, sessionId), summary);
+  });
+
+/* ── Llamadas con transcripción dentro de una sesión de mentoría ── */
+
+/** Lecturas sin revalidar la página: se consultan seguido durante una llamada. */
+async function read<T>(fn: (d: ServiceDeps) => Promise<T>): Promise<ActionResult<T>> {
+  const d = await getDeps();
+  if (!d) return { ok: false, error: "Tu sesión terminó. Volvé a entrar.", code: "unauthenticated" };
+  try {
+    return { ok: true, data: await fn(d) };
+  } catch (e) {
+    if (isDomainError(e)) return { ok: false, error: e.message, code: e.code };
+    console.error("[rax] lectura fallida", e);
+    return { ok: false, error: "Algo salió mal. Probá de nuevo." };
+  }
+}
+
+export const getSessionCallStateAction = async (sessionId: string) =>
+  read((d) => getSessionCallState(d, V.parse(V.Ids, sessionId)));
+
+export const getCallTranscriptAction = async (callId: string) =>
+  read((d) => getCallTranscript(d, V.parse(V.Ids, callId)));
+
+export const startCallAction = async (sessionId: string) =>
+  read((d) => startCall(d, V.parse(V.Ids, sessionId)));
+
+export const endCallAction = async (projectId: string, callId: string) =>
+  run(projectId, async (d) => {
+    const res = await endCall(d, V.parse(V.Ids, callId));
+    revalidatePath(`/app/p/${projectId}/mentoria`);
+    return res;
   });
 
 export const getMentorSessionWorkspaceAction = async (projectId: string, sessionId: string) =>

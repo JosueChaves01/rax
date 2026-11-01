@@ -270,6 +270,8 @@ export interface PostSessionSynthesisContext {
   goals: Array<{ id: string; title: string }>;
   keyProblems?: Array<{ id: string; title: string }>;
   recentDiscussions?: Array<{ author: string; content: string }>;
+  /** Transcripción automática de las llamadas de la sesión («[mm:ss] Nombre: texto»), si hubo. */
+  callTranscript?: string;
 }
 
 export interface PostSessionSynthesisResult {
