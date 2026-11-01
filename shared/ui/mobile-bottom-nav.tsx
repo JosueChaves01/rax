@@ -1,96 +1,98 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Role } from "@/types/domain";
 import { cx } from "./primitives";
+import { NavGlyph, isActive, navFor } from "./nav-items";
 
 interface MobileBottomNavProps {
-  onOpenMore?: () => void;
+  role: Role;
 }
 
-export function MobileBottomNav({ onOpenMore }: MobileBottomNavProps) {
+/** Barra inferior en celular: las 3 primeras entradas del menú del rol y «Más» con el resto. */
+export function MobileBottomNav({ role }: MobileBottomNavProps) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
   const currentProjectId = pathname.match(/\/app\/p\/([^/]+)/)?.[1];
   const chatHref = currentProjectId ? `/app/chat?project=${currentProjectId}` : "/app/chat";
+  const { main, support } = navFor(role, chatHref);
+  const all = [...main, ...support];
+  const bar = all.slice(0, 3);
+  const rest = all.slice(3);
 
-  const links = [
-    {
-      label: "Inicio",
-      href: "/app",
-      exact: true,
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-      ),
-    },
-    {
-      label: "IA Assistant",
-      href: chatHref,
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M12 2a8 8 0 0 0-8 8c0 3.37 2.07 6.25 5 7.42V20a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2.58c2.93-1.17 5-4.05 5-7.42a8 8 0 0 0-8-8z" />
-          <line x1="9.5" x2="9.5" y1="9" y2="9.01" />
-          <line x1="14.5" x2="14.5" y1="9" y2="9.01" />
-          <path d="M10 13c.5.5 1.5.5 2 0" />
-        </svg>
-      ),
-    },
-    {
-      label: "Sesiones",
-      href: "/app/sesiones",
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-          <line x1="16" x2="16" y1="2" y2="6" />
-          <line x1="8" x2="8" y1="2" y2="6" />
-          <line x1="3" x2="21" y1="10" y2="10" />
-        </svg>
-      ),
-    },
-  ];
+  useEffect(() => setOpen(false), [pathname]);
 
   return (
-    <nav
-      className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-white border-t border-slate-200 px-2 py-1 shadow-lg pb-[env(safe-area-inset-bottom)]"
-      aria-label="Navegación móvil inferior"
-    >
-      <div className="grid grid-cols-4 items-center">
-        {links.map((link) => {
-          const isActive = link.exact
-            ? pathname === link.href
-            : pathname.startsWith(link.href);
+    <>
+      {open && rest.length > 0 && (
+        <div className="md:hidden fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Más secciones">
+          <button type="button" aria-label="Cerrar" className="absolute inset-0 bg-slate-900/40" onClick={() => setOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-white p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] shadow-xl">
+            <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Más secciones</p>
+            <ul className="grid grid-cols-2 gap-2">
+              {rest.map((item) => (
+                <li key={item.label}>
+                  <Link
+                    href={item.href}
+                    className={cx(
+                      "flex items-center gap-2 rounded-xl border px-3 py-3 text-sm",
+                      isActive(item, pathname) ? "border-blue-300 bg-blue-50 text-blue-700 font-semibold" : "border-slate-200 text-slate-700",
+                    )}
+                  >
+                    <NavGlyph icon={item.icon} className="w-4 h-4 shrink-0" />
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
-          return (
-            <Link
-              key={link.label}
-              href={link.href}
+      <nav
+        className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-white border-t border-slate-200 px-2 py-1 shadow-lg pb-[env(safe-area-inset-bottom)]"
+        aria-label="Navegación móvil"
+      >
+        <div className={cx("grid items-center", rest.length > 0 ? "grid-cols-4" : bar.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
+          {bar.map((item) => {
+            const active = isActive(item, pathname);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cx(
+                  "flex flex-col items-center justify-center py-2 text-[10px] font-medium transition-colors",
+                  active ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900",
+                )}
+              >
+                <NavGlyph icon={item.icon} className="w-5 h-5" />
+                <span className="mt-1">{item.label}</span>
+              </Link>
+            );
+          })}
+          {rest.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
               className={cx(
                 "flex flex-col items-center justify-center py-2 text-[10px] font-medium transition-colors",
-                isActive ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900"
+                open || rest.some((i) => isActive(i, pathname)) ? "text-blue-600 font-semibold" : "text-slate-500 hover:text-slate-900",
               )}
             >
-              {link.icon}
-              <span className="mt-1">{link.label}</span>
-            </Link>
-          );
-        })}
-
-        <button
-          type="button"
-          onClick={onOpenMore}
-          className="flex flex-col items-center justify-center py-2 text-[10px] font-medium text-slate-500 hover:text-slate-900 transition-colors"
-        >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="1" />
-            <circle cx="19" cy="12" r="1" />
-            <circle cx="5" cy="12" r="1" />
-          </svg>
-          <span className="mt-1">Más</span>
-        </button>
-      </div>
-    </nav>
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <circle cx="12" cy="12" r="1" />
+                <circle cx="19" cy="12" r="1" />
+                <circle cx="5" cy="12" r="1" />
+              </svg>
+              <span className="mt-1">Más</span>
+            </button>
+          )}
+        </div>
+      </nav>
+    </>
   );
 }
-

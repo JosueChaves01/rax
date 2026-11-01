@@ -12,6 +12,8 @@ const BUCKET_COUNT = 5;
 export default async function ReportsPage() {
   const d = await getDeps();
   if (!d) redirect("/entrar");
+  // Alcance: los reportes son de administración; emprendedor y mentor leen su avance en cada proyecto.
+  if (d.actor.role !== "admin") redirect("/app");
 
   const [tasks, audits, sessions, evaluations, interventions] = await Promise.all([
     d.repo.tasks.list().catch(() => []),

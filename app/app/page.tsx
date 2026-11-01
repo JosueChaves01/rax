@@ -1,16 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDeps, homeFor } from "@/lib/runtime";
-import { getWorkspace, listMyProjects } from "@/lib/services/projects";
-import { getMentorPortfolio } from "@/lib/services/portfolio";
-import { EXPERIENCE_LABEL, EXPERTISE_LABEL } from "@/features/labels";
+import { loadMyWorkspaces } from "@/lib/services/pending";
+import { mentorInbox } from "@/features/mentoring/inbox";
+import { EXPERIENCE_LABEL, EXPERTISE_LABEL, SESSION_KIND_LABEL } from "@/features/labels";
 import type { MentorOnboarding } from "@/types/domain";
 import { Empty, Heading, Notice, Tag, formatDate } from "@/shared/ui/primitives";
-import { MentorDashboard } from "@/shared/ui/mentor-dashboard";
-import { EntrepreneurDashboard } from "@/shared/ui/entrepreneur-dashboard";
 import { NewProjectForm } from "./new-project-form";
+import { ProjectCard } from "./project-card";
 
-export const metadata = { title: "Dashboard · RAX" };
+export const metadata = { title: "Inicio · RAX" };
 
 export default async function ProjectsPage() {
   const d = await getDeps();
@@ -26,134 +25,151 @@ export default async function ProjectsPage() {
     );
   }
 
-  const projects = await listMyProjects(d);
   // Un proyecto dañado no puede tumbar el inicio: se omite y queda en el log.
-  const workspaces = (
-    await Promise.all(
-      projects.map((p) =>
-        getWorkspace(d, p.id).catch((e) => {
-          console.error("[rax] no se pudo cargar el proyecto en el inicio:", p.id, e instanceof Error ? e.message : e);
-          return null;
-        }),
-      ),
-    )
-  ).filter((w): w is NonNullable<typeof w> => w !== null);
-  const isMentor = d.actor.role === "mentor";
+  const workspaces = await loadMyWorkspaces(d);
+  const firstName = d.actor.name.split(" ")[0] || "";
 
-  if (isMentor) {
-    const portfolio = await getMentorPortfolio(d);
-    const mentorSessions = await d.repo.mentorSessions.list({ mentorId: d.actor.id }).catch(() => []);
-    const upcomingSessions = mentorSessions
-      .filter((s) => s.status !== "completed")
-      .map((s) => {
-        const proj = portfolio.projects.find((p) => p.projectId === s.projectId);
-        return {
-          id: s.id,
-          timeBadge: s.scheduledAt ? formatDate(s.scheduledAt) : "Programada",
-          mentee: proj?.entrepreneurName || proj?.projectName || "Emprendedor",
-          topic: `Sesión de ${s.kind || "mentoría"}`,
-          isToday: Boolean(s.scheduledAt && new Date(s.scheduledAt).toDateString() === new Date().toDateString()),
-          href: "/app/sesiones",
-        };
-      });
+  if (d.actor.role === "mentor") {
+    const inbox = mentorInbox(
+      d.actor.id,
+      workspaces.map((w) => ({ id: w.project.id, name: w.project.name, sessions: w.sessions, hypotheses: w.hypotheses })),
+    );
+    const upcoming = workspaces
+      .flatMap((w) => w.sessions.filter((s) => s.mentorId === d.actor.id && s.status !== "completed" && s.scheduledAt).map((s) => ({ s, w })))
+      .sort((a, b) => (a.s.scheduledAt ?? "").localeCompare(b.s.scheduledAt ?? ""))
+      .slice(0, 4);
 
     return (
-      <div className="space-y-10">
-        <MentorDashboard
-          mentorName={d.actor.name}
-          portfolio={portfolio}
-          upcomingSessions={upcomingSessions}
-        />
-
-        {/* Sección adicional: Proyectos asignados directamente */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-            <h2 className="text-base font-bold text-slate-900">
-              Proyectos bajo tu tutela ({workspaces.length})
-            </h2>
-            <Link
-              href="/app/mentor"
-              className="text-xs font-semibold text-blue-600 hover:underline"
-            >
-              Ver matriz de cartera completa →
-            </Link>
+      <div className="space-y-8">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Hola, {firstName}</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {inbox.length
+                ? `${inbox.length} ${inbox.length === 1 ? "pedido espera" : "pedidos esperan"} tu respuesta.`
+                : "Nada espera tu respuesta ahora."}
+            </p>
           </div>
+          <Link href="/app/mentor" className="text-xs font-semibold text-blue-600 hover:underline">
+            Ver cartera y cupo →
+          </Link>
+        </header>
 
-          {workspaces.length === 0 ? (
-            <Empty title="Sin asignaciones activas">
-              La administración te asignará proyectos cuando los emprendedores completen su diagnóstico.
-            </Empty>
+        <section aria-labelledby="bandeja" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-6">
+          <h2 id="bandeja" className="text-base font-bold text-slate-900">Bandeja</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Revisiones e hipótesis que te pidieron, la más vieja primero.</p>
+          {inbox.length === 0 ? (
+            <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+              Cuando un emprendedor pida una revisión o envíe una hipótesis, aparece aquí.
+            </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <ul className="mt-4 divide-y divide-slate-100">
+              {inbox.map((i) => (
+                <li key={`${i.kind}-${i.projectId}-${i.since}`}>
+                  <Link href={`/app/p/${i.projectId}/${i.tab}`} className="group flex items-start justify-between gap-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 group-hover:text-blue-600">
+                        {INBOX_LABEL[i.kind]} · {i.projectName}
+                      </p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">{i.detail}</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] text-slate-500">desde {formatDate(i.since)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section aria-labelledby="proyectos-mentor">
+          <h2 id="proyectos-mentor" className="text-base font-bold text-slate-900">Tus proyectos ({workspaces.length})</h2>
+          {workspaces.length === 0 ? (
+            <div className="mt-4">
+              <Empty title="Sin proyectos asignados">La administración te asigna proyectos según tu cupo y especialidades.</Empty>
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
               {workspaces.map((w) => (
-                <Link
-                  key={w.project.id}
-                  href={`/app/p/${w.project.id}`}
-                  className="p-4 rounded-xl border border-slate-200/80 hover:border-blue-400 bg-slate-50/50 hover:bg-white transition-all shadow-2xs group block"
-                >
-                  <p className="text-xs font-bold text-slate-900 group-hover:text-blue-600 truncate">
-                    {w.project.name}
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
-                    {w.project.description || "Sin descripción proporcionada"}
-                  </p>
-                  <div className="mt-3 flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-100 pt-2 font-mono">
-                    <span>Etapa: {w.phase}</span>
-                    <span className="text-blue-600 font-semibold group-hover:underline">Abrir →</span>
-                  </div>
-                </Link>
+                <ProjectCard key={w.project.id} w={w} />
               ))}
             </div>
           )}
-        </div>
+        </section>
+
+        {upcoming.length > 0 && (
+          <section aria-labelledby="proximas" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-6">
+            <div className="flex items-center justify-between">
+              <h2 id="proximas" className="text-base font-bold text-slate-900">Próximas sesiones</h2>
+              <Link href="/app/sesiones" className="text-xs font-semibold text-blue-600 hover:underline">
+                Todas las sesiones →
+              </Link>
+            </div>
+            <ul className="mt-3 divide-y divide-slate-100 text-sm">
+              {upcoming.map(({ s, w }) => (
+                <li key={s.id} className="flex justify-between gap-4 py-2">
+                  <span className="text-slate-800">
+                    {SESSION_KIND_LABEL[s.kind]} · {w.project.name}
+                  </span>
+                  <span className="shrink-0 text-xs text-slate-500">{formatDate(s.scheduledAt!)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     );
   }
 
   // Emprendedor
-  let assignedMentorName: string | undefined;
-  const mentorId =
-    workspaces[0]?.mentorshipRelation?.mentorId || workspaces[0]?.mentors?.[0];
-  if (mentorId) {
-    const mentorProfile = await d.repo.profiles.get(mentorId).catch(() => null);
-    if (mentorProfile) {
-      assignedMentorName = mentorProfile.name;
-    }
-  }
-
-  const primaryProjectId = workspaces[0]?.project?.id;
-  const recentAudits = primaryProjectId
-    ? (await d.repo.auditEvents.list({ projectId: primaryProjectId })).sort(
-        (a, b) => b.createdAt.localeCompare(a.createdAt)
-      )
-    : [];
-
   return (
-    <div className="space-y-10">
-      <EntrepreneurDashboard
-        entrepreneurName={d.actor.name}
-        mentorName={assignedMentorName}
-        workspaces={workspaces}
-        recentAudits={recentAudits}
-      />
-
-      {/* Creación de proyecto si no tiene */}
-      {workspaces.length === 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs max-w-xl mx-auto">
-          <h2 className="text-lg font-bold text-slate-900">
-            Crea tu primer proyecto
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Solo necesitas un nombre para empezar a ordenar tu iniciativa con RAX.
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Hola, {firstName}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            Cada proyecto recorre 4 etapas: entender tu idea, orientarte con tu mentor, probar en pequeño y decidir con evidencia.
           </p>
-          <div className="mt-4">
-            <NewProjectForm />
-          </div>
         </div>
+        {workspaces.length > 0 && (
+          <Link
+            href={`/app/chat?project=${workspaces[0].project.id}`}
+            className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700"
+          >
+            Conversar con RAX
+          </Link>
+        )}
+      </header>
+
+      {workspaces.length === 0 ? (
+        <section className="mx-auto max-w-xl rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
+          <h2 className="text-lg font-bold text-slate-900">Crea tu primer proyecto</h2>
+          <p className="mt-1 text-xs text-slate-500">Solo necesitas un nombre. Después conversas con RAX para ordenar lo que sabes y lo que supones.</p>
+          <NewProjectForm />
+        </section>
+      ) : (
+        <>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {workspaces.map((w) => (
+              <ProjectCard key={w.project.id} w={w} />
+            ))}
+          </div>
+          <details className="rounded-2xl border border-dashed border-slate-300 bg-white/60 p-5">
+            <summary className="cursor-pointer select-none text-sm font-semibold text-slate-700 hover:text-slate-900">+ Nuevo proyecto</summary>
+            <div className="max-w-xl">
+              <NewProjectForm />
+            </div>
+          </details>
+        </>
       )}
     </div>
   );
 }
+
+const INBOX_LABEL = {
+  first_review: "Primera revisión",
+  hypothesis: "Hipótesis por aprobar",
+  second_review: "Segunda revisión",
+} as const;
 
 function MentorApplication({
   status,

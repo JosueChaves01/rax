@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { signOutAction } from "@/app/actions";
 import { ROLE_LABEL } from "@/features/labels";
 import type { Profile } from "@/types/domain";
@@ -12,36 +12,21 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ actor, onOpenNotifications, unreadCount = 0 }: AppHeaderProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-
   return (
     <header className="h-16 border-b border-slate-200 bg-white sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 lg:px-8">
-      {/* Buscador global tipo mock */}
-      <div className="flex items-center gap-3 flex-1 max-w-md">
-        <div className="relative w-full">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" x2="16.65" y1="21" y2="16.65" />
-            </svg>
-          </span>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar..."
-            className="w-full pl-9 pr-4 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
-          />
-        </div>
-      </div>
+      {/* En celular no hay barra lateral: el logo lleva al inicio del rol. */}
+      <Link href={actor.role === "admin" ? "/app/admin" : "/app"} className="md:hidden text-xl font-black tracking-tight text-slate-900">
+        <span className="text-blue-600">R</span>AX
+      </Link>
+      <div className="hidden md:block" />
 
       {/* Acciones de la derecha: Notificaciones + Perfil */}
       <div className="flex items-center gap-4">
-        {/* Campana de Notificaciones (Panel 15) */}
+        {/* Pendientes reales de la persona */}
         <button
           type="button"
           onClick={onOpenNotifications}
-          aria-label="Abrir panel de estados y notificaciones"
+          aria-label={unreadCount > 0 ? `Ver ${unreadCount} pendientes` : "Ver pendientes"}
           className="relative p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

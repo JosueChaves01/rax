@@ -66,7 +66,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
           <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-lg font-bold text-slate-900" id="notif-title">
-                Estados y notificaciones
+                Lo que te espera
               </span>
               <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
                 {items.length}
@@ -76,7 +76,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
               type="button"
               onClick={onClose}
               className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
-              aria-label="Cerrar notificaciones"
+              aria-label="Cerrar pendientes"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -89,7 +89,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
             {items.length === 0 ? (
               <div className="p-8 text-center text-slate-500 text-xs">
-                No tienes notificaciones pendientes.
+                Nada te espera ahora. Cuando alguien te pida algo o te toque mover un proyecto, aparece aquí.
               </div>
             ) : (
               items.map((n) => (
@@ -124,7 +124,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
 
           {/* Pie de panel */}
           <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-            <span>Todas las notificaciones al día</span>
+            <span>Se calcula con el estado real de tus proyectos</span>
             <button
               type="button"
               onClick={onClose}

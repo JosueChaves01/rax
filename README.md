@@ -77,7 +77,7 @@ Después, en el panel de Supabase:
 
 ## Documentación
 
-- [Contexto de producto](docs/product-context.md) · [Flujos](docs/user-flows.md) · [Modelo de dominio](docs/domain-model.md)
+- [Alcance](docs/alcance.md) · [Contexto de producto](docs/product-context.md) · [Flujos](docs/user-flows.md) · [Modelo de dominio](docs/domain-model.md)
 - [Arquitectura](docs/architecture.md) · [Comportamiento de la IA](docs/ai-behavior.md) · [Seguridad](docs/security.md)
 - [Pruebas](docs/testing.md) · [Progreso](docs/progress.md) · [Decisiones](docs/decisions/)
 
