@@ -95,7 +95,7 @@ export function ResourcesView({ initialResources, isMentor }: Props) {
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-6xl">
       {/* Cabecera */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -134,7 +134,7 @@ export function ResourcesView({ initialResources, isMentor }: Props) {
             onClick={() => setSelectedCategory("all")}
             className={cx(
               "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-              selectedCategory === "all" ? "bg-accent text-white" : "border border-line bg-panel text-muted hover:text-ink",
+              selectedCategory === "all" ? "bg-accent text-white" : "border border-slate-200 bg-white text-muted hover:text-slate-900",
             )}
           >
             Todos ({resources.length})
@@ -146,7 +146,7 @@ export function ResourcesView({ initialResources, isMentor }: Props) {
               onClick={() => setSelectedCategory(cat)}
               className={cx(
                 "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-                selectedCategory === cat ? "bg-accent text-white" : "border border-line bg-panel text-muted hover:text-ink",
+                selectedCategory === cat ? "bg-accent text-white" : "border border-slate-200 bg-white text-muted hover:text-slate-900",
               )}
             >
               {RESOURCE_CATEGORY_LABEL[cat]}
@@ -174,20 +174,20 @@ export function ResourcesView({ initialResources, isMentor }: Props) {
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filteredResources.map((res) => (
-              <Card key={res.id} className="p-5 flex flex-col justify-between transition-colors hover:border-line-strong">
+              <Card key={res.id} className="p-5 flex flex-col justify-between transition-colors hover:border-slate-300">
                 <div>
                   <div className="flex flex-wrap items-center justify-between gap-1">
                     <Tag color="var(--color-cyan)">{RESOURCE_CATEGORY_LABEL[res.category]}</Tag>
                     <span className="font-mono text-[0.6875rem] text-faint">{formatDate(res.createdAt)}</span>
                   </div>
 
-                  <h3 className="mt-3 text-lg font-semibold text-ink">{res.title}</h3>
+                  <h3 className="mt-3 text-lg font-semibold text-slate-900">{res.title}</h3>
                   <p className="mt-1 text-xs text-muted line-clamp-3">{res.description}</p>
 
                   {res.tags.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-1">
                       {res.tags.map((tag) => (
-                        <span key={tag} className="rounded bg-raised px-1.5 py-0.5 text-[0.6875rem] text-faint">
+                        <span key={tag} className="rounded bg-slate-100 px-1.5 py-0.5 text-[0.6875rem] text-faint">
                           #{tag}
                         </span>
                       ))}
@@ -195,11 +195,11 @@ export function ResourcesView({ initialResources, isMentor }: Props) {
                   )}
                 </div>
 
-                <div className="mt-6 flex items-center justify-between gap-2 border-t border-line pt-3">
+                <div className="mt-6 flex items-center justify-between gap-2 border-t border-slate-200 pt-3">
                   <button
                     type="button"
                     onClick={() => setActiveResourceModal(res)}
-                    className="text-xs font-semibold text-highlight hover:underline"
+                    className="text-xs font-semibold text-blue-600 hover:underline"
                   >
                     Ver plantilla completa →
                   </button>
@@ -220,26 +220,26 @@ export function ResourcesView({ initialResources, isMentor }: Props) {
 
       {/* Modal de visualización de contenido */}
       {activeResourceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line-strong bg-panel p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-300 bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <Tag color="var(--color-cyan)">
                   {RESOURCE_CATEGORY_LABEL[activeResourceModal.category]}
                 </Tag>
-                <h2 className="display mt-2 text-2xl text-ink">{activeResourceModal.title}</h2>
+                <h2 className="display mt-2 text-2xl text-slate-900">{activeResourceModal.title}</h2>
                 <p className="mt-1 text-xs text-muted">{activeResourceModal.description}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveResourceModal(null)}
-                className="text-muted hover:text-ink text-lg"
+                className="text-muted hover:text-slate-900 text-lg"
               >
                 ✕
               </button>
             </div>
 
-            <div className="mt-6 rounded-xl border border-line bg-bg p-4 font-mono text-xs whitespace-pre-wrap leading-relaxed text-ink/90">
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs whitespace-pre-wrap leading-relaxed text-slate-800">
               {activeResourceModal.content}
             </div>
 
@@ -261,14 +261,14 @@ export function ResourcesView({ initialResources, isMentor }: Props) {
 
       {/* Modal para crear nuevo recurso */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-line-strong bg-panel p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-300 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h2 className="display text-2xl">Agregar recurso</h2>
+              <h2 className="display text-2xl text-slate-900">Agregar recurso</h2>
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="text-muted hover:text-ink text-lg"
+                className="text-muted hover:text-slate-900 text-lg"
               >
                 ✕
               </button>
@@ -346,14 +346,14 @@ export function ResourcesView({ initialResources, isMentor }: Props) {
                   id="res-public"
                   checked={isPublic}
                   onChange={(e) => setIsPublic(e.target.checked)}
-                  className="rounded border-line-strong text-accent focus:ring-accent"
+                  className="rounded border-slate-300 text-accent focus:ring-accent"
                 />
                 <label htmlFor="res-public" className="text-xs text-muted">
                   Hacer público para toda la plataforma (desmarcar para dejarlo privado en tu biblioteca)
                 </label>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
                 <Button
                   type="button"
                   variant="ghost"
@@ -370,7 +370,7 @@ export function ResourcesView({ initialResources, isMentor }: Props) {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 
