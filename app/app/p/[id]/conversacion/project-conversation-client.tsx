@@ -15,6 +15,7 @@ import {
 } from "@/app/actions";
 import { FormattedText } from "@/app/app/chat/formatted-text";
 import { DocumentCard, isDocumentArtifact } from "@/app/app/chat/document-card";
+import { FollowUpChips } from "@/app/app/chat/follow-up-chips";
 
 /** Borrar el proyecto es el único paso que no se deshace desde la pantalla: se confirma aparte. */
 const isDeleteProject = (proposal: Record<string, unknown>) =>
@@ -32,6 +33,8 @@ interface MessageView {
   cachedPromptUsed?: boolean;
   /** La IA no respondió: el texto explica el motivo, no es una respuesta del agente. */
   failed?: boolean;
+  /** Respuestas sugeridas a este mensaje; solo se muestran si es el último. */
+  followUps?: string[];
 }
 
 const QUICK_PROMPTS = [
@@ -218,6 +221,7 @@ export function ProjectConversationClient({
             proposals,
             cachedPromptUsed: res.data?.cachedPromptUsed,
             failed: assistantMessage.status === "failed",
+            followUps: res.data?.followUps,
           },
         ]);
       } else {
@@ -574,21 +578,13 @@ export function ProjectConversationClient({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Sugerencias contextuales rápidas */}
-        {canWrite && (
-          <div className="px-5 py-2 bg-slate-50/50 border-t border-slate-100 flex flex-wrap gap-1.5">
-            {QUICK_PROMPTS.map((qp, i) => (
-              <button
-                key={i}
-                type="button"
-                disabled={isLoading}
-                onClick={() => handleSendMessage(qp)}
-                className="px-2.5 py-1 rounded-full border border-slate-200 bg-white text-[11px] text-slate-600 hover:text-blue-600 hover:border-blue-400 transition cursor-pointer"
-              >
-                {qp}
-              </button>
-            ))}
-          </div>
+        {/* Las sugerencias fijas solo van en el hilo vacío; después, respuestas a lo último que dijo el agente. */}
+        {canWrite && !isLoading && messages.at(-1)?.sender === "ai" && (
+          <FollowUpChips
+            suggestions={messages.at(-1)?.followUps}
+            onPick={(text) => handleSendMessage(text)}
+            className="px-5 py-2 bg-slate-50/50 border-t border-slate-100"
+          />
         )}
 
         {/* Barra de Entrada / Composer */}

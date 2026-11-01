@@ -2,6 +2,7 @@ import "server-only";
 import type { AgentArtifact, AgentMessage, AgentThreadMemory, KnowledgeCitation, Project, Role } from "@/types/domain";
 import type { KnowledgeContextResult } from "./knowledge-retrieval";
 import { extractArtifacts } from "./artifact-parser";
+import { extractFollowUps, FOLLOW_UP_INSTRUCTIONS } from "./follow-ups";
 import type { ServiceDeps } from "@/lib/services/base";
 import { STEP_ACTIONS, stepActionTitle, type StepActionParams } from "./step-actions";
 import { executeWorkflowTool, makeProposal, RAX_WORKFLOW_TOOLS, type WorkflowToolDefinition } from "./workflow-tools";
@@ -85,6 +86,8 @@ export interface ClaudeTurnResult {
   unavailable?: { code: string; message: string };
   /** El agente actualizó las notas de la sesión en este turno. */
   sessionUpdated?: boolean;
+  /** Respuestas cortas que la persona podría enviar a continuación (no se guardan en el hilo). */
+  followUps?: string[];
 }
 
 const MAX_HISTORY_TO_MODEL = 20;
@@ -245,6 +248,8 @@ Cuando se te pida diseñar interfaces, componentes de UI, dashboards, diagramas,
    </antArtifact>
 2. Acompaña el artefacto con un mensaje breve que explique qué es.
 </artifact_instructions>
+
+${FOLLOW_UP_INSTRUCTIONS}
 
 ${stateBlock}
 
@@ -499,7 +504,8 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
     }
   }
 
-  const { cleanText, artifacts } = extractArtifacts(completion.content);
+  const { cleanText: withoutFollowUps, followUps } = extractFollowUps(completion.content);
+  const { cleanText, artifacts } = extractArtifacts(withoutFollowUps);
   const notes = toolNotes.length ? `\n\n${toolNotes.map((n) => `📌 **${n}**`).join("\n")}` : "";
   const fallbackText = toolArtifacts.length
     ? "Aquí está el documento."
@@ -518,6 +524,7 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
     cacheStatus: cache.status,
     cachedTokens: cache.cached,
     model: completion.model,
+    followUps,
     ...(sessionUpdated ? { sessionUpdated } : {}),
   };
 }

@@ -13,6 +13,8 @@ export interface MessageView {
   text: string;
   time: string;
   chips?: string[];
+  /** Respuestas sugeridas a este mensaje del agente; solo se muestran si es el último. */
+  followUps?: string[];
   artifacts?: AgentArtifact[];
   citations?: KnowledgeCitation[];
   proposals?: Array<Record<string, unknown>>;
