@@ -145,6 +145,7 @@ function Result({ projectId, sessionId, result }: { projectId: string; sessionId
             </div>
           )}
           {syn.nextSteps && <p><span className="font-semibold">Próximos pasos:</span> {syn.nextSteps}</p>}
+          <p className="text-[11px] text-slate-500">Puedes corregirla o agregar puntos con «Editar o agregar» en la síntesis de la sesión.</p>
         </div>
       ) : (
         result.synthesisError && <Notice tone="warn">No se pudo generar la síntesis ahora: {result.synthesisError}. Puedes generarla luego con «Síntesis pos-sesión».</Notice>

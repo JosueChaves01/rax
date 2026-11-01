@@ -131,3 +131,40 @@ describe("Síntesis pos-sesión con modelos gratuitos", () => {
     expect(r.nextSteps).toBe("Entrevistar oficinas\nMedir costos");
   });
 });
+
+describe("Briefing del mentor y síntesis editable", () => {
+  it("solo el mentor de la sesión prepara el briefing", async () => {
+    const { ent, mentor, session } = await setup();
+    const { generatePreSessionBriefing } = await import("@/lib/services/mentoring");
+    await expect(generatePreSessionBriefing(ent, session.id)).rejects.toMatchObject({ code: "forbidden" });
+    const b = await generatePreSessionBriefing(mentor, session.id);
+    expect(b.suggestedAgenda.length).toBeGreaterThan(0);
+  });
+
+  it("la síntesis sale de la transcripción y se puede editar o escribir a mano", async () => {
+    const { ent, mentor, session, as, repo } = await setup();
+    const { generatePostSessionSynthesis, updatePostSessionSynthesis } = await import("@/lib/services/mentoring");
+    // Sin llamada ni notas no hay de dónde sacar la síntesis.
+    await expect(generatePostSessionSynthesis(ent, session.id)).rejects.toMatchObject({ code: "validation" });
+
+    const call = await startCall(mentor, session.id);
+    await transcribeCallAudio(ent, call.id, audio(), 0, fakeTranscriber(["Voy a llamar a tres proveedores de café."]));
+    const res = await endCall(mentor, call.id);
+    expect(res.synthesis?.basedOn).toBe("transcript");
+
+    await expect(updatePostSessionSynthesis(as("ent2"), session.id, { summary: "x", agreedDecisions: [], entrepreneurCommitments: [], mentorCommitments: [] })).rejects.toMatchObject({ code: "not_found" });
+    const edited = await updatePostSessionSynthesis(ent, session.id, {
+      summary: "Resumen corregido por la emprendedora.",
+      agreedDecisions: ["Priorizar oficinas", "  "],
+      entrepreneurCommitments: [...res.synthesis!.entrepreneurCommitments, { title: "Armar precio de suscripción", actionType: "financial_review" }],
+      mentorCommitments: [{ title: "Pasar contactos" }],
+      nextSteps: "Revisar en dos semanas",
+      suggestedNextSessionInDays: 14,
+    });
+    expect(edited.basedOn).toBe("transcript");
+    expect(edited.agreedDecisions).toEqual(["Priorizar oficinas"]);
+    expect(edited.editedBy).toBe(ent.actor.id);
+    expect((await repo.mentorSessions.get(session.id))?.postSessionSynthesis?.summary).toBe("Resumen corregido por la emprendedora.");
+    expect(edited.entrepreneurCommitments.map((c) => c.title)).toContain("Armar precio de suscripción");
+  });
+});

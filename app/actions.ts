@@ -49,6 +49,7 @@ import {
   requestReview,
   scheduleSession,
   startSession,
+  updatePostSessionSynthesis,
   suggestFirstReview,
 } from "@/lib/services/mentoring";
 import { endCall, getCallTranscript, getSessionCallState, startCall } from "@/lib/services/session-calls";
@@ -352,6 +353,14 @@ export const generatePreSessionBriefingAction = async (projectId: string, sessio
 export const generatePostSessionSynthesisAction = async (projectId: string, sessionId: string) =>
   run(projectId, async (d) => {
     const res = await generatePostSessionSynthesis(d, V.parse(V.Ids, sessionId));
+    revalidatePath(`/app/p/${projectId}/orientar`);
+    revalidatePath(`/app/p/${projectId}/mentoria`);
+    return res;
+  });
+
+export const updatePostSessionSynthesisAction = async (projectId: string, sessionId: string, input: unknown) =>
+  run(projectId, async (d) => {
+    const res = await updatePostSessionSynthesis(d, V.parse(V.Ids, sessionId), V.parse(V.SynthesisEdit, input));
     revalidatePath(`/app/p/${projectId}/orientar`);
     revalidatePath(`/app/p/${projectId}/mentoria`);
     return res;

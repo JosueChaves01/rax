@@ -332,10 +332,9 @@ export async function generatePreSessionBriefing(
 ): Promise<PreSessionBriefing> {
   const s = await loadSession(d, sessionId);
   const { project, rel } = await guard(d, s.projectId, "project.read");
-  const isAssigned = s.mentorId === d.actor.id || rel.isAssignedMentor;
-  const isOwner = rel.isOwner || rel.isCollaborator;
-  if (!isAssigned && !isOwner && d.actor.role !== "admin") {
-    throw forbidden("Esta sesión está asignada a otra persona.");
+  // La preparación es trabajo del mentor: solo el mentor de la sesión la genera.
+  if (s.mentorId !== d.actor.id || !rel.isAssignedMentor) {
+    throw forbidden("Solo el mentor de la sesión puede preparar el briefing.");
   }
 
   const [diagnoses, allSessions, allNotes, allTasks, allExps, allRelations, diagnosisItems] = await Promise.all([
@@ -412,7 +411,7 @@ export async function generatePreSessionBriefing(
     : [];
 
   let recentMessages: Array<{ author: string; content: string }> | undefined;
-  if (project.shareConversationWithMentor || isOwner) {
+  if (project.shareConversationWithMentor) {
     const [legacyMsgs, threads] = await Promise.all([
       d.repo.messages.list({ projectId: s.projectId }).catch(() => []),
       d.repo.agentThreads.list({ projectId: s.projectId }).catch(() => []),
@@ -523,6 +522,11 @@ export async function generatePostSessionSynthesis(
   ]);
 
   if (!project) throw notFound("Proyecto no encontrado.");
+  const sharedNotes = sessionNotes.filter((n) => !n.isPrivate);
+  // La síntesis sale de la transcripción de la llamada; sin llamada, de las notas compartidas.
+  if (!callTranscript && sharedNotes.length === 0) {
+    throw validation("Todavía no hay transcripción de la llamada ni notas compartidas para sintetizar. Haz la llamada desde la sesión o escribe la síntesis a mano.");
+  }
   const dx = diagnoses[0];
   const activeRelation = allRelations.find((r) => r.stage !== "closed") ?? allRelations[0];
   const allGoals = activeRelation ? await d.repo.mentorshipGoals.list({ relationId: activeRelation.id }) : [];
@@ -536,7 +540,7 @@ export async function generatePostSessionSynthesis(
     projectSummary: dx?.summary ?? project.description,
     sessionKind: s.kind,
     // El resumen se persiste en la sesión, visible para el emprendedor; notas privadas no entran al proveedor.
-    sessionNotes: sessionNotes.filter((n) => !n.isPrivate).map((n) => ({ kind: n.kind, body: n.body, isPrivate: false })),
+    sessionNotes: sharedNotes.map((n) => ({ kind: n.kind, body: n.body, isPrivate: false })),
     briefingAgenda: s.preSessionBriefing?.suggestedAgenda,
     goals: allGoals.map((g) => ({ id: g.id, title: g.title })),
     keyProblems: keyProblems.length > 0 ? keyProblems : undefined,
@@ -555,6 +559,7 @@ export async function generatePostSessionSynthesis(
   const synthesis: PostSessionSynthesis = {
     generatedAt: d.now(),
     ...res.synthesis,
+    basedOn: callTranscript ? "transcript" : "notes",
   };
 
   await sysRepo(d).mentorSessions.update(sessionId, {
@@ -566,6 +571,61 @@ export async function generatePostSessionSynthesis(
     targetId: sessionId,
     meta: { provider: res.provider, fromCall: Boolean(callTranscript) },
   });
+  await touch(d, s.projectId);
+  return synthesis;
+}
+
+export interface PostSessionSynthesisInput {
+  summary: string;
+  agreedDecisions: string[];
+  entrepreneurCommitments: Array<{ title: string; actionType?: PostSessionSynthesis["entrepreneurCommitments"][number]["actionType"]; dueDate?: string }>;
+  mentorCommitments: Array<{ title: string; dueDate?: string }>;
+  nextSteps?: string;
+  suggestedNextSessionInDays?: number;
+}
+
+/**
+ * El mentor de la sesión o el equipo del proyecto corrige o completa la síntesis (o la escribe a
+ * mano si no se generó). Los compromisos ya adoptados como tareas no cambian.
+ */
+export async function updatePostSessionSynthesis(
+  d: ServiceDeps,
+  sessionId: string,
+  input: PostSessionSynthesisInput,
+): Promise<PostSessionSynthesis> {
+  const s = await loadSession(d, sessionId);
+  const { rel } = await guard(d, s.projectId, "project.read");
+  const isSessionMentor = s.mentorId === d.actor.id && rel.isAssignedMentor;
+  if (!isSessionMentor && !rel.isOwner && !rel.isCollaborator) {
+    throw forbidden("Solo el mentor de la sesión y el equipo del proyecto pueden editar la síntesis.");
+  }
+  const clean = (x: string) => x.replace(/\s+$/g, "").trim();
+  const summary = clean(input.summary);
+  if (summary.length < 3) throw validation("La síntesis necesita un resumen.");
+  const list = (xs: string[], max: number) => xs.map(clean).filter(Boolean).slice(0, max).map((x) => x.slice(0, 400));
+  const days = input.suggestedNextSessionInDays;
+  const now = d.now();
+  const prev = s.postSessionSynthesis;
+  const synthesis: PostSessionSynthesis = {
+    generatedAt: prev?.generatedAt ?? now,
+    basedOn: prev?.basedOn ?? "manual",
+    summary: summary.slice(0, 3000),
+    agreedDecisions: list(input.agreedDecisions, 15),
+    entrepreneurCommitments: input.entrepreneurCommitments
+      .map((c) => ({ ...c, title: clean(c.title).slice(0, 200) }))
+      .filter((c) => c.title)
+      .slice(0, 15),
+    mentorCommitments: input.mentorCommitments
+      .map((c) => ({ ...c, title: clean(c.title).slice(0, 200) }))
+      .filter((c) => c.title)
+      .slice(0, 15),
+    nextSteps: input.nextSteps?.trim() ? input.nextSteps.trim().slice(0, 1000) : undefined,
+    suggestedNextSessionInDays: days && Number.isInteger(days) && days >= 1 && days <= 90 ? days : undefined,
+    editedAt: now,
+    editedBy: d.actor.id,
+  };
+  await sysRepo(d).mentorSessions.update(sessionId, { postSessionSynthesis: synthesis });
+  await audit(d, "session.synthesis_edited", { projectId: s.projectId, targetId: sessionId });
   await touch(d, s.projectId);
   return synthesis;
 }

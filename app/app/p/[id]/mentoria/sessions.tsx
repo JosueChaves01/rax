@@ -38,6 +38,7 @@ import {
 import { Button, Card, Field, Notice, Tag, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
 import { SessionCallPanel } from "@/shared/ui/session-call";
+import { SynthesisEditor } from "./synthesis-editor";
 
 type People = Record<string, { id: string; name: string; role: string }>;
 
@@ -217,12 +218,15 @@ function SessionCopilotBar({
   projectId,
   sessionId,
   disabled,
+  canBrief,
   onBriefingGenerated,
   onSynthesisGenerated,
 }: {
   projectId: string;
   sessionId: string;
   disabled?: boolean;
+  /** Solo el mentor de la sesión prepara el briefing. */
+  canBrief: boolean;
   onBriefingGenerated: (briefing: PreSessionBriefing) => void;
   onSynthesisGenerated: (synthesis: PostSessionSynthesis) => void;
 }) {
@@ -259,7 +263,11 @@ function SessionCopilotBar({
       const res = await generatePostSessionSynthesisAction(projectId, sessionId);
       if (res.ok) {
         if (res.data) {
-          setAiNotice("Síntesis y compromisos generados a partir de las notas y contexto de la sesión.");
+          setAiNotice(
+            res.data.basedOn === "transcript"
+              ? "Síntesis generada a partir de la transcripción de la llamada. Revísala y edítala si hace falta."
+              : "No hay transcripción de llamada: la síntesis salió de las notas compartidas. Revísala y edítala si hace falta.",
+          );
           onSynthesisGenerated(res.data);
         }
       } else {
@@ -283,20 +291,24 @@ function SessionCopilotBar({
             </p>
           </div>
           <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
-            Prepará la reunión con 4 capas de memoria o redactá la síntesis ejecutiva con compromisos en borrador en base al diagnóstico actual.
+            {canBrief
+              ? "Prepara la reunión con el briefing de 4 capas. Al terminar, la síntesis sale de la transcripción de la llamada y se puede editar."
+              : "El mentor prepara el briefing antes de la sesión. Al terminar, la síntesis sale de la transcripción de la llamada y puedes editarla o completarla."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            type="button"
-            className="border-blue-300 text-blue-800 hover:bg-blue-50/80 font-semibold"
-            disabled={isAiLoading || disabled}
-            onClick={handleGenerateBriefing}
-          >
-            {isAiLoading ? "Procesando..." : "✨ Briefing 4 capas"}
-          </Button>
+          {canBrief && (
+            <Button
+              size="sm"
+              variant="secondary"
+              type="button"
+              className="border-blue-300 text-blue-800 hover:bg-blue-50/80 font-semibold"
+              disabled={isAiLoading || disabled}
+              onClick={handleGenerateBriefing}
+            >
+              {isAiLoading ? "Procesando..." : "✨ Briefing 4 capas"}
+            </Button>
+          )}
           <Button
             size="sm"
             variant="secondary"
@@ -305,7 +317,7 @@ function SessionCopilotBar({
             disabled={isAiLoading || disabled}
             onClick={handleGenerateSynthesis}
           >
-            {isAiLoading ? "Procesando..." : "✨ Síntesis pos-sesión"}
+            {isAiLoading ? "Procesando..." : "✨ Síntesis desde la transcripción"}
           </Button>
         </div>
       </div>
@@ -348,6 +360,8 @@ export function SessionCard(props: {
   const [postSyn, setPostSyn] = useState<PostSessionSynthesis | undefined>(s.postSessionSynthesis);
   const canAct = props.isSessionMentor && s.status !== "completed";
   const canUseCopilot = (props.isSessionMentor || props.isOwner) && s.status !== "completed";
+  const canEditSynthesis = Boolean(props.isSessionMentor || props.isOwner);
+  const [editingSyn, setEditingSyn] = useState(false);
   const itemTitle = (id?: string) => props.items.find((i) => i.id === id)?.title;
 
   useEffect(() => {
@@ -398,6 +412,7 @@ export function SessionCard(props: {
           projectId={props.projectId}
           sessionId={s.id}
           disabled={pending}
+          canBrief={props.isSessionMentor}
           onBriefingGenerated={(briefing) => {
             setPreBrief(briefing);
             router.refresh();
@@ -568,7 +583,25 @@ export function SessionCard(props: {
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 3. SÍNTESIS POS-SESIÓN Y ADOPCIÓN DE COMPROMISOS              */}
       {/* ───────────────────────────────────────────────────────────── */}
-      {postSyn && (
+      {!postSyn && canEditSynthesis && !editingSyn && (
+        <button type="button" onClick={() => setEditingSyn(true)} className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline">
+          ✎ Escribir la síntesis a mano
+        </button>
+      )}
+      {editingSyn && (
+        <SynthesisEditor
+          projectId={props.projectId}
+          sessionId={s.id}
+          initial={postSyn}
+          onCancel={() => setEditingSyn(false)}
+          onSaved={(syn) => {
+            setPostSyn(syn);
+            setEditingSyn(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {postSyn && !editingSyn && (
         <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/30 p-5 space-y-4 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 pb-2.5">
             <div>
@@ -576,7 +609,17 @@ export function SessionCard(props: {
                 Síntesis Pos-Sesión · {formatDate(postSyn.generatedAt)}
               </p>
               <h4 className="font-bold text-slate-900">Resumen ejecutivo y compromisos formalizados</h4>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                {postSyn.basedOn === "transcript" ? "Desde la transcripción de la llamada" : postSyn.basedOn === "manual" ? "Escrita a mano" : postSyn.basedOn === "notes" ? "Desde las notas de la sesión" : "Generada por el copiloto"}
+                {postSyn.editedAt ? ` · editada por ${props.people[postSyn.editedBy ?? ""]?.name ?? "el equipo"} ${formatDate(postSyn.editedAt)}` : ""}
+              </p>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+            {canEditSynthesis && (
+              <Button size="sm" type="button" onClick={() => setEditingSyn(true)}>
+                ✎ Editar o agregar
+              </Button>
+            )}
             {(props.isSessionMentor || props.isOwner) && postSyn.entrepreneurCommitments.length > 0 && (
               <Button
                 size="sm"
@@ -587,6 +630,7 @@ export function SessionCard(props: {
                 {pending ? "Adoptando..." : "✓ Adoptar compromisos en Hoja de Ruta"}
               </Button>
             )}
+            </div>
           </div>
 
           <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{postSyn.summary}</p>
