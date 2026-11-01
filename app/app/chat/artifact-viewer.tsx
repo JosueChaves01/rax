@@ -2,14 +2,18 @@
 
 import { useState } from "react";
 import type { AgentArtifact } from "@/types/domain";
+import { DocumentDownloads, isDocumentArtifact, messageDocumentUrl } from "./document-card";
+import { FormattedText } from "./formatted-text";
 
 interface ArtifactViewerProps {
   artifact: AgentArtifact | null;
+  /** Mensaje del que sale el artefacto: habilita la descarga en PDF/Word de los documentos. */
+  messageId?: string;
   onClose: () => void;
   onSaveToKnowledge?: (artifact: AgentArtifact) => void;
 }
 
-export function ArtifactViewer({ artifact, onClose, onSaveToKnowledge }: ArtifactViewerProps) {
+export function ArtifactViewer({ artifact, messageId, onClose, onSaveToKnowledge }: ArtifactViewerProps) {
   const [tab, setTab] = useState<"preview" | "code">("preview");
   const [copied, setCopied] = useState(false);
 
@@ -38,7 +42,9 @@ export function ArtifactViewer({ artifact, onClose, onSaveToKnowledge }: Artifac
     URL.revokeObjectURL(url);
   };
 
+  const isDocument = isDocumentArtifact(artifact);
   const isVisual =
+    isDocument ||
     artifact.type === "text/html" ||
     artifact.type === "application/vnd.ant.react" ||
     artifact.type === "image/svg+xml" ||
@@ -77,8 +83,13 @@ export function ArtifactViewer({ artifact, onClose, onSaveToKnowledge }: Artifac
             )}
           </button>
 
+          {isDocument && messageId && (
+            <DocumentDownloads hrefFor={(f) => messageDocumentUrl(messageId, artifact.id, f)} preferred={artifact.format} />
+          )}
+
           <button
             onClick={handleDownload}
+            hidden={isDocument}
             title="Descargar archivo"
             className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-lg text-xs transition"
           >
@@ -87,7 +98,7 @@ export function ArtifactViewer({ artifact, onClose, onSaveToKnowledge }: Artifac
             </svg>
           </button>
 
-          {onSaveToKnowledge && (
+          {onSaveToKnowledge && !artifact.documentId && (
             <button
               onClick={() => onSaveToKnowledge(artifact)}
               title="Guardar en Conocimiento del Proyecto"
@@ -139,7 +150,13 @@ export function ArtifactViewer({ artifact, onClose, onSaveToKnowledge }: Artifac
       {/* Body Area */}
       <div className="flex-1 overflow-auto bg-slate-50/50">
         {tab === "preview" && isVisual ? (
-          artifact.type === "image/svg+xml" ? (
+          isDocument ? (
+            <div className="p-6 bg-white m-4 rounded-xl border border-slate-200">
+              <h1 className="text-base font-bold text-slate-900">{artifact.title}</h1>
+              {artifact.subtitle && <p className="text-[0.6875rem] text-slate-500 mb-4">{artifact.subtitle}</p>}
+              <FormattedText content={artifact.content} isUser={false} />
+            </div>
+          ) : artifact.type === "image/svg+xml" ? (
             <div
               className="p-6 flex items-center justify-center min-h-full"
               dangerouslySetInnerHTML={{ __html: artifact.content }}

@@ -101,6 +101,7 @@ export default function ChatClient({
   const [applyingProposalTitle, setApplyingProposalTitle] = useState<string | null>(null);
 
   const [activeArtifact, setActiveArtifact] = useState<AgentArtifact | null>(null);
+  const [activeArtifactMessageId, setActiveArtifactMessageId] = useState<string | null>(null);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [isKnowledgeOpen, setIsKnowledgeOpen] = useState(false);
   const [customInstructions, setCustomInstructions] = useState("");
@@ -267,7 +268,12 @@ export default function ChatClient({
             cachedTokens: res.data!.cachedTokens,
           },
         ]);
-        if (artifacts && artifacts.length > 0) setActiveArtifact(artifacts[0]);
+        // Los documentos se descargan desde su tarjeta; el panel se abre solo para los demás artefactos.
+        const visual = artifacts?.find((a) => a.type !== "application/vnd.rax.document");
+        if (visual) {
+          setActiveArtifact(visual);
+          setActiveArtifactMessageId(assistantMessage.id);
+        }
       } else {
         setMessages((prev) => [
           ...prev,
@@ -574,7 +580,10 @@ export default function ChatClient({
                 appliedProposals={appliedProposals}
                 applyingProposalTitle={applyingProposalTitle}
                 onApplyProposal={handleApplyProposal}
-                onOpenArtifact={setActiveArtifact}
+                onOpenArtifact={(art, messageId) => {
+                  setActiveArtifact(art);
+                  setActiveArtifactMessageId(messageId);
+                }}
                 onSaveToKnowledge={(m) => {
                   setSaveModalMessage(m);
                   setSaveDecisionTitle(`Decisión: ${m.text.slice(0, 30)}...`);
@@ -605,6 +614,7 @@ export default function ChatClient({
         {activeArtifact && (
           <ArtifactViewer
             artifact={activeArtifact}
+            messageId={activeArtifactMessageId ?? undefined}
             onClose={() => setActiveArtifact(null)}
             onSaveToKnowledge={async (art) => {
               await promoteDecisionToKnowledgeAction(projectId, { title: art.title, filename: `${art.identifier}.md`, content: art.content });
