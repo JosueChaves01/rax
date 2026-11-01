@@ -123,3 +123,11 @@ describe("Llamadas con transcripción entre mentor y emprendedor", () => {
     expect(withTurn[1]).toEqual({ urls: ["turn:a.example:3478", "turns:a.example:443"], username: "u", credential: "c" });
   });
 });
+
+describe("Síntesis pos-sesión con modelos gratuitos", () => {
+  it("acepta próximos pasos devueltos como lista", async () => {
+    const { PostSessionSynthesisSchema } = await import("@/lib/ai/schema");
+    const r = PostSessionSynthesisSchema.parse({ summary: "Resumen de la llamada.", nextSteps: ["Entrevistar oficinas", "Medir costos"] });
+    expect(r.nextSteps).toBe("Entrevistar oficinas\nMedir costos");
+  });
+});

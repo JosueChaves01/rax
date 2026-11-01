@@ -24,6 +24,15 @@ export interface LiveSegment {
   offsetMs: number;
 }
 
+/** Ejecuta una limpieza sin dejar que un error del navegador tumbe la página. */
+function safely(fn: () => unknown) {
+  try {
+    fn();
+  } catch (err) {
+    console.warn("[llamada]", err);
+  }
+}
+
 export type CallPhase = "idle" | "joining" | "in_call" | "ending" | "ended";
 
 const CHUNK_MS = 15_000;
@@ -233,17 +242,17 @@ export function useSessionCall(opts: {
   /* ── Ciclo de vida ── */
 
   const cleanup = useCallback(() => {
-    pcRef.current?.close();
+    safely(() => pcRef.current?.close());
     pcRef.current = null;
     localRef.current?.getTracks().forEach((t) => t.stop());
     localRef.current = null;
     setLocalStream(null);
     setRemoteStream(null);
-    if (channelRef.current) {
-      const sb = browserSupabase();
-      channelRef.current.unsubscribe().catch(() => {});
-      if (sb) sb.removeChannel(channelRef.current).catch(() => {});
-      channelRef.current = null;
+    const channel = channelRef.current;
+    channelRef.current = null;
+    if (channel) {
+      // removeChannel ya cancela la suscripción; llamarlo dos veces puede fallar en algunas versiones.
+      safely(() => browserSupabase()?.removeChannel(channel).catch(() => {}));
     }
     peerIdRef.current = null;
     setPeer(null);
@@ -313,7 +322,7 @@ export function useSessionCall(opts: {
         if ((payload as { from?: string }).from === me.id || phaseRef.current !== "in_call") return;
         // La otra persona colgó: se envía el último trozo y se avisa para que cierre la llamada.
         setPhase("ending");
-        await recorderRef.current?.stop();
+        await recorderRef.current?.stop().catch(() => {});
         recorderRef.current = null;
         send("flushed", {});
         window.setTimeout(() => {
@@ -359,14 +368,22 @@ export function useSessionCall(opts: {
       flushedRef.current = resolve;
       window.setTimeout(resolve, hadPeer ? 8000 : 0);
     });
-    send("hangup", {});
-    await recorderRef.current?.stop();
-    recorderRef.current = null;
-    await peerFlushed;
-    cleanup();
-    const res = await endCallAction(projectId, current.id);
-    if (res.ok && res.data) setResult(res.data);
-    else if (!res.ok) setError(res.error);
+    try {
+      send("hangup", {});
+      await recorderRef.current?.stop().catch(() => {});
+      recorderRef.current = null;
+      await peerFlushed;
+    } finally {
+      safely(cleanup);
+    }
+    try {
+      const res = await endCallAction(projectId, current.id);
+      if (res.ok && res.data) setResult(res.data);
+      else if (!res.ok) setError(res.error);
+    } catch (err) {
+      console.error("[llamada] No se pudo cerrar la llamada:", err);
+      setError("No se pudo confirmar el cierre de la llamada. Recarga la página: lo transcrito hasta ahora quedó guardado.");
+    }
     setPhase("ended");
   }, [projectId, send, cleanup]);
 
@@ -387,7 +404,7 @@ export function useSessionCall(opts: {
   // Al salir de la página en plena llamada se liberan cámara y micrófono.
   useEffect(() => () => {
     recorderRef.current?.stop().catch(() => {});
-    cleanup();
+    safely(cleanup);
   }, [cleanup]);
 
   return {
