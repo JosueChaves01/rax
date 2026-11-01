@@ -5,6 +5,7 @@ import { openQuestions, pendingReview } from "@/features/diagnosis/rules";
 import { cx, formatDate } from "@/shared/ui/primitives";
 import { loadWorkspace } from "./data";
 import { nextAction } from "@/lib/services/next-action";
+import { DeleteProject } from "./delete-project";
 
 const CTA: Record<string, string> = {
   conversacion: "Ir a la conversación",
@@ -106,6 +107,14 @@ export default async function ProjectHome({ params }: { params: Promise<{ id: st
               Ver evidencia e historial →
             </Link>
           </div>
+          {w.permissions["project.delete"] && !w.isMentorView && (
+            <div className="rounded-2xl border border-rose-200/80 bg-white p-6 shadow-xs">
+              <p className="eyebrow text-rose-600">¿Lo creaste por error?</p>
+              <div className="mt-3">
+                <DeleteProject projectId={id} projectName={w.project.name} />
+              </div>
+            </div>
+          )}
         </aside>
       </div>
     </div>

@@ -24,6 +24,7 @@ export const STEP_ACTIONS = {
   mentor_decision: { permission: "mentor.decide", label: "Registrar la decisión de la segunda revisión", needs: "targetId de la hipótesis, decision continue|reformulate|deepen|pause|discard y text con la justificación" },
   schedule_session: { permission: "mentorship.manage", label: "Agendar una sesión de seguimiento", needs: "scheduledAt (YYYY-MM-DD o ISO)" },
   complete_session: { permission: "mentor.decide", label: "Cerrar una sesión de seguimiento", needs: "targetId de la sesión y text con el resumen" },
+  delete_project: { permission: "project.delete", label: "Borrar el proyecto", needs: "text con el motivo. Solo si la persona dueña lo pide de forma explícita (p. ej. lo creó por error); es definitivo para todos" },
   evaluate_cycle: { permission: "cycle.evaluate", label: "Registrar la evaluación del ciclo", needs: "decision renew|close|new_stage, autonomy nascent|developing|autonomous y text con la valoración" },
 } as const satisfies Record<string, { permission: Action; label: string; needs: string }>;
 

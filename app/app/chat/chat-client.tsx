@@ -26,6 +26,10 @@ import { ProjectOverview } from "./project-overview";
 import { SessionSidebar } from "./session-sidebar";
 import { ThreadMessages, type MessageView } from "./thread-messages";
 
+/** Borrar el proyecto es el único paso que no se deshace desde la pantalla: se confirma aparte. */
+const isDeleteProject = (proposal: Record<string, unknown>) =>
+  (proposal.metadata as Record<string, unknown> | undefined)?.action === "delete_project";
+
 /** Dónde está la persona: lista de proyectos → proyecto → sesión → hilo. Se refleja en la URL. */
 interface Route {
   projectId?: string;
@@ -391,9 +395,15 @@ export default function ChatClient({
 
   const handleApplyProposal = async (proposal: Record<string, unknown>) => {
     if (!projectId || typeof proposal.title !== "string") return;
+    const deleting = isDeleteProject(proposal);
+    if (deleting && !window.confirm(`¿Borrar «${activeProject?.name ?? "este proyecto"}»? Desaparece para ti y para tu mentor.`)) return;
     setApplyingProposalTitle(proposal.title);
     try {
       const res = await applyAiProposalAction(projectId, proposal);
+      if (res.ok && deleting) {
+        window.location.assign("/app?borrado=1");
+        return;
+      }
       if (res.ok) setAppliedProposals((prev) => new Set(prev).add(String(proposal.title)));
       else setNotice(res.error);
     } finally {

@@ -34,7 +34,7 @@ import { completeOnboarding } from "@/lib/services/onboarding";
 import { isDomainError } from "@/lib/errors";
 import { audit, guard, sysRepo, type ServiceDeps } from "@/lib/services/base";
 import type { ItemChange } from "@/features/diagnosis/rules";
-import { createProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
+import { createProject, deleteProject, setConversationSharing, setProjectStatus } from "@/lib/services/projects";
 import { addComment, addItem, changeItem, confirmSummary, editSummary } from "@/lib/services/diagnosis";
 import {
   addNote,
@@ -268,6 +268,12 @@ export async function createProjectAction(input: { name: string; description: st
 
 export const setProjectStatusAction = async (projectId: string, status: ProjectStatus) =>
   run(projectId, (d) => setProjectStatus(d, V.parse(V.Ids, projectId), V.parse(V.ProjectStatus, status)));
+/** Borra un proyecto creado por error. Pide el nombre como confirmación y vuelve al inicio. */
+export async function deleteProjectAction(projectId: string, confirmName: string) {
+  const res = await run(null, (d) => deleteProject(d, V.parse(V.Ids, projectId), { confirmName: V.parse(V.Text(200), confirmName) }));
+  if (res.ok) redirect("/app?borrado=1");
+  return res;
+}
 export const setSharingAction = async (projectId: string, share: boolean) =>
   run(projectId, (d) => setConversationSharing(d, V.parse(V.Ids, projectId), share === true));
 

@@ -16,6 +16,10 @@ import {
 import { FormattedText } from "@/app/app/chat/formatted-text";
 import { DocumentCard, isDocumentArtifact } from "@/app/app/chat/document-card";
 
+/** Borrar el proyecto es el único paso que no se deshace desde la pantalla: se confirma aparte. */
+const isDeleteProject = (proposal: Record<string, unknown>) =>
+  (proposal.metadata as Record<string, unknown> | undefined)?.action === "delete_project";
+
 interface MessageView {
   id: string;
   sender: "user" | "ai";
@@ -246,9 +250,15 @@ export function ProjectConversationClient({
 
   const handleApplyProposal = async (proposal: Record<string, unknown>) => {
     const title = String(proposal.title || "propuesta");
+    const deleting = isDeleteProject(proposal);
+    if (deleting && !window.confirm("¿Borrar este proyecto? Desaparece para ti y para tu mentor.")) return;
     setApplyingTitle(title);
     try {
       const res = await applyAiProposalAction(projectId, proposal);
+      if (res.ok && deleting) {
+        window.location.assign("/app?borrado=1");
+        return;
+      }
       if (res.ok) {
         setAppliedProposals((prev) => new Set(prev).add(title));
         const notice = res.data && "notice" in res.data ? res.data.notice : undefined;
