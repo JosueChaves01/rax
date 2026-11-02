@@ -34,7 +34,7 @@ export interface AgentTurnResult {
 /** Estado del proyecto visto por quien conversa. Si no se puede armar, el agente sigue con lo básico. */
 export async function loadProjectState(d: ServiceDeps, projectId: string): Promise<ProjectStateSnapshot | undefined> {
   try {
-    return buildProjectState(await getWorkspace(d, projectId), d.actor.role, d.now());
+    return buildProjectState(await getWorkspace(d, projectId, { forAgent: true }), d.actor.role, d.now());
   } catch (e) {
     console.warn("[agent] No se pudo armar el estado del proyecto:", e instanceof Error ? e.message : e);
     return undefined;
