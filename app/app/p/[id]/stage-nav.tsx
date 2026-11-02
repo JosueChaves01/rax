@@ -104,7 +104,7 @@ export function MobileStageBar({ projectId, phase, badges }: { projectId: string
   return (
     <nav
       aria-label="Etapas del proyecto"
-      className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-slate-200 bg-white/95 backdrop-blur md:bottom-0 md:pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-slate-200 bg-white md:bottom-0 md:pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <ul className="grid grid-cols-5">
         {SECTIONS.filter((s) => s.id !== "archivo").map((s) => {
@@ -117,13 +117,21 @@ export function MobileStageBar({ projectId, phase, badges }: { projectId: string
                 href={href(base, s.pages[0].slug)}
                 aria-current={active ? "page" : undefined}
                 className={cx(
-                  "relative flex flex-col items-center gap-1 px-1 pb-3 pt-2.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em]",
+                  "relative flex flex-col items-center gap-1 px-0.5 pb-2.5 pt-2 text-[0.625rem] font-semibold uppercase tracking-[0.06em]",
                   active ? "text-blue-600" : state === "upcoming" ? "text-slate-400" : "text-slate-600",
                 )}
               >
-                <span aria-hidden className={cx("h-1.5 w-1.5 rounded-full", state === "done" ? "bg-emerald-600" : "bg-current")} />
+                {/* Arriba, el estado de la etapa; si hay pendientes, el número reemplaza al punto (un solo indicador). */}
+                <span className="grid h-3.5 place-items-center">
+                  {n ? (
+                    <span className="grid h-3.5 min-w-3.5 place-items-center rounded-full bg-blue-600 px-1 font-mono text-[0.5625rem] leading-none text-white" aria-label={`${n} pendientes`}>
+                      {n}
+                    </span>
+                  ) : (
+                    <span aria-hidden className={cx("h-1.5 w-1.5 rounded-full", state === "done" ? "bg-emerald-600" : "bg-current")} />
+                  )}
+                </span>
                 {s.label}
-                {!!n && <span className="absolute left-1/2 top-1.5 ml-2 h-1.5 w-1.5 rounded-full bg-blue-600" aria-label={`${n} pendientes`} />}
               </Link>
             </li>
           );
