@@ -26,7 +26,7 @@ import {
   suggestFirstReviewAction,
 } from "@/app/actions";
 import { ACTION_TYPE_LABEL, DECISION_LABEL, HYPOTHESIS_STATUS_LABEL, OUTCOME_LABEL } from "@/features/labels";
-import { Button, Card, Field, Notice, Tag, formatDate, inputClass } from "@/shared/ui/primitives";
+import { Button, Card, Field, Notice, Tag, cx, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
 import { localIsoWithOffset, parseSessionDateTime } from "@/lib/dates";
 import { SessionCallPanel } from "@/shared/ui/session-call";
@@ -37,16 +37,16 @@ import { AiNotesDraft } from "./ai-notes-draft";
 type People = Record<string, { id: string; name: string; role: string }>;
 export type ProblemOption = { id: string; title: string; priority?: { rank: number; rationale: string } };
 
-const KIND_TITLE: Record<MentorSessionKind, readonly [string, string]> = {
-  first_review: ["Primera revisión", "orientar el enfoque."],
-  second_review: ["Segunda revisión", "decidir con evidencia."],
-  exploratory: ["Sesión exploratoria", "evaluar compatibilidad."],
-  follow_up: ["Sesión de seguimiento", "ejecución y destrabes."],
-  evaluation: ["Evaluación de ciclo", "cierre o renovación."],
+const KIND_TITLE: Record<MentorSessionKind, string> = {
+  first_review: "Primera revisión",
+  second_review: "Segunda revisión",
+  exploratory: "Sesión exploratoria",
+  follow_up: "Sesión de seguimiento",
+  evaluation: "Evaluación de ciclo",
 };
 
 const STATUS_TAG = {
-  pending: ["Pendiente del mentor", "var(--color-highlight)"],
+  pending: ["Por confirmar", "var(--color-highlight)"],
   in_progress: ["En curso", "var(--color-cyan)"],
   completed: ["Completada", "var(--color-ok)"],
 } as const;
@@ -79,112 +79,72 @@ export function SharingToggle({ projectId, shared }: { projectId: string; shared
 }
 
 /**
- * Lo que pide el emprendedor: la revisión de esta etapa (con fecha opcional) y, aparte, sesiones de
- * seguimiento. Las revisiones solo se piden por aquí, con sus requisitos.
+ * Pedir la revisión de esta etapa (con la fecha y hora que prefiere la persona). Solo se muestra cuando
+ * no hay una abierta: el mentor recibe el pedido con el briefing preparado y confirma la fecha.
  */
-export function ReviewRequests({
-  projectId,
-  sessions,
-  summaryConfirmed,
-  hasResults,
-  only,
-}: {
-  projectId: string;
-  sessions: MentorSession[];
-  summaryConfirmed: boolean;
-  hasResults: boolean;
-  /** Muestra solo el pedido de esta revisión (cada etapa pide la suya). */
-  only?: MentorSession["kind"];
-}) {
+export function RequestReview({ projectId, kind, ready }: { projectId: string; kind: "first_review" | "second_review"; ready: boolean }) {
   const { run, pending, error } = useAction();
-  const [reviewDate, setReviewDate] = useState("");
-  const [showFollowUp, setShowFollowUp] = useState(false);
-  const [followUpDate, setFollowUpDate] = useState("");
-
-  const open = (k: MentorSession["kind"]) => sessions.some((s) => s.kind === k && s.status !== "completed");
-  const done = (k: MentorSession["kind"]) => sessions.some((s) => s.kind === k && s.status === "completed");
-
-  const row = (kind: "first_review" | "second_review") => {
-    const isFirst = kind === "first_review";
-    const ready = isFirst ? summaryConfirmed : hasResults;
-    const blocked = open(kind) || (isFirst && done(kind));
-    return (
-      <div className="space-y-3 rounded-xl border border-slate-200/60 bg-slate-50/60 p-3">
-        <div>
-          <span className="font-semibold text-slate-900">{isFirst ? "Primera revisión" : "Segunda revisión"}</span>
-          <span className="mt-0.5 block text-xs text-slate-500">
-            {blocked
-              ? open(kind)
-                ? "Pedida: el mentor ya tiene el briefing listo."
-                : "Hecha."
-              : !ready
-                ? isFirst
-                  ? "Disponible al confirmar el resumen inicial."
-                  : "Disponible cuando registres al menos un resultado."
-                : "Proponé fecha y hora: el mentor recibe el pedido con el briefing preparado y confirma la fecha o propone otra."}
-          </span>
-        </div>
-        {!blocked && (
-          <div className="flex flex-wrap items-end gap-2">
-            <Field id={`${kind}-date`} label="Fecha y hora (opcional)">
-              <input id={`${kind}-date`} type="datetime-local" className={inputClass} value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} />
-            </Field>
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={pending || !ready}
-              onClick={() => run(() => requestReviewAction(projectId, kind, toIso(reviewDate)), () => setReviewDate(""))}
-            >
-              {pending ? "Pidiendo..." : "Pedir revisión"}
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
+  const [date, setDate] = useState("");
+  const isFirst = kind === "first_review";
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
-      <p className="eyebrow border-b border-slate-200/80 pb-3 text-slate-500">Revisión con tu mentor</p>
-      <div className="space-y-3 text-sm">
-        {only !== "second_review" && row("first_review")}
-        {only !== "first_review" && row("second_review")}
+    <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-5 shadow-xs sm:p-6">
+      <p className="text-base font-bold text-slate-900">{isFirst ? "Pedí tu primera revisión" : "Pedí la segunda revisión"}</p>
+      <p className="mt-1 max-w-2xl text-sm text-slate-600">
+        {!ready
+          ? isFirst
+            ? "Se habilita cuando confirmes el resumen inicial en el diagnóstico."
+            : "Se habilita cuando registres al menos un resultado en Probar."
+          : "Proponé fecha y hora. Tu mentor recibe el pedido con el briefing ya preparado y confirma la fecha o te propone otra."}
+      </p>
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <Field id={`${kind}-date`} label="Fecha y hora (opcional)">
+          <input id={`${kind}-date`} type="datetime-local" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} disabled={!ready} />
+        </Field>
+        <Button variant="primary" disabled={pending || !ready} onClick={() => run(() => requestReviewAction(projectId, kind, toIso(date)), () => setDate(""))}>
+          {pending ? "Pidiendo..." : "Pedir revisión"}
+        </Button>
       </div>
-
-      <div className="border-t border-slate-200/80 pt-3">
-        {showFollowUp ? (
-          <form
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run(
-                () => scheduleSessionAction(projectId, { kind: "follow_up", scheduledAt: toIso(followUpDate) }),
-                () => {
-                  setShowFollowUp(false);
-                  setFollowUpDate("");
-                },
-              );
-            }}
-          >
-            <Field id="follow-up-date" label="Sesión de seguimiento · fecha y hora">
-              <input id="follow-up-date" type="datetime-local" className={inputClass} value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
-            </Field>
-            <Button size="sm" variant="primary" type="submit" disabled={pending}>
-              Agendar
-            </Button>
-            <Button size="sm" variant="ghost" type="button" onClick={() => setShowFollowUp(false)}>
-              Cancelar
-            </Button>
-          </form>
-        ) : (
-          <button type="button" onClick={() => setShowFollowUp(true)} className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline">
-            + Agendar una sesión de seguimiento
-          </button>
-        )}
-      </div>
-
-      {error && <Notice tone="error">{error}</Notice>}
+      {error && <div className="mt-3"><Notice tone="error">{error}</Notice></div>}
     </div>
+  );
+}
+
+/** Sesiones de seguimiento entre revisiones: un enlace discreto que se abre en un formulario corto. */
+export function FollowUpRequest({ projectId }: { projectId: string }) {
+  const { run, pending, error } = useAction();
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState("");
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline">
+        + Agendar una sesión de seguimiento
+      </button>
+    );
+  return (
+    <form
+      className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200/80 bg-white p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run(
+          () => scheduleSessionAction(projectId, { kind: "follow_up", scheduledAt: toIso(date) }),
+          () => {
+            setOpen(false);
+            setDate("");
+          },
+        );
+      }}
+    >
+      <Field id="follow-up-date" label="Sesión de seguimiento · fecha y hora">
+        <input id="follow-up-date" type="datetime-local" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+      </Field>
+      <Button size="sm" variant="primary" type="submit" disabled={pending}>
+        {pending ? "Agendando..." : "Agendar"}
+      </Button>
+      <Button size="sm" variant="ghost" type="button" onClick={() => setOpen(false)}>
+        Cancelar
+      </Button>
+      {error && <Notice tone="error">{error}</Notice>}
+    </form>
   );
 }
 
@@ -251,6 +211,18 @@ function ConfirmDate({ projectId, session }: { projectId: string; session: Mento
   );
 }
 
+type Step = "prepare" | "meeting" | "close";
+
+const STEPS: Array<[Step, string, string]> = [
+  ["prepare", "1 · Preparar", "Fecha y briefing"],
+  ["meeting", "2 · Reunión", "Llamada y notas"],
+  ["close", "3 · Cierre", "Síntesis y acuerdo"],
+];
+
+/**
+ * Una sesión del ciclo. Abierta, se trabaja en tres pasos (Preparar, Reunión, Cierre) en vez de una
+ * pila larga; cerrada, se ve como un resumen con la síntesis, la decisión y las notas plegadas.
+ */
 export function SessionCard(props: {
   projectId: string;
   session: MentorSession;
@@ -267,9 +239,6 @@ export function SessionCard(props: {
 }) {
   const router = useRouter();
   const { session: s } = props;
-  const [title, hi] = KIND_TITLE[s.kind] ?? ["Sesión de mentoría", "acompañamiento"];
-  const [statusLabel, statusColor] = STATUS_TAG[s.status];
-  const b = s.briefing;
   const [preBrief, setPreBrief] = useState<PreSessionBriefing | undefined>(s.preSessionBriefing);
   const [postSyn, setPostSyn] = useState<PostSessionSynthesis | undefined>(s.postSessionSynthesis);
   const [editingSyn, setEditingSyn] = useState(false);
@@ -277,216 +246,263 @@ export function SessionCard(props: {
   const isOpen = s.status !== "completed";
   const canAct = props.isSessionMentor && isOpen;
   const canEditSynthesis = Boolean(props.isSessionMentor || props.isOwner);
+  const [step, setStep] = useState<Step>(() => (s.postSessionSynthesis ? "close" : s.confirmedAt ? "meeting" : "prepare"));
 
   useEffect(() => {
     if (s.preSessionBriefing) setPreBrief(s.preSessionBriefing);
   }, [s.preSessionBriefing]);
 
   useEffect(() => {
-    if (s.postSessionSynthesis) setPostSyn(s.postSessionSynthesis);
+    if (s.postSessionSynthesis) {
+      setPostSyn(s.postSessionSynthesis);
+      setStep("close");
+    }
   }, [s.postSessionSynthesis]);
 
+  const stepDone: Record<Step, boolean> = { prepare: Boolean(s.confirmedAt), meeting: Boolean(postSyn), close: !isOpen };
+
+  const synthesis = editingSyn ? (
+    <SynthesisEditor
+      projectId={props.projectId}
+      sessionId={s.id}
+      initial={postSyn}
+      onCancel={() => setEditingSyn(false)}
+      onSaved={(syn) => {
+        setPostSyn(syn);
+        setEditingSyn(false);
+        router.refresh();
+      }}
+    />
+  ) : postSyn ? (
+    <SynthesisView
+      projectId={props.projectId}
+      sessionId={s.id}
+      postSyn={postSyn}
+      people={props.people}
+      canEdit={canEditSynthesis}
+      canAdopt={!isOpen && canEditSynthesis}
+      onEdit={() => setEditingSyn(true)}
+    />
+  ) : canEditSynthesis && isOpen ? (
+    <GenerateSynthesis
+      projectId={props.projectId}
+      sessionId={s.id}
+      onGenerated={(syn) => {
+        setPostSyn(syn);
+        router.refresh();
+      }}
+      onWrite={() => setEditingSyn(true)}
+    />
+  ) : (
+    <p className="text-sm text-slate-500">La síntesis aparece acá después de la llamada.</p>
+  );
+
+  const decision = s.decision && (
+    <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+      <p className="eyebrow text-blue-700">Decisión del mentor</p>
+      <p className="display mt-1 text-2xl text-slate-900">{DECISION_LABEL[s.decision.value]}</p>
+      <p className="mt-1 text-sm text-slate-700">{s.decision.justification}</p>
+      <p className="mt-1 text-xs text-slate-500">
+        Sobre: {props.hypotheses.find((h) => h.id === s.decision!.hypothesisId)?.statement ?? "hipótesis"} · {formatDate(s.decision.decidedAt)}
+      </p>
+    </div>
+  );
+
   return (
-    <Card as="li" className="p-6 space-y-6 bg-white border border-slate-200/80 shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="display text-2xl text-slate-900">
-            {title} <span className="text-highlight">{hi}</span>
-          </h3>
-          <Tag color={statusColor}>{statusLabel}</Tag>
-          {s.scheduledAt && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-blue-700 font-medium bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200 font-mono">
-              📅 {formatDate(s.scheduledAt)}
-            </span>
-          )}
-          {isOpen && (
-            <span className={`text-xs font-semibold ${s.confirmedAt ? "text-emerald-700" : "text-amber-700"}`}>
-              {s.confirmedAt ? "Fecha confirmada" : s.scheduledAt ? "Fecha por confirmar" : "Sin fecha"}
-            </span>
-          )}
+    <Card as="li" className="space-y-5 border border-slate-200/80 bg-white p-5 shadow-xs sm:p-6">
+      <SessionHeader session={s} people={props.people} />
+
+      {!isOpen ? (
+        <div className="space-y-4">
+          {decision}
+          {synthesis}
+          <details className="rounded-xl border border-slate-200/80 p-4">
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Notas y preparación de la sesión</summary>
+            <div className="mt-4 space-y-4">
+              <Briefing session={s} preBrief={preBrief} open={false} />
+              <SessionNotes projectId={props.projectId} sessionId={s.id} refreshKey={notesKey} />
+            </div>
+          </details>
         </div>
-        {canAct && !s.confirmedAt && <ConfirmDate projectId={props.projectId} session={s} />}
-        <span className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-          {canAct && (
-            <RefreshBriefing
-              projectId={props.projectId}
-              sessionId={s.id}
-              onDone={(briefing) => {
-                setPreBrief(briefing);
-                router.refresh();
-              }}
-            />
-          )}
-          <span>
-            {props.people[s.mentorId]?.name ?? "Mentor"} · creada {formatDate(s.createdAt)}
-          </span>
-        </span>
-      </div>
-
-      {/* 1. Preparación: el briefing (con IA si ya está, si no el resumen del diagnóstico) */}
-      {preBrief && (
-        <details className="rounded-2xl border border-blue-200/80 bg-blue-50/30 p-5 shadow-xs" open={true}>
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center justify-between">
-            <span>✨ Briefing Pre-Sesión (4 Capas de Memoria) · {formatDate(preBrief.generatedAt)}</span>
-            <span className="text-[0.6875rem] text-blue-700 bg-blue-100/70 border border-blue-200 px-2.5 py-0.5 rounded-full font-semibold normal-case">
-              Preparación en &lt; 3 minutos
-            </span>
-          </summary>
-          <div className="mt-3.5 space-y-3.5 text-sm pt-3 border-t border-blue-200/70">
-            {/* Capa 1: Acuerdos y Objetivos vigentes */}
-            <div className="rounded-xl bg-white p-4 border border-slate-200/80 shadow-2xs">
-              <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700">
-                Capa 1: Acuerdos y Objetivos vigentes
-              </p>
-              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 leading-relaxed">
-                {preBrief.activeAgreementsAndGoalsSummary}
-              </p>
-            </div>
-
-            {/* Capa 2: Progreso y Ejecución reciente */}
-            <div className="rounded-xl bg-white p-4 border border-slate-200/80 shadow-2xs">
-              <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700">
-                Capa 2: Progreso reciente, problemas diagnósticos y bloqueos
-              </p>
-              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 leading-relaxed">
-                {preBrief.recentProgressSummary}
-              </p>
-            </div>
-
-            {/* Capa 3: Temas pendientes y conversaciones recientes */}
-            <div className="rounded-xl bg-white p-4 border border-slate-200/80 shadow-2xs">
-              <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700">
-                Capa 3: Temas pendientes de sesiones previas y chat del asistente
-              </p>
-              <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-800 leading-relaxed">
-                {preBrief.pendingTopicsSummary}
-              </p>
-            </div>
-
-            {/* Capa 4: Propuesta de agenda y preguntas estratégicas */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl bg-white p-4 border border-slate-200/80 shadow-2xs">
-                <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700">
-                  Capa 4: Propuesta de Agenda
-                </p>
-                <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-800">
-                  {preBrief.suggestedAgenda.map((item, idx) => (
-                    <li key={idx}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="rounded-xl bg-white p-4 border border-slate-200/80 shadow-2xs">
-                <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700">
-                  Capa 4: Preguntas estratégicas sugeridas
-                </p>
-                <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-600 italic">
-                  {preBrief.suggestedQuestions.map((q, idx) => (
-                    <li key={idx}>«{q}»</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </details>
-      )}
-
-      {/* Briefing determinista clásico si no hay preBriefing generado */}
-      {!preBrief && b && (
-        <details className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-2xs" open={canAct}>
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
-            Resumen estructurado para el mentor · {formatDate(b.generatedAt)}
-          </summary>
-          <dl className="mt-3.5 grid gap-4 text-sm md:grid-cols-2">
-            <Brief label="Qué intenta desarrollar" value={b.whatTheyBuild} />
-            <Brief label="Etapa" value={b.stage} />
-            <Brief label="Problema principal" value={b.mainProblem} />
-            <Brief label="Evidencia" list={b.evidence} empty="Sin evidencia registrada." />
-            <Brief label="Supuestos sin comprobar" list={b.openAssumptions} empty="Ninguno registrado." />
-            <Brief label="Recursos y limitaciones" list={b.resourcesAndLimits} empty="Sin datos." />
-            <Brief label="Preguntas que requieren criterio humano" list={b.questionsForMentor} empty="Ninguna." />
-          </dl>
-        </details>
-      )}
-
-      {s.kind === "second_review" && (
-        <ResultsDigest hypotheses={props.hypotheses} experiments={props.experiments} results={props.results} />
-      )}
-
-      {/* 2. La reunión: llamada con transcripción */}
-      {isOpen && <SessionCallPanel sessionId={s.id} />}
-
-      {/* 3. Notas (y respuestas) */}
-      <SessionNotes projectId={props.projectId} sessionId={s.id} refreshKey={notesKey} />
-
-      {/* 4. Síntesis */}
-      {editingSyn ? (
-        <SynthesisEditor
-          projectId={props.projectId}
-          sessionId={s.id}
-          initial={postSyn}
-          onCancel={() => setEditingSyn(false)}
-          onSaved={(syn) => {
-            setPostSyn(syn);
-            setEditingSyn(false);
-            router.refresh();
-          }}
-        />
-      ) : postSyn ? (
-        <SynthesisView
-          projectId={props.projectId}
-          sessionId={s.id}
-          postSyn={postSyn}
-          people={props.people}
-          canEdit={canEditSynthesis}
-          canAdopt={!isOpen && canEditSynthesis}
-          onEdit={() => setEditingSyn(true)}
-        />
       ) : (
-        canEditSynthesis &&
-        isOpen && (
-          <GenerateSynthesis
-            projectId={props.projectId}
-            sessionId={s.id}
-            onGenerated={(syn) => {
-              setPostSyn(syn);
-              router.refresh();
-            }}
-            onWrite={() => setEditingSyn(true)}
-          />
-        )
-      )}
+        <>
+          <div role="tablist" aria-label="Pasos de la sesión" className="grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-100/80 p-1.5">
+            {STEPS.map(([id, label, hint]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={step === id}
+                onClick={() => setStep(id)}
+                className={cx(
+                  "cursor-pointer rounded-xl px-2 py-2 text-left transition-colors sm:px-3",
+                  step === id ? "bg-white shadow-2xs" : "hover:bg-white/60",
+                )}
+              >
+                <span className={cx("flex items-center gap-1.5 text-xs font-bold", step === id ? "text-blue-700" : "text-slate-700")}>
+                  {stepDone[id] && <span className="text-emerald-600" aria-label="hecho">✓</span>}
+                  {label}
+                </span>
+                <span className="hidden text-[0.6875rem] text-slate-500 sm:block">{hint}</span>
+              </button>
+            ))}
+          </div>
 
-      {s.decision && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
-          <p className="eyebrow text-blue-700">Decisión formal del mentor</p>
-          <p className="display mt-1 text-2xl text-slate-900">{DECISION_LABEL[s.decision.value]}</p>
-          <p className="mt-1 text-sm text-slate-700">{s.decision.justification}</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Sobre: {props.hypotheses.find((h) => h.id === s.decision!.hypothesisId)?.statement ?? "hipótesis"} · {formatDate(s.decision.decidedAt)}
-          </p>
-        </div>
-      )}
+          {/* Los pasos quedan montados (ocultos) para no cortar una llamada al cambiar de pestaña. */}
+          <div role="tabpanel" hidden={step !== "prepare"} className="space-y-4">
+            {canAct && !s.confirmedAt && <ConfirmDate projectId={props.projectId} session={s} />}
+            {!props.isSessionMentor && !s.confirmedAt && (
+              <p className="text-sm text-slate-600">
+                {s.scheduledAt ? "Tu mentor todavía no confirmó la fecha. Te avisamos acá cuando lo haga." : "Tu mentor va a proponer la fecha de la sesión."}
+              </p>
+            )}
+            <Briefing
+              session={s}
+              preBrief={preBrief}
+              open
+              refresh={
+                canAct ? (
+                  <RefreshBriefing
+                    projectId={props.projectId}
+                    sessionId={s.id}
+                    onDone={(briefing) => {
+                      setPreBrief(briefing);
+                      router.refresh();
+                    }}
+                  />
+                ) : undefined
+              }
+            />
+            {s.kind === "second_review" && <ResultsDigest hypotheses={props.hypotheses} experiments={props.experiments} results={props.results} />}
+            <StepNext onClick={() => setStep("meeting")} label="Ir a la reunión" />
+          </div>
 
-      {!props.isSessionMentor && isOpen && (
-        <p className="text-sm text-slate-600">
-          Después de la llamada, la síntesis se arma sola. Podés corregirla y responder las notas del mentor; al cerrar la sesión, tus compromisos se vuelven tareas.
-        </p>
-      )}
+          <div role="tabpanel" hidden={step !== "meeting"} className="space-y-4">
+            <SessionCallPanel sessionId={s.id} />
+            <SessionNotes projectId={props.projectId} sessionId={s.id} refreshKey={notesKey} />
+            {canAct && <AiNotesDraft projectId={props.projectId} sessionId={s.id} items={props.items} onSaved={() => setNotesKey((k) => k + 1)} />}
+            <StepNext onClick={() => setStep("close")} label="Ir al cierre" />
+          </div>
 
-      {/* 5. Cierre único del mentor */}
-      {canAct && (
-        <ClosePanel
-          projectId={props.projectId}
-          session={s}
-          synthesis={postSyn}
-          items={props.items}
-          problems={props.problems}
-          hypotheses={props.hypotheses}
-          onNotesSaved={() => setNotesKey((k) => k + 1)}
-        />
+          <div role="tabpanel" hidden={step !== "close"} className="space-y-4">
+            {synthesis}
+            {decision}
+            {canAct ? (
+              <ClosePanel
+                projectId={props.projectId}
+                session={s}
+                synthesis={postSyn}
+                problems={props.problems}
+                hypotheses={props.hypotheses}
+              />
+            ) : (
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                {props.isSessionMentor
+                  ? "Esta sesión ya está cerrada."
+                  : "Podés corregir la síntesis y responder las notas del mentor. Cuando tu mentor cierre la sesión, tus compromisos se vuelven tareas."}
+              </p>
+            )}
+          </div>
+        </>
       )}
     </Card>
+  );
+}
+
+function StepNext({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <div className="flex justify-end">
+      <button type="button" onClick={onClick} className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-blue-600 hover:text-blue-700">
+        {label} →
+      </button>
+    </div>
+  );
+}
+
+function SessionHeader({ session: s, people }: { session: MentorSession; people: People }) {
+  const [statusLabel, statusColor] = STATUS_TAG[s.status];
+  const isOpen = s.status !== "completed";
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-lg font-bold text-slate-900">{KIND_TITLE[s.kind] ?? "Sesión de mentoría"}</h3>
+          <Tag color={statusColor}>{statusLabel}</Tag>
+        </div>
+        <p className="mt-1 text-xs text-slate-500">
+          Con {people[s.mentorId]?.name ?? "el mentor"} ·{" "}
+          {s.scheduledAt ? (
+            <>
+              📅 {formatDate(s.scheduledAt)}
+              {isOpen && (
+                <span className={cx("ml-1.5 font-semibold", s.confirmedAt ? "text-emerald-700" : "text-amber-700")}>
+                  {s.confirmedAt ? "· confirmada" : "· por confirmar"}
+                </span>
+              )}
+            </>
+          ) : isOpen ? (
+            "sin fecha"
+          ) : (
+            `cerrada ${formatDate(s.completedAt ?? s.createdAt)}`
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Un solo briefing: el que preparó la IA si existe; si no, el resumen estructurado del diagnóstico. */
+function Briefing({ session: s, preBrief, open, refresh }: { session: MentorSession; preBrief?: PreSessionBriefing; open: boolean; refresh?: React.ReactNode }) {
+  const b = s.briefing;
+  if (!preBrief && !b) return refresh ? <div>{refresh}</div> : null;
+  return (
+    <details className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 sm:p-5" open={open}>
+      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
+        <span>Briefing · {formatDate((preBrief ?? b)!.generatedAt)}</span>
+        {refresh}
+      </summary>
+      {preBrief ? (
+        <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+          <BriefBlock label="Acuerdos y objetivos vigentes" text={preBrief.activeAgreementsAndGoalsSummary} />
+          <BriefBlock label="Avance, problemas y bloqueos" text={preBrief.recentProgressSummary} />
+          <BriefBlock label="Temas pendientes" text={preBrief.pendingTopicsSummary} wide />
+          <BriefList label="Agenda propuesta" items={preBrief.suggestedAgenda} />
+          <BriefList label="Preguntas para la sesión" items={preBrief.suggestedQuestions.map((q) => `«${q}»`)} />
+        </div>
+      ) : (
+        <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
+          <Brief label="Qué intenta desarrollar" value={b!.whatTheyBuild} />
+          <Brief label="Etapa" value={b!.stage} />
+          <Brief label="Problema principal" value={b!.mainProblem} />
+          <Brief label="Evidencia" list={b!.evidence} empty="Sin evidencia registrada." />
+          <Brief label="Supuestos sin comprobar" list={b!.openAssumptions} empty="Ninguno registrado." />
+          <Brief label="Recursos y limitaciones" list={b!.resourcesAndLimits} empty="Sin datos." />
+          <Brief label="Preguntas que requieren criterio humano" list={b!.questionsForMentor} empty="Ninguna." />
+        </dl>
+      )}
+    </details>
+  );
+}
+
+function BriefBlock({ label, text, wide }: { label: string; text: string; wide?: boolean }) {
+  return (
+    <div className={cx("rounded-xl border border-slate-200/80 bg-white p-4", wide && "md:col-span-2")}>
+      <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-slate-800">{text}</p>
+    </div>
+  );
+}
+
+function BriefList({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="rounded-xl border border-slate-200/80 bg-white p-4">
+      <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+      <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-slate-800">
+        {items.map((x, i) => (
+          <li key={i}>{x}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -536,18 +552,14 @@ function ClosePanel({
   projectId,
   session: s,
   synthesis,
-  items,
   problems,
   hypotheses,
-  onNotesSaved,
 }: {
   projectId: string;
   session: MentorSession;
   synthesis?: PostSessionSynthesis;
-  items: Array<{ id: string; title: string }>;
   problems: ProblemOption[];
   hypotheses: Hypothesis[];
-  onNotesSaved: () => void;
 }) {
   const { run, pending, error } = useAction();
   const [suggesting, startSuggest] = useTransition();
@@ -583,9 +595,7 @@ function ClosePanel({
     });
 
   return (
-    <div className="space-y-5 border-t border-slate-200/80 pt-5">
-      <AiNotesDraft projectId={projectId} sessionId={s.id} items={items} onSaved={onNotesSaved} />
-
+    <div>
       <form
         className="space-y-4 rounded-2xl border border-blue-200/80 bg-blue-50/30 p-5 shadow-xs"
         onSubmit={(e) => {
@@ -717,9 +727,8 @@ function SynthesisView({
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 pb-2.5">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-                Síntesis Pos-Sesión · {formatDate(postSyn.generatedAt)}
+                Síntesis de la sesión · {formatDate(postSyn.generatedAt)}
               </p>
-              <h4 className="font-bold text-slate-900">Resumen ejecutivo y compromisos formalizados</h4>
               <p className="mt-0.5 text-[11px] text-slate-500">
                 {postSyn.basedOn === "transcript" ? "Desde la transcripción de la llamada" : postSyn.basedOn === "manual" ? "Escrita a mano" : postSyn.basedOn === "notes" ? "Desde las notas de la sesión" : "Generada por el copiloto"}
                 {postSyn.editedAt ? ` · editada por ${people[postSyn.editedBy ?? ""]?.name ?? "el equipo"} ${formatDate(postSyn.editedAt)}` : ""}
@@ -744,7 +753,7 @@ function SynthesisView({
           {postSyn.agreedDecisions.length > 0 && (
             <div className="rounded-xl bg-white p-4 border border-slate-200/80 shadow-2xs">
               <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-emerald-800">
-                Decisiones y Acuerdos
+                Decisiones y acuerdos
               </p>
               <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs text-slate-800">
                 {postSyn.agreedDecisions.map((d, idx) => (
@@ -758,7 +767,7 @@ function SynthesisView({
             {postSyn.entrepreneurCommitments.length > 0 && (
               <div className="rounded-xl bg-white p-4 border border-slate-200/80 shadow-2xs">
                 <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-emerald-800">
-                  Compromisos del Emprendedor ({postSyn.entrepreneurCommitments.length}){postSyn.commitmentsAdoptedAt ? " · ya son tareas" : ""}
+                  Compromisos del emprendedor ({postSyn.entrepreneurCommitments.length}){postSyn.commitmentsAdoptedAt ? " · ya son tareas" : ""}
                 </p>
                 <ul className="mt-2 space-y-2 text-xs text-slate-800">
                   {postSyn.entrepreneurCommitments.map((c, idx) => (
@@ -776,7 +785,7 @@ function SynthesisView({
             {postSyn.mentorCommitments.length > 0 && (
               <div className="rounded-xl bg-white p-4 border border-slate-200/80 shadow-2xs">
                 <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-emerald-800">
-                  Compromisos del Mentor ({postSyn.mentorCommitments.length})
+                  Compromisos del mentor ({postSyn.mentorCommitments.length})
                 </p>
                 <ul className="mt-2 space-y-1.5 text-xs text-slate-700">
                   {postSyn.mentorCommitments.map((mc, idx) => (
