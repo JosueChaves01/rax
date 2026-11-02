@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { cx, formatDate } from "@/shared/ui/primitives";
-import type { Evidence, MentorSession, ProjectKnowledgeDocument, SessionNote, SessionNoteKind, SessionNoteReply, Task } from "@/types/domain";
+import type { Evidence, MentorSession, ProjectKnowledgeDocument, SessionNote, SessionNoteKind, SessionNoteReply, Task, TaskStatus } from "@/types/domain";
 import {
   addNoteAction,
   replyToNoteAction,
   updateNoteReplyAction,
   updateSessionNoteAction,
+  addProjectDocumentAction,
+  createTaskAction,
   getMentorSessionWorkspaceAction,
 } from "@/app/actions";
 

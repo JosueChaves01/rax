@@ -55,7 +55,7 @@ function extractServiceRoleKey(): string {
   }
 
   // Fallback seguro de servidor si no está configurada la variable en Vercel
-  return DEFAULT_SERVICE_ROLE_KEY;
+  return DEFAULT_SERVICE_ROLE_KEY ?? "";
 }
 
 /**
