@@ -1,0 +1,80 @@
+/*
+ * Sistema visual de la landing pública (estilo «Baseline»).
+ * Todo está acotado a .bl-root o a html:has(.bl-root), así el resto de la app no cambia:
+ * cuando la landing se desmonta (navegación a /entrar, /app…) la escala rem vuelve a 16px.
+ */
+
+/* Escala rem adaptativa: diseño base 1920px. Por encima de 1920 la escala la sube el JS del shell. */
+html:has(.bl-root) {
+  font-size: 16px;
+  background: #ffffff;
+}
+@media (max-width: 1920px) {
+  html:has(.bl-root) { font-size: 0.833333vw; }
+}
+@media (max-width: 1440px) {
+  html:has(.bl-root) { font-size: 1.111111vw; }
+}
+@media (max-width: 1024px) {
+  html:has(.bl-root) { font-size: 1.5625vw; }
+}
+@media (max-width: 640px) {
+  html:has(.bl-root) { font-size: 4.444444vw; }
+}
+
+html:has(.bl-root) body {
+  background: #ffffff;
+  color: #0a0a0a;
+}
+
+/* Bloqueo de scroll nativo mientras el loader, el menú o el modal están abiertos. */
+html.bl-locked {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Lenis */
+html.lenis,
+html.lenis body { height: auto; }
+.lenis:not(.lenis-autoToggle).lenis-stopped { overflow: clip; }
+.lenis [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-smooth iframe { pointer-events: none; }
+
+.bl-root,
+.bl-portal {
+  --bl-bg: #ffffff;
+  --bl-ink: #0a0a0a;
+  --bl-brand: #2563c9;
+  --bl-deep: #0f2f63;
+  --bl-light: #5790e6;
+  --bl-teal: #0b6e97;
+  --bl-surface: #f4f4f4;
+  --bl-card: #ffffff;
+  --bl-soft: #717784;
+  --bl-ghost: #d7dae1;
+  --bl-hair: #e6e8ec;
+  --bl-on: #ffffff;
+  --bl-r-card: 1.5rem;
+  --bl-r-card-lg: 2rem;
+  --bl-r-pill: 62.5rem;
+
+  font-family: var(--font-onest), system-ui, sans-serif;
+  font-weight: 400;
+  color: var(--bl-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.bl-root *:focus-visible,
+.bl-portal *:focus-visible {
+  outline: 2px solid var(--bl-light);
+  outline-offset: 2px;
+}
+
+.bl-root button,
+.bl-portal button { cursor: pointer; }
+
+/* Caja de recorte de las revelaciones por línea/palabra (sin cortar tildes ni descendentes). */
+.bl-clip-line { display: block; overflow: hidden; padding-top: 0.12em; margin-top: -0.12em; padding-bottom: 0.14em; margin-bottom: -0.14em; }
+.bl-clip-word { display: inline-block; overflow: hidden; vertical-align: bottom; padding-top: 0.12em; margin-top: -0.12em; padding-bottom: 0.12em; margin-bottom: -0.12em; }
+
