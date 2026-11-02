@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Anton, Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const anton = Anton({ weight: "400", subsets: ["latin"], variable: "--font-anton", display: "swap" });
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-face", display: "swap" });
+// Fuentes autoalojadas (OFL, de Fontsource): el build no depende de descargar Google Fonts.
+const anton = localFont({ src: "./fonts/anton-latin-400-normal.woff2", weight: "400", variable: "--font-anton", display: "swap", fallback: ["Impact", "Arial Narrow", "sans-serif"] });
+const inter = localFont({ src: "./fonts/inter-latin-wght-normal.woff2", weight: "100 900", variable: "--font-inter", display: "swap", fallback: ["system-ui", "sans-serif"] });
+const mono = localFont({ src: "./fonts/jetbrains-mono-latin-wght-normal.woff2", weight: "100 800", variable: "--font-mono-face", display: "swap", fallback: ["ui-monospace", "monospace"] });
 
 export const metadata: Metadata = {
   title: "RAX · Diagnóstico y validación de emprendimientos",
