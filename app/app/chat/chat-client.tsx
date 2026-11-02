@@ -26,6 +26,7 @@ import { ProjectsGrid } from "./projects-grid";
 import { ProjectOverview } from "./project-overview";
 import { SessionSidebar } from "./session-sidebar";
 import { FollowUpChips } from "./follow-up-chips";
+import { AgentToolsPanel, type ToolUse } from "./agent-tools-panel";
 import { ThreadMessages, type MessageView } from "./thread-messages";
 import { FormattedText } from "./formatted-text";
 import { visibleStreamText } from "@/lib/ai/stream-text";
@@ -122,6 +123,11 @@ export default function ChatClient({
     evaluation: { mode: "in_context" | "rag"; percentOfLimit: number };
   } | null>(null);
 
+  /** Panel de herramientas del agente y la herramienta elegida para el próximo mensaje. */
+  const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const [pendingTool, setPendingTool] = useState<{ title: string; tool: string } | null>(null);
+  const [draft, setDraft] = useState<{ text: string; nonce: number } | undefined>(undefined);
+
   const [saveModalMessage, setSaveModalMessage] = useState<MessageView | null>(null);
   const [saveDecisionTitle, setSaveDecisionTitle] = useState("");
   const [isSavingDecision, setIsSavingDecision] = useState(false);
@@ -137,6 +143,19 @@ export default function ChatClient({
   const sessions = useMemo(() => sessionsView?.sessions ?? [], [sessionsView]);
   const activeSession = sessions.find((s) => s.id === route.sessionId);
   const activeThread = activeSession?.threads.find((t) => t.id === route.threadId);
+  /** Documentos que el agente generó en este hilo (los puede guardar en un proyecto). */
+  const threadDocuments = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ id: string; title: string }> = [];
+    for (const m of [...messages].reverse()) {
+      for (const a of m.artifacts ?? []) {
+        if (a.type !== "application/vnd.rax.document" || seen.has(a.title)) continue;
+        seen.add(a.title);
+        out.push({ id: a.title, title: a.title });
+      }
+    }
+    return out;
+  }, [messages]);
 
   /* ── Navegación ── */
 
@@ -145,6 +164,7 @@ export default function ChatClient({
     setRoute(next);
     setActiveArtifact(null);
     setIsSidebarOpen(false);
+    setPendingTool(null);
     if (typeof window === "undefined") return;
     const url = urlOf(next);
     if (opts.replace) window.history.replaceState(null, "", url);
@@ -286,7 +306,7 @@ export default function ChatClient({
    * instante, luego el estado («leyendo el proyecto», «redactando el documento») y el texto en vivo.
    * Si el streaming no está disponible, usa la acción del servidor (respuesta completa al final).
    */
-  const sendMessageToAgent = async (textToSend: string, explicitThreadId?: string) => {
+  const sendMessageToAgent = async (textToSend: string, explicitThreadId?: string, requestedTool?: string) => {
     const threadId = explicitThreadId ?? route.threadId;
     const text = textToSend.trim();
     if (!text || isLoading || !projectId || !threadId) return;
@@ -295,7 +315,7 @@ export default function ChatClient({
     const tempId = `tmp-${Date.now()}`;
     setMessages((prev) => [...prev, { id: tempId, sender: "user", senderName: "Tú", text, time: time(new Date().toISOString()) }]);
     setLive({ status: "Enviando…", text: "" });
-    const sessionContext = { location: "global_assistant" as const, pageTitle: "Asistente de IA de RAX (/app/chat)" };
+    const sessionContext = { location: "global_assistant" as const, pageTitle: "Asistente de IA de RAX (/app/chat)", ...(requestedTool ? { requestedTool } : {}) };
     try {
       const res = await fetch("/api/agente/turno", {
         method: "POST",
@@ -366,6 +386,17 @@ export default function ChatClient({
       await loadSessions(projectId);
       freshThreadRef.current = null;
     }
+  };
+
+  /** Una herramienta elegida en el panel: se envía ya o queda en el cuadro de texto para revisarla. */
+  const handleUseTool = ({ entry, prompt, mode }: ToolUse) => {
+    if (mode === "send") {
+      setPendingTool(null);
+      void sendMessageToAgent(prompt, undefined, entry.primaryTool);
+      return;
+    }
+    setPendingTool({ title: entry.title, tool: entry.primaryTool });
+    setDraft({ text: prompt, nonce: Date.now() });
   };
 
   /** Abre un hilo nuevo (vacío) y deja la pantalla lista para escribir. */
@@ -598,6 +629,18 @@ export default function ChatClient({
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
+                onClick={() => setIsToolsOpen(true)}
+                disabled={!route.threadId}
+                className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg border border-slate-200 hover:border-orange-200 transition disabled:opacity-50 inline-flex items-center gap-1.5"
+                title="Herramientas del agente"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+                </svg>
+                <span className="hidden @lg:inline">Herramientas</span>
+              </button>
+              <button
+                type="button"
                 onClick={handleNewThread}
                 disabled={!activeSession}
                 className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition disabled:opacity-50"
@@ -647,6 +690,13 @@ export default function ChatClient({
                       {label}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setIsToolsOpen(true)}
+                    className="px-3 py-1.5 text-xs font-semibold bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-xl text-orange-700 shadow-2xs transition"
+                  >
+                    🧰 Ver herramientas
+                  </button>
                 </div>
               </div>
             ) : (
@@ -696,7 +746,14 @@ export default function ChatClient({
           </div>
 
           <ChatInput
-            onSend={(text) => sendMessageToAgent(text)}
+            onSend={(text) => {
+              const tool = pendingTool?.tool;
+              setPendingTool(null);
+              return sendMessageToAgent(text, undefined, tool);
+            }}
+            draft={draft}
+            onOpenTools={() => setIsToolsOpen(true)}
+            toolChip={pendingTool ? { label: pendingTool.title, onClear: () => setPendingTool(null) } : undefined}
             onAttach={
               projectId
                 ? async (file) => {
@@ -713,6 +770,18 @@ export default function ChatClient({
             placeholder="Escribe tu consulta o pide un artefacto…"
           />
         </div>
+
+        <AgentToolsPanel
+          open={isToolsOpen}
+          onClose={() => setIsToolsOpen(false)}
+          projectId={projectId}
+          projectName={activeProject.name}
+          threadDocuments={threadDocuments}
+          siblingThreads={(activeSession?.threads ?? []).filter((t) => t.id !== route.threadId).map((t) => ({ id: t.id, title: t.title }))}
+          sessionToolsEnabled={!!activeSession && !activeSession.virtual}
+          disabled={isLoading || !route.threadId}
+          onUse={handleUseTool}
+        />
 
         {activeArtifact && (
           <ArtifactViewer

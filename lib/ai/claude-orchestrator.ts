@@ -1,4 +1,5 @@
 import "server-only";
+import { REQUESTABLE_TOOLS } from "./tool-catalog";
 import { longLocalDateTime, PLATFORM_TIMEZONE_LABEL } from "@/lib/dates";
 import type { AgentArtifact, AgentMessage, AgentThreadMemory, AgentTurnMetrics, KnowledgeCitation, Project, Role } from "@/types/domain";
 import type { KnowledgeContextResult } from "./knowledge-retrieval";
@@ -39,6 +40,11 @@ export interface SessionContext {
   hasMentor?: boolean;
   mentorNames?: string[];
   dimensionsCovered?: string[];
+  /**
+   * Herramienta que la persona eligió en el panel de herramientas del asistente (lib/ai/tool-catalog.ts).
+   * Solo orienta: el agente la usa si la tiene disponible en este turno.
+   */
+  requestedTool?: string;
   /** Campo de formulario para el que se pide un borrador (habilita la herramienta draft_field_value). */
   field?: {
     path: string;
@@ -232,6 +238,7 @@ export function buildSystemPrompt(
     ? `Conversación de trabajo del proyecto (/app/p/${project.id}/conversacion)`
     : sessionContext?.pageTitle || "Asistente de IA de RAX (/app/chat)";
   const field = sessionContext?.field;
+  const requestedTool = sessionContext?.requestedTool && REQUESTABLE_TOOLS.has(sessionContext.requestedTool) ? sessionContext.requestedTool : undefined;
 
   // Sin estado del servidor (p. ej. pruebas o llamadas sin espacio de trabajo), se usa lo que se sabe del proyecto.
   const stateBlock = extras.projectState
@@ -322,7 +329,8 @@ ${extras.thread ? renderThreadMemory({ title: extras.thread.title }, extras.thre
 
 <current_screen>
 Fecha y hora actuales: ${longLocalDateTime(new Date().toISOString())} (${PLATFORM_TIMEZONE_LABEL})
-Pantalla desde la que escribe la persona: ${location}${sessionContext?.section ? ` · sección «${sessionContext.section}»` : ""}
+Pantalla desde la que escribe la persona: ${location}${sessionContext?.section ? ` · sección «${sessionContext.section}»` : ""}${requestedTool ? `
+La persona eligió la herramienta «${requestedTool}» en el panel de herramientas: úsala en este turno con los datos de su mensaje. Si falta un dato imprescindible, pregúntalo en una frase en vez de inventarlo.` : ""}
 Rol de la cuenta: ${role === "mentor" ? "Mentor/a o tutor/a" : role === "admin" ? "Administración" : "Emprendedor/a o estudiante"}${field ? `
 Borrador pedido para el campo «${field.label}» (${field.path})${field.type ? `, tipo ${field.type}` : ""}${field.maxLength ? `, máximo ${field.maxLength} caracteres` : ""}${field.options?.length ? `, opciones: ${field.options.join(" | ")}` : ""}.${field.description ? `\nQué pide el campo: ${field.description}` : ""}
 Valor actual: ${field.currentValue ? field.currentValue.slice(0, 2000) : "(vacío)"}` : ""}

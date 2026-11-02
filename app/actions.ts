@@ -117,7 +117,10 @@ import {
   listProjectThreads,
   renameAgentThread,
 } from "@/lib/services/agent-chat";
-import { addAgentDocumentToProject, documentTargets } from "@/lib/services/agent-documents";
+import { addAgentDocumentToProject, documentTargets, listDocumentTargetProjects } from "@/lib/services/agent-documents";
+import { listProjectNotes } from "@/lib/services/session-notes";
+import { webSearchProvider } from "@/lib/ai/web-search";
+import { SESSION_KIND_LABEL } from "@/features/labels";
 import {
   archiveAgentThread,
   createAgentSession,
@@ -1462,6 +1465,40 @@ export async function listProjectDocumentsAction(projectId: string) {
 export async function getProjectKnowledgeStatsAction(projectId: string) {
   return chat(projectId, async (d) => {
     return getProjectKnowledgeStats(d, projectId);
+  });
+}
+
+/**
+ * Lo que necesita el panel de herramientas del asistente para armar los formularios: rol, si hay
+ * búsqueda web, documentos del proyecto, sesiones de mentoría y proyectos donde guardar documentos.
+ * Cada parte falla por separado (p. ej. sin sesiones de mentoría el resto sigue).
+ */
+export async function getAgentToolboxAction(projectId: string) {
+  return chat(projectId, async (d) => {
+    await guard(d, projectId, "agent.chat");
+    const [docs, notes, targets] = await Promise.all([
+      listProjectDocuments(d, projectId).catch(() => []),
+      listProjectNotes(d, projectId, { limit: 1 }).catch(() => null),
+      listDocumentTargetProjects(d).catch(() => []),
+    ]);
+    const day = (iso?: string) =>
+      iso ? new Date(iso).toLocaleString("es-CR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Costa_Rica" }) : "sin fecha";
+    const sessions = [...(notes?.sessions ?? [])]
+      .sort((a, b) => (b.scheduledAt ?? b.createdAt).localeCompare(a.scheduledAt ?? a.createdAt))
+      .map((s) => ({
+        id: s.id,
+        label: `${SESSION_KIND_LABEL[s.kind] ?? "Sesión"} · ${day(s.scheduledAt ?? s.createdAt)}`,
+        open: s.status !== "completed",
+        mine: s.mentorId === d.actor.id,
+        confirmed: Boolean(s.confirmedAt),
+      }));
+    return {
+      role: d.actor.role,
+      webSearch: webSearchProvider() !== null,
+      documents: docs.slice(0, 80).map((x) => ({ id: x.id, title: x.title, filename: x.filename, fileType: x.fileType })),
+      mentorSessions: sessions,
+      targetProjects: targets.map(({ id, name }) => ({ id, name })),
+    };
   });
 }
 

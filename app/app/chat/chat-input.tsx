@@ -15,6 +15,12 @@ interface ChatInputProps {
    */
   onAttach?: (file: File) => Promise<{ note: string } | { error: string }>;
   attachAccept?: string;
+  /** Texto que se pone en el cuadro (p. ej. desde el panel de herramientas); cambia `nonce` para volver a ponerlo. */
+  draft?: { text: string; nonce: number };
+  /** Abre el panel de herramientas del agente. */
+  onOpenTools?: () => void;
+  /** Herramienta elegida que acompaña al próximo mensaje. */
+  toolChip?: { label: string; onClear: () => void };
 }
 
 const TEMPLATES = [
@@ -128,6 +134,9 @@ export function ChatInput({
   placeholder = "Escribe tu consulta o pega tu texto largo aquí... (Soporta Markdown con **negrita**, listas y código)",
   onAttach,
   attachAccept,
+  draft,
+  onOpenTools,
+  toolChip,
 }: ChatInputProps) {
   const [attaching, setAttaching] = useState<string | null>(null);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -153,6 +162,19 @@ export function ChatInput({
   useEffect(() => {
     adjustHeight();
   }, [text, adjustHeight]);
+
+  // Borrador que llega de afuera (panel de herramientas): reemplaza el texto y deja el cursor al final.
+  useEffect(() => {
+    if (!draft) return;
+    setText(draft.text);
+    setActiveTab("write");
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }, [draft]);
 
   // Insertar formato Markdown rodeando la selección o con placeholder
   const applyFormat = useCallback(
@@ -478,6 +500,21 @@ export function ChatInput({
       )}
 
       {/* 3. Área de entrada o Vista Previa */}
+      {toolChip && (
+        <div className="mx-2.5 @2xl:mx-3 mt-2 flex">
+          <span className="inline-flex items-center gap-1.5 max-w-full rounded-full border border-orange-200 bg-orange-50 pl-2.5 pr-1 py-0.5 text-[0.6875rem] font-semibold text-orange-700">
+            <span className="truncate">Herramienta: {toolChip.label}</span>
+            <button
+              type="button"
+              onClick={toolChip.onClear}
+              className="w-5 h-5 rounded-full hover:bg-orange-100 flex items-center justify-center cursor-pointer"
+              aria-label="Quitar herramienta"
+            >
+              ✕
+            </button>
+          </span>
+        </div>
+      )}
       {(attaching || attachError) && (
         <div
           role="status"
@@ -533,6 +570,20 @@ export function ChatInput({
               )}
             </button>
           </>
+        )}
+        {onOpenTools && (
+          <button
+            type="button"
+            onClick={onOpenTools}
+            disabled={disabled || isLoading}
+            aria-label="Herramientas del agente"
+            title="Herramientas del agente: buscar en internet, leer documentos, generar PDF o Word, notas, revisiones…"
+            className="shrink-0 w-11 h-11 @2xl:w-10 @2xl:h-10 mb-0.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-orange-700 hover:border-orange-300 hover:bg-orange-50 flex items-center justify-center cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+            </svg>
+          </button>
         )}
         <div className="flex-1 min-w-0">
         {activeTab === "write" ? (

@@ -89,7 +89,7 @@ export async function getSessionWorkspaceWithReplies(d: ServiceDeps, sessionId: 
 }
 
 export interface ProjectNotesView {
-  sessions: Array<Pick<MentorSession, "id" | "kind" | "status" | "mentorId" | "createdAt" | "scheduledAt">>;
+  sessions: Array<Pick<MentorSession, "id" | "kind" | "status" | "mentorId" | "createdAt" | "scheduledAt" | "confirmedAt">>;
   notes: NoteView[];
   /** Notas visibles en total (antes de recortar a `limit`). */
   total: number;
@@ -108,7 +108,7 @@ export async function listProjectNotes(d: ServiceDeps, projectId: string, opts: 
   const visible = notes.filter((n) => n.projectId === projectId).filter(visibleTo(d)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const limit = Math.max(1, Math.min(opts.limit ?? 30, 100));
   return {
-    sessions: sessions.map(({ id, kind, status, mentorId, createdAt, scheduledAt }) => ({ id, kind, status, mentorId, createdAt, scheduledAt })),
+    sessions: sessions.map(({ id, kind, status, mentorId, createdAt, scheduledAt, confirmedAt }) => ({ id, kind, status, mentorId, createdAt, scheduledAt, confirmedAt })),
     notes: await withReplies(d, visible.slice(-limit), replies),
     total: visible.length,
   };
