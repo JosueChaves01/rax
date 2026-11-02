@@ -40,6 +40,7 @@ export function SessionsView({ sessions, projects }: { sessions: MentorSession[]
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
             {s.scheduledAt ? `📅 ${formatDate(s.scheduledAt)}` : "Sin fecha acordada"}
+            {s.status !== "completed" && s.scheduledAt ? (s.confirmedAt ? " · confirmada" : " · por confirmar") : ""}
             {s.preSessionBriefing && s.status !== "completed" ? " · briefing listo" : ""}
             {s.postSessionSynthesis ? " · con síntesis" : ""}
           </p>

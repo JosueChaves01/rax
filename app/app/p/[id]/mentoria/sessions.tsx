@@ -17,6 +17,7 @@ import type {
 import {
   adoptPostSessionCommitmentsAction,
   closeSessionAction,
+  confirmSessionAction,
   generatePostSessionSynthesisAction,
   generatePreSessionBriefingAction,
   requestReviewAction,
@@ -27,6 +28,7 @@ import {
 import { ACTION_TYPE_LABEL, DECISION_LABEL, HYPOTHESIS_STATUS_LABEL, OUTCOME_LABEL } from "@/features/labels";
 import { Button, Card, Field, Notice, Tag, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
+import { localIsoWithOffset, parseSessionDateTime } from "@/lib/dates";
 import { SessionCallPanel } from "@/shared/ui/session-call";
 import { NotesTab, useSessionWorkspace } from "@/shared/ui/session-tabs";
 import { SynthesisEditor } from "./synthesis-editor";
@@ -119,7 +121,7 @@ export function ReviewRequests({
                 ? isFirst
                   ? "Disponible al confirmar el resumen inicial."
                   : "Disponible cuando registres al menos un resultado."
-                : "Elegí una fecha si ya la acordaron. El mentor recibe el pedido con el briefing preparado."}
+                : "Proponé fecha y hora: el mentor recibe el pedido con el briefing preparado y confirma la fecha o propone otra."}
           </span>
         </div>
         {!blocked && (
@@ -224,6 +226,31 @@ function SessionNotes({ projectId, sessionId, refreshKey }: { projectId: string;
   return <NotesTab ws={ws.data} onChanged={reload} />;
 }
 
+/** El mentor confirma la fecha pedida o elige otra (queda confirmada con esa). */
+function ConfirmDate({ projectId, session }: { projectId: string; session: MentorSession }) {
+  const { run, pending, error } = useAction();
+  const [date, setDate] = useState(session.scheduledAt ? localIsoWithOffset(session.scheduledAt).slice(0, 16) : "");
+  const toIsoCr = (v: string) => {
+    try {
+      return parseSessionDateTime(v);
+    } catch {
+      return undefined;
+    }
+  };
+  const changed = Boolean(session.scheduledAt && date && toIsoCr(date) !== session.scheduledAt);
+  return (
+    <div className="flex w-full flex-wrap items-end gap-2">
+      <Field id={`confirm-${session.id}`} label={session.scheduledAt ? "Fecha pedida (podés cambiarla)" : "Fecha y hora de la sesión"}>
+        <input id={`confirm-${session.id}`} type="datetime-local" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+      </Field>
+      <Button size="sm" variant="primary" disabled={pending || !date} onClick={() => run(() => confirmSessionAction(projectId, session.id, changed || !session.scheduledAt ? toIsoCr(date) : undefined))}>
+        {pending ? "Confirmando..." : changed ? "Confirmar con esta fecha" : "Confirmar fecha"}
+      </Button>
+      {error && <Notice tone="error">{error}</Notice>}
+    </div>
+  );
+}
+
 export function SessionCard(props: {
   projectId: string;
   session: MentorSession;
@@ -272,7 +299,13 @@ export function SessionCard(props: {
               📅 {formatDate(s.scheduledAt)}
             </span>
           )}
+          {isOpen && (
+            <span className={`text-xs font-semibold ${s.confirmedAt ? "text-emerald-700" : "text-amber-700"}`}>
+              {s.confirmedAt ? "Fecha confirmada" : s.scheduledAt ? "Fecha por confirmar" : "Sin fecha"}
+            </span>
+          )}
         </div>
+        {canAct && !s.confirmedAt && <ConfirmDate projectId={props.projectId} session={s} />}
         <span className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
           {canAct && (
             <RefreshBriefing

@@ -144,7 +144,7 @@ describe("bandeja del mentor y sugerencia de asignación", () => {
       { id: "a", name: "A", sessions: [session({ kind: "follow_up", scheduledAt: "2026-10-09T15:00:00.000Z" })], hypotheses: [] },
     ]);
     expect(items.map((i) => [i.kind, i.tab, i.since])).toEqual([["follow_up", "orientar", "2026-10-09T15:00:00.000Z"]]);
-    expect(items[0].detail).toContain("2026-10-09");
+    expect(items[0].detail).toContain("9 oct");
   });
 
   it("sugiere a alguien con cupo, primero por rubro y después por cupo libre", () => {

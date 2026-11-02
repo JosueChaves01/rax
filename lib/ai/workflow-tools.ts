@@ -2,6 +2,7 @@ import "server-only";
 import type { AiProposalItem } from "@/lib/n8n/contracts";
 import type { ServiceDeps } from "@/lib/services/base";
 import { guard, relationOf } from "@/lib/services/base";
+import { stepActionBlocker } from "@/lib/services/agent-actions";
 import { can } from "@/lib/authz";
 import { parseStepParams, STEP_ACTION_IDS, STEP_ACTIONS, stepActionTitle } from "./step-actions";
 
@@ -248,7 +249,7 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
       type: "object",
       properties: {
         action: { type: "string", enum: STEP_ACTION_IDS, description: "Paso a dar" },
-        targetId: { type: "string", description: "Id del elemento sobre el que actúa (hipótesis, experimento, hallazgo, tarea, sesión o acuerdo)" },
+        targetId: { type: "string", description: "Id del elemento sobre el que actúa (hipótesis, experimento, hallazgo, tarea, sesión o acuerdo); en confirm_session, el id de la sesión" },
         text: { type: "string", description: "Texto principal: resumen, acuerdo, justificación, nota, lo observado o la valoración" },
         kind: { type: "string", description: "first_review|second_review para request_review; tipo de nota para add_session_note" },
         decision: { type: "string", description: "approve|return|discard (hipótesis); continue|reformulate|deepen|pause|discard (segunda revisión); confirm|reject (hallazgo); renew|close|new_stage (ciclo)" },
@@ -266,7 +267,7 @@ export const RAX_WORKFLOW_TOOLS: WorkflowToolDefinition[] = [
         expectedDurationWeeks: { type: "number", description: "Duración del ciclo en semanas (1 a 104)" },
         mentorCommitments: { type: "string", description: "Compromisos del mentor" },
         entrepreneurCommitments: { type: "string", description: "Compromisos del emprendedor" },
-        scheduledAt: { type: "string", description: "Fecha de la sesión (YYYY-MM-DD o ISO)" },
+        scheduledAt: { type: "string", description: "Fecha y hora de la sesión en hora de Costa Rica con su desfase, p. ej. 2026-11-05T15:00-06:00. Siempre con hora." },
         autonomy: { type: "string", enum: ["nascent", "developing", "autonomous"], description: "Autonomía (evaluación de ciclo)" },
       },
       required: ["action"],
@@ -621,6 +622,8 @@ export async function executeWorkflowTool(
           proposals: [],
         };
       }
+      const blocker = await stepActionBlocker(d, projectId, params);
+      if (blocker) return { ok: false, toolName, summary: `No propuesto: ${blocker} Explícale a la persona qué falta.`, proposals: [] };
       const title = stepActionTitle(params);
       return {
         ok: true,

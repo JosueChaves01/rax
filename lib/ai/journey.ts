@@ -75,14 +75,14 @@ export function buildJourney(w: Workspace): Journey {
       label: "Pedir la primera revisión al mentor",
       owner: "entrepreneur",
       done: first.length > 0,
-      how: "propose_step_action request_review (kind first_review)",
+      how: "propose_step_action request_review (kind first_review y scheduledAt con fecha y hora); queda pendiente hasta que el mentor la confirma",
     },
     {
       id: "first_review",
       label: "Primera revisión: el mentor orienta el enfoque y registra el acuerdo",
       owner: "mentor",
       done: first.some((s) => s.status === "completed"),
-      how: "Mentor: propose_step_action add_session_note y complete_first_review",
+      how: "Mentor: propose_step_action confirm_session (confirmar o cambiar la fecha), después add_session_note y complete_first_review",
     },
     {
       id: "prioritize_problem",
@@ -147,14 +147,14 @@ export function buildJourney(w: Workspace): Journey {
       label: "Pedir la segunda revisión al mentor",
       owner: "entrepreneur",
       done: second.length > 0,
-      how: "propose_step_action request_review (kind second_review)",
+      how: "propose_step_action request_review (kind second_review y scheduledAt con fecha y hora); queda pendiente hasta que el mentor la confirma",
     },
     {
       id: "mentor_decision",
       label: "Segunda revisión: el mentor decide continuar, reformular, profundizar, pausar o descartar",
       owner: "mentor",
       done: second.some((s) => s.status === "completed"),
-      how: "Mentor: propose_step_action mentor_decision",
+      how: "Mentor: propose_step_action confirm_session (confirmar o cambiar la fecha) y, en la revisión, mentor_decision",
     },
     {
       id: "evaluate_cycle",

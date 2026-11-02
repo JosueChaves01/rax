@@ -48,17 +48,10 @@ export async function requestReview(
 ): Promise<MentorSession> {
   if (kind !== "first_review" && kind !== "second_review") throw validation("Solo se piden la primera y la segunda revisión.");
   const { project } = await guard(d, projectId, "mentor.request_review");
+  const blocker = await reviewRequestBlocker(d, projectId, kind);
+  if (blocker) throw validation(blocker);
   const [dx] = await d.repo.diagnoses.list({ projectId });
-  const sessions = await d.repo.mentorSessions.list({ projectId, kind });
-  if (sessions.some((s) => s.status !== "completed")) throw validation("Ya hay una revisión de este tipo en curso.");
-  if (kind === "first_review" && !dx.summaryConfirmedAt) throw validation("Primero confirmá el resumen inicial para que el mentor tenga contexto fiable.");
-  if (kind === "second_review") {
-    const results = await d.repo.experimentResults.list({ projectId });
-    if (!results.length) throw validation("La segunda revisión necesita al menos un resultado registrado.");
-  }
   const [assignment] = await d.repo.mentorAssignments.list({ projectId, status: "active" });
-  if (!assignment)
-    throw validation("Todavía no hay un mentor asignado. Podés seguir registrando información; la administración debe asignarte uno.");
   const items = await d.repo.diagnosisItems.list({ projectId });
   const session: MentorSession = {
     id: d.newId("ses"),
@@ -66,7 +59,7 @@ export async function requestReview(
     mentorId: assignment.mentorId,
     kind,
     status: "pending",
-    scheduledAt: validDate(opts.scheduledAt),
+    scheduledAt: futureDate(d, opts.scheduledAt),
     briefing: buildBriefing(project, dx, items, d.now()),
     createdAt: d.now(),
   };
@@ -77,9 +70,56 @@ export async function requestReview(
   return session;
 }
 
+/**
+ * Por qué todavía no se puede pedir esta revisión (o null si se puede). Lo usan «Pedir revisión» y el
+ * agente antes de proponer la tarjeta, para que ambos apliquen las mismas reglas.
+ */
+export async function reviewRequestBlocker(d: ServiceDeps, projectId: string, kind: "first_review" | "second_review"): Promise<string | null> {
+  const sessions = await d.repo.mentorSessions.list({ projectId, kind });
+  if (sessions.some((s) => s.status !== "completed")) return "Ya hay una revisión de este tipo en curso.";
+  if (kind === "first_review") {
+    const [dx] = await d.repo.diagnoses.list({ projectId });
+    if (!dx?.summaryConfirmedAt) return "Primero confirmá el resumen inicial para que el mentor tenga contexto fiable.";
+  } else {
+    const results = await d.repo.experimentResults.list({ projectId });
+    if (!results.length) return "La segunda revisión necesita al menos un resultado registrado.";
+  }
+  const [assignment] = await d.repo.mentorAssignments.list({ projectId, status: "active" });
+  if (!assignment) return "Todavía no hay un mentor asignado. Podés seguir registrando información; la administración debe asignarte uno.";
+  return null;
+}
+
 function validDate(x?: string): string | undefined {
   if (!x || Number.isNaN(Date.parse(x))) return undefined;
   return new Date(x).toISOString();
+}
+
+/** Fecha válida y por venir: no se agenda ni se confirma una sesión en el pasado. */
+function futureDate(d: ServiceDeps, x?: string): string | undefined {
+  const at = validDate(x);
+  if (at && at <= d.now()) throw validation("La fecha de la sesión ya pasó. Elegí una fecha y hora futuras.");
+  return at;
+}
+
+/**
+ * El mentor de la sesión confirma la fecha pedida o, con `scheduledAt`, la cambia por otra y la deja
+ * confirmada. Solo el mentor asignado a esa sesión, y solo si todavía no terminó.
+ */
+export async function confirmSession(d: ServiceDeps, sessionId: string, opts: { scheduledAt?: string } = {}): Promise<MentorSession> {
+  const s = await loadSession(d, sessionId);
+  await guard(d, s.projectId, "mentor.note");
+  if (s.mentorId !== d.actor.id) throw forbidden("Solo el mentor de esta sesión puede confirmarla.");
+  if (s.status === "completed") throw validation("La sesión ya terminó.");
+  const requested = opts.scheduledAt ? futureDate(d, opts.scheduledAt) : undefined;
+  if (opts.scheduledAt && !requested) throw validation("La fecha no es válida.");
+  const at = requested ?? s.scheduledAt;
+  if (!at) throw validation("La sesión no tiene fecha: indicá la fecha y hora para confirmarla.");
+  if (!requested && at <= d.now()) throw validation("La fecha pedida ya pasó. Proponé una fecha y hora nuevas.");
+  const rescheduled = Boolean(s.scheduledAt && requested && requested !== s.scheduledAt);
+  const updated = await d.repo.mentorSessions.update(sessionId, { scheduledAt: at, confirmedAt: d.now() });
+  await audit(d, "session.confirmed", { projectId: s.projectId, targetId: s.id, meta: { kind: s.kind, scheduledAt: at, rescheduled } });
+  await touch(d, s.projectId);
+  return updated;
 }
 
 /** Prepara el briefing con IA al crear una sesión (lo pide quien la abre, no el mentor). */
@@ -407,12 +447,22 @@ export async function scheduleSession(
     relationId: input.relationId,
     kind: input.kind,
     status: "pending",
-    scheduledAt: validDate(input.scheduledAt),
+    scheduledAt: futureDate(d, input.scheduledAt),
     briefing: dx ? buildBriefing(project, dx, items, now) : undefined,
     createdAt: now,
   };
 
   await d.repo.mentorSessions.insert(session);
+  // Si la agenda el propio mentor con fecha, ya queda confirmada; si la pide el emprendedor, la confirma el mentor.
+  if (session.scheduledAt && session.mentorId === d.actor.id) {
+    try {
+      session.confirmedAt = d.now();
+      await d.repo.mentorSessions.update(session.id, { confirmedAt: session.confirmedAt });
+    } catch (err) {
+      session.confirmedAt = undefined;
+      console.warn("[mentoring] No se pudo marcar la sesión como confirmada (¿falta la migración 20261102000003?):", err);
+    }
+  }
   await audit(d, "session.scheduled", {
     projectId,
     targetId: session.id,

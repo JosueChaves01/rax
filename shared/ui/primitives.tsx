@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { DISPLAY_UTC_OFFSET_HOURS } from "@/lib/dates";
 
 /** Primitivas visuales compartidas. Sin lógica de dominio. */
 
@@ -128,8 +129,7 @@ export function Meter({ value, total, label }: { value: number; total: number; l
 }
 
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-/** Zona horaria de presentación (Costa Rica, UTC−6 sin horario de verano). Determinista en servidor y navegador. */
-export const DISPLAY_UTC_OFFSET_HOURS = -6;
+export { DISPLAY_UTC_OFFSET_HOURS };
 
 export function formatDate(iso: string) {
   const d = new Date(Date.parse(iso) + DISPLAY_UTC_OFFSET_HOURS * 3_600_000);

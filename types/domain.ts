@@ -493,6 +493,8 @@ export interface MentorSession {
   kind: MentorSessionKind;
   status: MentorSessionStatus;
   scheduledAt?: ISODate;
+  /** Cuándo el mentor confirmó la fecha. Sin valor, la fecha (si hay) es solo la que se pidió. */
+  confirmedAt?: ISODate;
   startedAt?: ISODate;
   /** Resumen preparado (determinista desde el diagnóstico) que el mentor lee antes de intervenir. */
   briefing?: MentorBriefing;
@@ -931,6 +933,7 @@ export type AuditAction =
   | "roadmap.milestone_status_changed"
   | "task.delay_diagnosed"
   | "session.scheduled"
+  | "session.confirmed"
   | "session.started"
   | "session.briefing_generated"
   | "session.synthesis_generated"

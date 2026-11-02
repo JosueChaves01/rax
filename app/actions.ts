@@ -47,6 +47,7 @@ import {
   generatePostSessionSynthesis,
   generatePreSessionBriefing,
   requestReview,
+  confirmSession,
   scheduleSession,
   startSession,
   updatePostSessionSynthesis,
@@ -337,6 +338,10 @@ export const addCommentAction = async (projectId: string, targetType: Comment["t
 export const requestReviewAction = async (projectId: string, kind: MentorSessionKind, scheduledAt?: string) =>
   run(projectId, async (d) => {
     await requestReview(d, V.parse(V.Ids, projectId), V.parse(V.SessionKind, kind), { scheduledAt: V.parse(V.OptionalDate, scheduledAt) });
+  });
+export const confirmSessionAction = async (projectId: string, sessionId: string, scheduledAt?: string) =>
+  run(projectId, async (d) => {
+    await confirmSession(d, V.parse(V.Ids, sessionId), { scheduledAt: V.parse(V.OptionalDate, scheduledAt) });
   });
 export const startSessionAction = async (projectId: string, sessionId: string) =>
   run(projectId, async (d) => {

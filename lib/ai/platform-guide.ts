@@ -23,7 +23,7 @@ export const PLATFORM_PAGES: PlatformPage[] = [
   { path: "/app/chat", label: "Asistente IA", what: "Chat con el agente organizado como Proyecto → Sesión → Hilo: cada proyecto tiene sesiones de trabajo (con objetivo y notas que mantiene el agente) y cada sesión tiene varios hilos de conversación. Incluye instrucciones del proyecto y base de conocimiento (documentos, descargables en PDF o Word). El agente puede generar documentos en PDF o Word sobre un tema y agregarlos al proyecto. Desde aquí se puede llevar todo el ciclo.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/mentor", label: "Emprendedores", what: "Cartera del mentor: proyectos asignados, cupo y estado de cada uno.", roles: ["mentor"] },
   { path: "/app/tareas", label: "Tareas", what: "Tareas de un proyecto (se elige arriba), con estado, fecha y bloqueos.", roles: ["entrepreneur", "mentor"] },
-  { path: "/app/sesiones", label: "Sesiones", what: "Agenda de las sesiones de mentoría de todos los proyectos (próximas, abiertas y cerradas), con vista de calendario (/app/calendario). Es un índice: cada sesión se trabaja dentro de su proyecto, en Orientar (primera revisión y seguimientos) o Decidir (segunda revisión). Ahí está el briefing (se prepara solo al pedir la revisión), la videollamada con transcripción, las notas con sus respuestas, la síntesis (se arma sola al colgar y se puede editar) y el cierre del mentor: acuerdo y problema prioritario, o decisión formal. Al cerrar, los compromisos del emprendedor se vuelven tareas.", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/sesiones", label: "Sesiones", what: "Agenda de las sesiones de mentoría de todos los proyectos (próximas, abiertas y cerradas, con su fecha pedida o confirmada por el mentor), con vista de calendario (/app/calendario). Es un índice: cada sesión se trabaja dentro de su proyecto, en Orientar (primera revisión y seguimientos) o Decidir (segunda revisión). Ahí está el briefing (se prepara solo al pedir la revisión), la videollamada con transcripción, las notas con sus respuestas, la síntesis (se arma sola al colgar y se puede editar) y el cierre del mentor: acuerdo y problema prioritario, o decisión formal. Al cerrar, los compromisos del emprendedor se vuelven tareas.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/documentos", label: "Documentos", what: "Apoyo: documentos de trabajo de los proyectos, editables y mejorables con IA.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/aprendizaje", label: "Aprendizaje", what: "Apoyo: tutor de ejercicios; el agente propone ejercicios según el objetivo del proyecto y los evalúa con puntaje y retroalimentación.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/mentor/recursos", label: "Recursos", what: "Apoyo: biblioteca de recursos y plantillas metodológicas del mentor.", roles: ["mentor"] },
@@ -36,7 +36,7 @@ export const PROJECT_PAGES: Array<{ slug: string; label: string; stage: string; 
   { slug: "", label: "Inicio del proyecto", stage: "todas", what: "Qué sigue, a quién le toca y pendientes." },
   { slug: "conversacion", label: "Conversación", stage: "Entender", what: "Conversación con el agente que alimenta el diagnóstico vivo. Tiene varios hilos." },
   { slug: "diagnostico", label: "Diagnóstico vivo", stage: "Entender", what: "Hallazgos por categoría (contexto, personas/mercado, problema, soluciones, finanzas, operación, comercial, legal, riesgos, preguntas abiertas) con estado de revisión e incertidumbre, y el resumen que confirma el emprendedor." },
-  { slug: "orientar", label: "Sesiones de mentoría", stage: "Orientar", what: "Primera revisión con el mentor: se pide con fecha opcional, el briefing se prepara solo, llamada con transcripción, notas con respuestas, síntesis y un cierre único con el acuerdo y el problema a investigar primero. También las sesiones de seguimiento." },
+  { slug: "orientar", label: "Sesiones de mentoría", stage: "Orientar", what: "Primera revisión con el mentor: el emprendedor la pide con fecha y hora, el mentor la confirma o propone otra, el briefing se prepara solo, llamada con transcripción, notas con respuestas, síntesis y un cierre único con el acuerdo y el problema a investigar primero. También las sesiones de seguimiento." },
   { slug: "acuerdos", label: "Acuerdo y objetivos", stage: "Orientar", what: "Acuerdo de mentoría (frecuencia, alcance, compromisos) y objetivos del ciclo." },
   { slug: "evaluacion", label: "Evaluación de ciclo", stage: "Orientar", what: "Evaluación del ciclo de mentoría." },
   { slug: "validacion", label: "Hipótesis y experimentos", stage: "Probar", what: "Hipótesis (el mentor las aprueba), experimentos con criterios de éxito y descarte fijados antes de empezar, sus tareas y su evidencia." },
@@ -48,12 +48,12 @@ export const PROJECT_PAGES: Array<{ slug: string; label: string; stage: string; 
 const ROLE_GUIDE: Record<Role, string> = {
   entrepreneur: `La persona es EMPRENDEDORA o ESTUDIANTE (dueña o colaboradora del proyecto). Puede:
 - Conversar con el agente, revisar y corregir su diagnóstico, y confirmar el resumen (solo la dueña).
-- Pedir la revisión del mentor, proponer hipótesis, diseñar e iniciar experimentos, registrar resultados y evidencia.
+- Pedir la revisión del mentor con la fecha y hora que prefiere (queda pendiente hasta que el mentor la confirma), proponer hipótesis, diseñar e iniciar experimentos, registrar resultados y evidencia.
 - Gestionar tareas, objetivos y el acuerdo junto con su mentor.
 No elige mentor: lo asigna administración. No puede aprobar hipótesis ni tomar las decisiones del mentor: eso le corresponde a su mentor asignado.`,
   mentor: `La persona es MENTORA o TUTORA asignada al proyecto. Puede:
 - Ver el diagnóstico y el briefing (la conversación del emprendedor solo si la compartió).
-- Dejar notas y preguntas en sesiones, priorizar el problema, pedir aclaraciones.
+- Confirmar la fecha de las revisiones que le piden (o proponer otra), dejar notas y preguntas en sesiones, priorizar el problema, pedir aclaraciones.
 - Aprobar, devolver o descartar hipótesis; registrar la decisión de la segunda revisión; evaluar el ciclo.
 - Gestionar tareas, objetivos y el acuerdo con el emprendedor.
 No edita el diagnóstico del emprendedor ni confirma su resumen: le sugiere cambios.`,

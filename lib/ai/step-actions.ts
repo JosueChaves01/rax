@@ -1,4 +1,15 @@
 import type { Action } from "@/lib/authz";
+import { longLocalDateTime, parseSessionDateTime } from "@/lib/dates";
+
+/** Fecha legible para el título de la tarjeta; si no se entiende, se muestra como vino. */
+function when(raw: string): string {
+  try {
+    const iso = parseSessionDateTime(raw);
+    return iso ? longLocalDateTime(iso) : raw;
+  } catch {
+    return raw;
+  }
+}
 
 /**
  * Acciones del recorrido que el agente puede proponer desde el chat con `propose_step_action`.
@@ -9,7 +20,8 @@ export const STEP_ACTIONS = {
   set_summary: { permission: "diagnosis.confirm_summary", label: "Guardar el resumen del diagnóstico", needs: "text: el resumen completo" },
   confirm_summary: { permission: "diagnosis.confirm_summary", label: "Confirmar el resumen del diagnóstico", needs: "nada" },
   review_item: { permission: "diagnosis.edit", label: "Revisar un hallazgo del diagnóstico", needs: "targetId del hallazgo y decision confirm|reject" },
-  request_review: { permission: "mentor.request_review", label: "Pedir revisión al mentor", needs: "kind first_review|second_review" },
+  request_review: { permission: "mentor.request_review", label: "Pedir revisión al mentor", needs: "kind first_review|second_review y scheduledAt (fecha y hora pedidas, AAAA-MM-DDTHH:MM-06:00)" },
+  confirm_session: { permission: "mentor.note", label: "Confirmar la fecha de una revisión o sesión", needs: "targetId de la sesión; scheduledAt solo si el mentor propone otra fecha y hora" },
   add_session_note: { permission: "mentor.note", label: "Agregar nota a la sesión", needs: "text y kind observation|question|suggestion|commitment|blocker" },
   complete_first_review: { permission: "mentor.decide", label: "Cerrar la primera revisión con el acuerdo", needs: "text: qué problema investigar y qué falta saber" },
   prioritize_problem: { permission: "diagnosis.prioritize", label: "Priorizar un problema", needs: "targetId del problema, rank (1 = primero) y text con la justificación" },
@@ -22,7 +34,7 @@ export const STEP_ACTIONS = {
   set_task_status: { permission: "task.manage", label: "Cambiar el estado de una tarea", needs: "targetId de la tarea y status todo|doing|done|blocked" },
   record_result: { permission: "experiment.record_result", label: "Registrar el resultado del experimento", needs: "targetId, outcome positive|negative|mixed|inconclusive, text (lo observado), metricValue, learnings, limitations" },
   mentor_decision: { permission: "mentor.decide", label: "Registrar la decisión de la segunda revisión", needs: "targetId de la hipótesis, decision continue|reformulate|deepen|pause|discard y text con la justificación" },
-  schedule_session: { permission: "mentorship.manage", label: "Agendar una sesión de seguimiento", needs: "scheduledAt (YYYY-MM-DD o ISO)" },
+  schedule_session: { permission: "mentorship.manage", label: "Agendar una sesión de seguimiento", needs: "scheduledAt (fecha y hora, AAAA-MM-DDTHH:MM-06:00)" },
   complete_session: { permission: "mentor.decide", label: "Cerrar una sesión de seguimiento", needs: "targetId de la sesión y text con el resumen" },
   delete_project: { permission: "project.delete", label: "Borrar el proyecto", needs: "text con el motivo. Solo si la persona dueña lo pide de forma explícita (p. ej. lo creó por error); es definitivo para todos" },
   evaluate_cycle: { permission: "cycle.evaluate", label: "Registrar la evaluación del ciclo", needs: "decision renew|close|new_stage, autonomy nascent|developing|autonomous y text con la valoración" },
@@ -92,7 +104,11 @@ export function stepActionTitle(p: StepActionParams): string {
   const base = STEP_ACTIONS[p.action].label;
   switch (p.action) {
     case "request_review":
-      return p.kind === "second_review" ? "Pedir la segunda revisión al mentor" : "Pedir la primera revisión al mentor";
+      return `${p.kind === "second_review" ? "Pedir la segunda revisión al mentor" : "Pedir la primera revisión al mentor"}${p.scheduledAt ? ` para el ${when(p.scheduledAt)}` : ""}`;
+    case "confirm_session":
+      return p.scheduledAt ? `Confirmar la sesión con nueva fecha: ${when(p.scheduledAt)}` : "Confirmar la fecha pedida para la sesión";
+    case "schedule_session":
+      return p.scheduledAt ? `${base} el ${when(p.scheduledAt)}` : base;
     case "decide_hypothesis":
     case "mentor_decision":
     case "evaluate_cycle":

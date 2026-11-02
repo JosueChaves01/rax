@@ -343,6 +343,7 @@ const session: Spec<MentorSession> = {
     status: ["status", same],
     relationId: ["relation_id", nul],
     scheduledAt: ["scheduled_at", ts],
+    confirmedAt: ["confirmed_at", ts],
     startedAt: ["started_at", ts],
     briefing: ["briefing", nul],
     preSessionBriefing: ["pre_session_briefing", nul],

@@ -1,4 +1,5 @@
 import type { Workspace } from "@/lib/services/projects";
+import { localIsoWithOffset, longLocalDateTime } from "@/lib/dates";
 import type { Role } from "@/types/domain";
 import { stageOf } from "@/features/projects/stages";
 import { isCurrent } from "@/features/diagnosis/rules";
@@ -97,8 +98,14 @@ export function buildProjectState(w: Workspace, viewerRole: Role, today: string)
     .map((i) => `[${CATEGORY_LABEL[i.category]} · ${REVIEW_LABEL[i.reviewStatus]}] ${clip(i.title, 120)}: ${clip(i.content, 220)}`);
 
   const name = (id: string) => w.people[id]?.name ?? "otra persona";
+  const when = (s: Workspace["sessions"][number]) => {
+    if (s.status === "completed") return `realizada ${day(s.completedAt)}`;
+    if (!s.scheduledAt) return "pedida sin fecha: el mentor debe proponer fecha y hora para confirmarla";
+    const at = `${longLocalDateTime(s.scheduledAt)} (${localIsoWithOffset(s.scheduledAt)})`;
+    return s.confirmedAt ? `confirmada por el mentor para el ${at}` : `fecha pedida ${at}, falta que el mentor la confirme`;
+  };
   const sessionLine = (s: Workspace["sessions"][number]) =>
-    `[${s.id}] ${SESSION_KIND_LABEL[s.kind]} (${s.status === "completed" ? `realizada ${day(s.completedAt)}` : s.scheduledAt ? `programada ${day(s.scheduledAt)}` : "pedida, sin fecha"})${s.decision ? ` · decisión: ${DECISION_LABEL[s.decision.value].toLowerCase()}` : ""}`;
+    `[${s.id}] ${SESSION_KIND_LABEL[s.kind]} con ${name(s.mentorId)} (${when(s)}${s.status === "in_progress" ? ", en curso" : ""})${s.decision ? ` · decisión: ${DECISION_LABEL[s.decision.value].toLowerCase()}` : ""}`;
   const upcoming = w.sessions
     .filter((s) => s.status !== "completed")
     .sort((a, b) => (a.scheduledAt ?? a.createdAt).localeCompare(b.scheduledAt ?? b.createdAt))
