@@ -1,4 +1,5 @@
 import "server-only";
+import { longLocalDateTime, PLATFORM_TIMEZONE_LABEL } from "@/lib/dates";
 import type { AgentArtifact, AgentMessage, AgentThreadMemory, AgentTurnMetrics, KnowledgeCitation, Project, Role } from "@/types/domain";
 import type { KnowledgeContextResult } from "./knowledge-retrieval";
 import { extractArtifacts } from "./artifact-parser";
@@ -183,7 +184,7 @@ Cómo ayudar en cada etapa:
    - Cuando ya se cubrieron los temas principales o pide un resumen, usa update_context_memory (o propose_step_action set_summary). Luego propone confirm_summary y, con mentor asignado, request_review first_review.
 2. «Orientar» — ¿Qué investigamos primero?
    - Al pedir la revisión, el briefing se prepara solo (generate_mentor_briefing lo actualiza). Al mentor: registra notas (add_session_note) y ciérrala con el acuerdo (complete_first_review) y el problema a investigar primero (prioritize_problem, con justificación). Al cerrar cualquier sesión, los compromisos del emprendedor de la síntesis se vuelven tareas solos.
-   - Las revisiones se piden con request_review (se puede indicar la fecha); schedule_session es solo para sesiones de seguimiento.
+   - Las revisiones se piden con request_review, con la fecha y hora que quiere la persona; schedule_session es solo para sesiones de seguimiento. El mentor confirma la fecha (o propone otra) con confirm_session.
    - Acuerdo (save_agreement, confirm_agreement) y objetivos (propose_goals) son opcionales pero recomendados para el ciclo.
 3. «Probar» — ¿Cómo lo comprobamos en pequeño?
    - Formula la hipótesis con design_experiment sin hypothesisId y propone submit_hypothesis. El mentor la decide con decide_hypothesis.
@@ -269,7 +270,12 @@ Usa herramientas cuando la persona quiera estructurar algo en el proyecto; para 
 - save_note_reply: responder una nota de mentoría (o corregir una respuesta propia con reply_id). La puede usar el emprendedor/estudiante o el mentor. Escribe la respuesta con las palabras y decisiones de la persona; no inventes datos.${role === "mentor" || role === "admin" ? "\n- save_mentor_note: crear una nota en una sesión de mentoría abierta (solo el mentor de esa sesión) o corregir una nota propia (con note_id). Las privadas no las ve el emprendedor." : ""}
   Estas dos se guardan directo (no son tarjetas): úsalas solo cuando la persona pida guardar, crear, responder o corregir una nota, o confirme el texto. Después di qué guardaste y dónde se ve (pestaña Notas de la sesión).
 - generate_document: crear un documento descargable (PDF o Word) sobre un tema: plan, informe, guía de estudio, resumen de decisiones, propuesta, acta de sesión, etc. Úsala cuando la persona pida un PDF, un Word, un documento o un archivo para descargar. Pon add_to_project en true cuando lo pida o cuando sea material de referencia del proyecto (plan, informe, guía, resumen); en false si es algo puntual o una prueba. El documento se redacta aparte con el contexto del proyecto: no lo copies en tu respuesta, solo di qué contiene y si quedó en el proyecto.
-- propose_step_action: dar cualquier paso del recorrido (confirmar resumen, pedir revisiones, priorizar, decidir hipótesis, iniciar experimentos, registrar resultados y evidencia, decisión del mentor, acuerdo, sesiones). Usa los ids entre corchetes de <project_state>.${field ? "\n- draft_field_value: redactar el borrador del campo de formulario indicado en <current_screen>. Úsala siempre en este turno." : ""}
+- propose_step_action: dar cualquier paso del recorrido (confirmar resumen, pedir revisiones, priorizar, decidir hipótesis, iniciar experimentos, registrar resultados y evidencia, decisión del mentor, acuerdo, sesiones). Usa los ids entre corchetes de <project_state>.
+- Agendar y confirmar revisiones con el mentor:
+  · Emprendedor/estudiante: para la primera o la segunda revisión propone request_review con kind y scheduledAt. Antes revisa «Recorrido» y «Sesiones próximas»: si falta un requisito (resumen confirmado para la primera, al menos un resultado registrado para la segunda, mentor asignado) o ya hay una revisión de ese tipo abierta, no la propongas: explica qué falta y propone ese paso. Para un encuentro extra, schedule_session.
+  · Mentor: para confirmar la fecha pedida propone confirm_session con el targetId de la sesión; si esa fecha no le sirve, confirm_session con la nueva scheduledAt (queda confirmada con esa fecha). Si la sesión no tiene fecha, pide fecha y hora antes de proponerla. Solo confirma el mentor de esa sesión.
+  · Fechas: interpreta «mañana», «el jueves», «a las 3» con la fecha y hora actuales de <current_screen>, y escribe scheduledAt como AAAA-MM-DDTHH:MM-06:00 (hora de Costa Rica). Si falta la hora o la fecha es ambigua, pregunta antes de proponer; nunca inventes la hora ni propongas fechas pasadas. En tu respuesta repite la fecha en palabras (p. ej. «jueves 5 de noviembre a las 15:00») para que la persona la verifique en la tarjeta.
+  · La fecha queda pedida al aplicar la tarjeta, no al proponerla: dilo así, y aclara que falta la confirmación del mentor cuando corresponda.${field ? "\n- draft_field_value: redactar el borrador del campo de formulario indicado en <current_screen>. Úsala siempre en este turno." : ""}
 Solo propone lo que esta persona puede hacer (ver «Acciones que esta persona puede hacer» en <project_state>). Después de usar una herramienta, explica en una o dos frases qué propusiste y que puede aplicarlo desde las tarjetas.
 </session_and_tool_guidelines>
 
@@ -297,6 +303,7 @@ ${extras.session ? renderSessionState(extras.session) : `<session_state>Este hil
 ${extras.thread ? renderThreadMemory({ title: extras.thread.title }, extras.thread.memory, extras.thread.totalMessages) : `<thread_state>Conversación sin hilo persistente: responde solo con este mensaje.</thread_state>`}
 
 <current_screen>
+Fecha y hora actuales: ${longLocalDateTime(new Date().toISOString())} (${PLATFORM_TIMEZONE_LABEL})
 Pantalla desde la que escribe la persona: ${location}${sessionContext?.section ? ` · sección «${sessionContext.section}»` : ""}
 Rol de la cuenta: ${role === "mentor" ? "Mentor/a o tutor/a" : role === "admin" ? "Administración" : "Emprendedor/a o estudiante"}${field ? `
 Borrador pedido para el campo «${field.label}» (${field.path})${field.type ? `, tipo ${field.type}` : ""}${field.maxLength ? `, máximo ${field.maxLength} caracteres` : ""}${field.options?.length ? `, opciones: ${field.options.join(" | ")}` : ""}.${field.description ? `\nQué pide el campo: ${field.description}` : ""}

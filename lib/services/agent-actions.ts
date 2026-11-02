@@ -18,7 +18,8 @@ import { notFound, validation } from "@/lib/errors";
 import { guard, type ServiceDeps } from "./base";
 import { deleteProject } from "./projects";
 import { addItem, changeItem, confirmSummary, editSummary } from "./diagnosis";
-import { addNote, completeFirstReview, completeSecondReview, completeSession, requestReview, scheduleSession } from "./mentoring";
+import { addNote, completeFirstReview, completeSecondReview, completeSession, confirmSession, requestReview, reviewRequestBlocker, scheduleSession } from "./mentoring";
+import { longLocalDateTime, parseSessionDateTime } from "@/lib/dates";
 import {
   confirmMentorshipAgreement,
   createMentorshipGoal,
@@ -177,6 +178,49 @@ async function openSession(d: ServiceDeps, projectId: string, kind?: MentorSessi
     .sort((a, b) => (a.scheduledAt ?? a.createdAt).localeCompare(b.scheduledAt ?? b.createdAt))[0];
 }
 
+/** Fecha y hora que escribió el agente, en la hora de la plataforma. Sin hora no se agenda. */
+function sessionDate(raw?: string): string | undefined {
+  try {
+    return parseSessionDateTime(raw);
+  } catch (err) {
+    throw validation(err instanceof Error ? err.message : "Fecha no válida.");
+  }
+}
+
+/**
+ * Antes de proponer la tarjeta: lo que haría fallar una acción de agenda (fecha pasada o sin hora,
+ * requisitos de la revisión, sesión ajena o sin fecha). Así el agente explica qué falta en vez de
+ * ofrecer una tarjeta que no se puede aplicar. Las reglas son las mismas que aplica el servicio.
+ */
+export async function stepActionBlocker(d: ServiceDeps, projectId: string, p: StepActionParams): Promise<string | null> {
+  if (p.action !== "request_review" && p.action !== "confirm_session" && p.action !== "schedule_session") return null;
+  let at: string | undefined;
+  try {
+    at = parseSessionDateTime(p.scheduledAt);
+  } catch (err) {
+    return err instanceof Error ? err.message : "Fecha no válida.";
+  }
+  if (at && at <= d.now()) return "La fecha de la sesión ya pasó. Elegí una fecha y hora futuras.";
+  if (p.action === "request_review") return reviewRequestBlocker(d, projectId, p.kind === "second_review" ? "second_review" : "first_review");
+  if (p.action === "confirm_session") {
+    const target = p.targetId ? await d.repo.mentorSessions.get(p.targetId) : await pendingConfirmation(d, projectId);
+    if (!target || target.projectId !== projectId) return p.targetId ? "Esa sesión no es de este proyecto." : "No hay sesiones tuyas esperando confirmación en este proyecto.";
+    if (target.mentorId !== d.actor.id) return "Solo el mentor de esa sesión puede confirmarla.";
+    if (target.status === "completed") return "Esa sesión ya terminó.";
+    if (!at && !target.scheduledAt) return "La sesión no tiene fecha: pedile al mentor la fecha y hora para confirmarla.";
+    if (!at && target.scheduledAt! <= d.now()) return "La fecha pedida ya pasó: hace falta proponer una fecha y hora nuevas.";
+  }
+  return null;
+}
+
+/** La sesión del mentor que espera confirmación (la más próxima), si no se indicó cuál. */
+async function pendingConfirmation(d: ServiceDeps, projectId: string) {
+  const sessions = await d.repo.mentorSessions.list({ projectId });
+  return sessions
+    .filter((s) => s.mentorId === d.actor.id && s.status !== "completed" && !s.confirmedAt)
+    .sort((a, b) => (a.scheduledAt ?? a.createdAt).localeCompare(b.scheduledAt ?? b.createdAt))[0];
+}
+
 /** La relación de mentoría se abre sola la primera vez que se acuerda algo con el mentor asignado. */
 const ensureRelation = ensureMentorshipRelation;
 
@@ -233,8 +277,18 @@ async function runStepAction(d: ServiceDeps, projectId: string, p: StepActionPar
     }
     case "request_review": {
       const kind: MentorSessionKind = p.kind === "second_review" ? "second_review" : "first_review";
-      const s = await requestReview(d, projectId, kind, { scheduledAt: p.scheduledAt });
-      return done(s.id, "Pedido enviado al mentor.");
+      // Mismas validaciones que «Pedir revisión» en la pantalla: las aplica el servicio.
+      const s = await requestReview(d, projectId, kind, { scheduledAt: sessionDate(p.scheduledAt) });
+      return done(
+        s.id,
+        s.scheduledAt ? `Pedido enviado al mentor para el ${longLocalDateTime(s.scheduledAt)}. Falta que el mentor confirme la fecha.` : "Pedido enviado al mentor. La fecha la acuerdan con el mentor.",
+      );
+    }
+    case "confirm_session": {
+      const target = p.targetId ? await d.repo.mentorSessions.get(p.targetId) : await pendingConfirmation(d, projectId);
+      if (!target || target.projectId !== projectId) throw validation("No encontré esa sesión en este proyecto.");
+      const s = await confirmSession(d, target.id, { scheduledAt: sessionDate(p.scheduledAt) });
+      return done(s.id, `Sesión confirmada para el ${longLocalDateTime(s.scheduledAt!)}.`);
     }
     case "add_session_note": {
       const s = (p.targetId && (await d.repo.mentorSessions.get(p.targetId))) || (await openSession(d, projectId));
@@ -328,7 +382,7 @@ async function runStepAction(d: ServiceDeps, projectId: string, p: StepActionPar
       return done(s.id, "Decisión registrada: el ciclo quedó cerrado.");
     }
     case "schedule_session": {
-      const at = p.scheduledAt && !Number.isNaN(Date.parse(p.scheduledAt)) ? new Date(p.scheduledAt).toISOString() : undefined;
+      const at = sessionDate(p.scheduledAt);
       const rel = (await d.repo.mentorshipRelations.list({ projectId })).find((r) => r.stage !== "closed");
       const s = await scheduleSession(d, projectId, { kind: "follow_up" as MentorSessionKind, scheduledAt: at, relationId: rel?.id });
       return done(s.id, "Sesión agendada.");

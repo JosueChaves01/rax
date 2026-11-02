@@ -1,3 +1,4 @@
+import { formatDate } from "@/shared/ui/primitives";
 import type { Hypothesis, MentorSession } from "@/types/domain";
 
 export type InboxKind = "first_review" | "hypothesis" | "second_review" | "follow_up";
@@ -24,7 +25,7 @@ export function mentorInbox(
   for (const p of projects) {
     for (const s of p.sessions) {
       if (s.status === "completed" || s.mentorId !== mentorId) continue;
-      const when = s.scheduledAt ? ` Fecha: ${s.scheduledAt.slice(0, 10)}.` : "";
+      const when = s.scheduledAt ? ` Fecha: ${formatDate(s.scheduledAt)}${s.confirmedAt ? " (confirmada)" : " (por confirmar)"}.` : " Sin fecha: proponé una.";
       if (s.kind === "first_review")
         items.push({ kind: "first_review", projectId: p.id, projectName: p.name, tab: "orientar", detail: `Pidió la primera revisión. El briefing está listo.${when}`, since: s.createdAt });
       else if (s.kind === "second_review")
