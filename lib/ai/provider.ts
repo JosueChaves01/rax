@@ -273,11 +273,51 @@ export interface PreSessionBriefingContext {
   blockedOrDelayedTasks: Array<{ title: string; blockedReason?: string; delayCause?: string; delayDetail?: string }>;
   experimentsInProgress: Array<{ question: string; status: string; metric?: string }>;
   // Capa 3: Temas pendientes y notas previas
-  previousSessionNotes: Array<{ kind: string; body: string }>;
+  /** Notas compartidas de la sesión anterior más reciente, con las respuestas de cada una. */
+  previousSessionNotes: BriefingNote[];
   /** Lo que quedó pendiente en la síntesis de la sesión anterior (compromisos y próximos pasos). */
   previousSessionPending?: string[];
+  /** Historial de sesiones anteriores (de la más reciente a la más antigua): notas, respuestas, síntesis, decisiones, transcripción. */
+  previousSessions?: BriefingPreviousSession[];
+  /** Preguntas que dejó el mentor en las notas y lo que respondió la persona (o que siguen sin respuesta). */
+  questionsFromNotes?: BriefingQuestion[];
+  /** Notas que ya se cargaron en la sesión que se prepara (p. ej. preguntas que el mentor dejó de antemano). */
+  currentSessionNotes?: BriefingNote[];
+  /** Documentos del proyecto (los más recientes), con un extracto. */
+  documents?: Array<{ title: string; source: string; updatedAt: string; excerpt: string }>;
   /** Planteos recientes de la persona emprendedora en el chat, ya en texto plano (sin respuestas del asistente). */
   recentMessages?: Array<{ author: string; content: string }>;
+}
+
+/** Nota compartida de una sesión con sus respuestas (quién escribió: el mentor o la persona emprendedora). */
+export interface BriefingNote {
+  kind: string;
+  author: "mentor" | "emprendedor";
+  body: string;
+  replies?: Array<{ author: "mentor" | "emprendedor"; body: string; date?: string }>;
+}
+
+export interface BriefingPreviousSession {
+  kind: string;
+  date?: string;
+  status: string;
+  agenda?: string[];
+  notes: BriefingNote[];
+  summary?: string;
+  agreedDecisions?: string[];
+  entrepreneurCommitments?: string[];
+  mentorCommitments?: string[];
+  nextSteps?: string;
+  mentorDecision?: string;
+  /** Tramo de la transcripción de la llamada (solo de la sesión anterior más reciente con llamada). */
+  transcriptExcerpt?: string;
+}
+
+export interface BriefingQuestion {
+  session: string;
+  question: string;
+  answered: boolean;
+  answers: string[];
 }
 
 export interface PreSessionBriefingResult {

@@ -411,13 +411,29 @@ export class SimulatedProvider implements AiProvider {
 
     // Capa 3 en secciones legibles: lo que quedó de la sesión anterior, incógnitas y lo que la persona planteó.
     const fromLastSession = [
-      ...ctx.previousSessionNotes.map((n) => `• ${(NOTE_KIND_LABEL as Record<string, string>)[n.kind] ?? "Nota"}: ${plainText(n.body, 160)}`),
+      ...ctx.previousSessionNotes
+        .filter((n) => n.kind !== "question")
+        .map((n) => {
+          const reply = n.replies?.find((r) => r.author !== n.author);
+          return `• ${(NOTE_KIND_LABEL as Record<string, string>)[n.kind] ?? "Nota"}: ${plainText(n.body, 160)}${reply ? ` (respuesta: ${plainText(reply.body, 160)})` : ""}`;
+        }),
       ...(ctx.previousSessionPending ?? []).map((p) => `• ${p}`),
     ].slice(0, 6);
+    const questions = ctx.questionsFromNotes ?? [];
+    const answered = questions
+      .filter((q) => q.answered)
+      .slice(-5)
+      .map((q) => `• ${plainText(q.question, 140)} → ${plainText(q.answers[q.answers.length - 1], 200)}`);
+    const unanswered = questions
+      .filter((q) => !q.answered)
+      .slice(-5)
+      .map((q) => `• ${plainText(q.question, 160)}`);
     const unknowns = (ctx.diagnosisUnknowns ?? []).slice(0, 4).map((u) => `• ${plainText(u.title, 120)}`);
     const asked = (ctx.recentMessages ?? []).slice(-3).map((m) => `• «${plainText(m.content, 180)}»`);
     const pendingTopicsSummary = [
       `De la sesión anterior:\n${fromLastSession.length ? fromLastSession.join("\n") : "• No quedaron notas ni compromisos registrados de una sesión anterior."}`,
+      answered.length ? `Preguntas del mentor que la persona ya respondió:\n${answered.join("\n")}` : "",
+      unanswered.length ? `Preguntas del mentor todavía sin respuesta:\n${unanswered.join("\n")}` : "",
       unknowns.length ? `Incógnitas del diagnóstico por aclarar:\n${unknowns.join("\n")}` : "",
       asked.length ? `Lo que la persona planteó recientemente en el chat:\n${asked.join("\n")}` : "",
     ]
@@ -432,10 +448,15 @@ export class SimulatedProvider implements AiProvider {
     ];
 
     const suggestedQuestions = [
+      ...questions
+        .filter((q) => q.answered)
+        .slice(-2)
+        .map((q) => `Sobre tu respuesta a «${plainText(q.question, 90)}»: ¿qué evidencia o siguiente paso tenés?`),
+      ...questions.filter((q) => !q.answered).slice(-1).map((q) => plainText(q.question, 200)),
       "¿Qué fue lo más retador o inesperado que encontraste desde la última sesión?",
       "De los compromisos pendientes, ¿cuál destrabaría mayor valor si lo resolvemos primero?",
       "¿Qué apoyo específico o recurso clave necesitás de mi parte como mentor esta semana?",
-    ];
+    ].slice(0, 5);
 
     const briefing: PreSessionBriefingSuggestion = {
       activeAgreementsAndGoalsSummary: `${agreementSummary}\n\nObjetivos vigentes:\n${goalsSummary}`,

@@ -1,7 +1,8 @@
 import type { MentorSession, SessionNote, SessionNoteKind, SessionNoteReply } from "@/types/domain";
 import { forbidden, notFound, validation } from "@/lib/errors";
 import { guard, type ServiceDeps } from "./base";
-import { addNote, getMentorSessionWorkspace } from "./mentoring";
+import { addNote, getMentorSessionWorkspace, refreshUpcomingBriefings } from "./mentoring";
+import { inBackground } from "./background";
 import { touch } from "./projects";
 
 /**
@@ -168,6 +169,7 @@ export async function addNoteReply(d: ServiceDeps, noteId: string, body: string)
   };
   await d.repo.sessionNoteReplies.insert(reply);
   await touch(d, note.projectId);
+  await inBackground("briefing", () => refreshUpcomingBriefings(d, note.projectId));
   return reply;
 }
 
@@ -179,6 +181,7 @@ export async function updateNoteReply(d: ServiceDeps, replyId: string, body: str
   if (reply.authorId !== d.actor.id) throw forbidden("Solo quien escribió la respuesta puede editarla.");
   const updated = await d.repo.sessionNoteReplies.update(replyId, { body: cleanBody(body, "La respuesta"), updatedAt: d.now() });
   await touch(d, reply.projectId);
+  await inBackground("briefing", () => refreshUpcomingBriefings(d, reply.projectId));
   return updated;
 }
 

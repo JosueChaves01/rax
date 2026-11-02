@@ -33,6 +33,7 @@ import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 import { sessionTranscriptForAi } from "./session-transcript";
 import { isFiller, plainText } from "@/lib/ai/plain-text";
 import { inBackground } from "./background";
+import { buildBriefingHistory } from "./briefing-history";
 import { changeItem } from "./diagnosis";
 
 /**
@@ -120,6 +121,17 @@ export async function confirmSession(d: ServiceDeps, sessionId: string, opts: { 
   await audit(d, "session.confirmed", { projectId: s.projectId, targetId: s.id, meta: { kind: s.kind, scheduledAt: at, rescheduled } });
   await touch(d, s.projectId);
   return updated;
+}
+
+/**
+ * Una respuesta a una nota cambia lo que el mentor necesita saber: se rehace el briefing de las sesiones
+ * que todavía no empezaron y ya tenían uno, para que no quede preparado con preguntas ya respondidas.
+ */
+export async function refreshUpcomingBriefings(d: ServiceDeps, projectId: string): Promise<void> {
+  const { project } = await guard(d, projectId, "project.read");
+  if (!project) return;
+  const upcoming = (await d.repo.mentorSessions.list({ projectId })).filter((s) => s.status === "pending" && s.preSessionBriefing);
+  for (const s of upcoming) await savePreSessionBriefing(d, s, project);
 }
 
 /** Prepara el briefing con IA al crear una sesión (lo pide quien la abre, no el mentor). */
@@ -507,7 +519,7 @@ export async function generatePreSessionBriefing(
 async function savePreSessionBriefing(d: ServiceDeps, s: MentorSession, project: Project): Promise<PreSessionBriefing> {
   const sessionId = s.id;
 
-  const [diagnoses, allSessions, allNotes, allTasks, allExps, allRelations, diagnosisItems] = await Promise.all([
+  const [diagnoses, allSessions, allNotes, allTasks, allExps, allRelations, diagnosisItems, allDocuments] = await Promise.all([
     d.repo.diagnoses.list({ projectId: s.projectId }),
     d.repo.mentorSessions.list({ projectId: s.projectId }),
     d.repo.sessionNotes.list({ projectId: s.projectId }),
@@ -515,6 +527,7 @@ async function savePreSessionBriefing(d: ServiceDeps, s: MentorSession, project:
     d.repo.experiments.list({ projectId: s.projectId }),
     d.repo.mentorshipRelations.list({ projectId: s.projectId }),
     d.repo.diagnosisItems.list({ projectId: s.projectId }),
+    d.repo.projectDocuments.list({ projectId: s.projectId }).catch(() => []),
   ]);
 
   if (!project) throw notFound("Proyecto no encontrado.");
@@ -571,23 +584,9 @@ async function savePreSessionBriefing(d: ServiceDeps, s: MentorSession, project:
     .filter((i) => i.infoType === "unknown" || i.category === "open_question")
     .map((i) => ({ id: i.id, title: i.title, content: i.content }));
 
-  // Capa 3: Temas pendientes y notas de sesiones previas
-  const previousSessions = allSessions
-    .filter((sess) => sess.id !== sessionId)
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  const lastSession = previousSessions[0];
-  const previousSessionNotes = lastSession
-    ? allNotes.filter((n) => n.sessionId === lastSession.id && !n.isPrivate).map((n) => ({ kind: n.kind, body: n.body }))
-    : [];
-
-  const prevSyn = previousSessions.find((sess) => sess.postSessionSynthesis)?.postSessionSynthesis;
-  const previousSessionPending = prevSyn
-    ? [
-        ...prevSyn.entrepreneurCommitments.map((c) => `Compromiso del emprendedor: ${plainText(c.title, 160)}`),
-        ...prevSyn.mentorCommitments.map((c) => `Compromiso del mentor: ${plainText(c.title, 160)}`),
-        ...(prevSyn.nextSteps ? [`Próximos pasos acordados: ${plainText(prevSyn.nextSteps, 240)}`] : []),
-      ].slice(0, 8)
-    : [];
+  // Capa 3: todo lo que dejaron las sesiones previas (notas con sus respuestas, preguntas respondidas o no,
+  // síntesis, decisiones, compromisos y transcripción) más los documentos del proyecto.
+  const history = await buildBriefingHistory(d, s, allSessions, allNotes, allDocuments);
 
   // Solo lo que planteó la persona (no las respuestas del asistente), en texto plano y sin muletillas.
   let recentMessages: Array<{ author: string; content: string }> | undefined;
@@ -608,7 +607,7 @@ async function savePreSessionBriefing(d: ServiceDeps, s: MentorSession, project:
       .sort((a, b) => a.at.localeCompare(b.at))
       .map((m) => plainText(m.content, 220))
       .filter((t) => t && !isFiller(t));
-    const unique = [...new Set(topics)].slice(-5);
+    const unique = [...new Set(topics)].slice(-8);
     if (unique.length > 0) recentMessages = unique.map((content) => ({ author: "emprendedor", content }));
   }
 
@@ -633,8 +632,7 @@ async function savePreSessionBriefing(d: ServiceDeps, s: MentorSession, project:
     diagnosisHypotheses: diagnosisHypotheses.length > 0 ? diagnosisHypotheses : undefined,
     diagnosisEvidence: diagnosisEvidence.length > 0 ? diagnosisEvidence : undefined,
     diagnosisUnknowns: diagnosisUnknowns.length > 0 ? diagnosisUnknowns : undefined,
-    previousSessionNotes,
-    previousSessionPending: previousSessionPending.length ? previousSessionPending : undefined,
+    ...history,
     recentMessages,
   };
 
