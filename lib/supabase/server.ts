@@ -25,9 +25,7 @@ export async function createUserClient(): Promise<SupabaseClient> {
 
 let system: SupabaseClient | null = null;
 
-const DEFAULT_SERVICE_ROLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzbG95YWJ0ZXlmam9wbnFyaHBlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MzE5MzEzNCwiZXhwIjoyMTA4NzY5MTM0fQ.MUXQAFGpez7MKeAcXN_rSgz3EGoIkrbp0DE92VBsSQ4";
-
+const DEFAULT_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 /**
  * Extrae y valida que un token JWT corresponda al rol service_role de Supabase.
  */
