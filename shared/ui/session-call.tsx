@@ -47,12 +47,12 @@ function Video({ stream, muted, label, off }: { stream: MediaStream | null; mute
   );
 }
 
-function TranscriptList({ segments, meId, empty }: { segments: LiveSegment[]; meId?: string; empty: string }) {
+function TranscriptList({ segments, meId, empty, tall }: { segments: LiveSegment[]; meId?: string; empty: string; tall?: boolean }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => end.current?.scrollIntoView({ block: "nearest" }), [segments.length]);
   if (!segments.length) return <p className="text-xs text-slate-500">{empty}</p>;
   return (
-    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+    <div className={cx("space-y-2 overflow-y-auto pr-1", tall ? "max-h-[50vh]" : "max-h-72")}>
       {segments.map((s) => (
         <p key={s.id} className="text-xs leading-relaxed text-slate-800">
           <span className="font-mono text-[10px] text-slate-400">{clock(s.offsetMs)}</span>{" "}
@@ -264,6 +264,7 @@ function InCall({ state, onDone, onActive }: { state: CallState; onDone: () => v
               segments={c.segments}
               meId={state.me.id}
               empty={c.transcribing ? "Lo que digan aparecerá aquí cada 15 segundos aproximadamente." : "Sin transcripción en esta llamada."}
+              tall
             />
           </div>
         </>
@@ -302,8 +303,15 @@ class CallErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
   }
 }
 
-/** Llamada con transcripción dentro de una sesión de mentoría. */
-export function SessionCallPanel(props: { sessionId: string; className?: string }) {
+/** Pantalla de la llamada (con el contexto del proyecto al lado) para una sesión. */
+export const callRoomHref = (sessionId: string) => `/app/llamada/${sessionId}`;
+
+/**
+ * Llamada con transcripción de una sesión de mentoría.
+ * - `inline` (dentro de la sesión): muestra el estado y lleva a la pantalla de la llamada.
+ * - `room` (pantalla de la llamada): aquí se hace la llamada.
+ */
+export function SessionCallPanel(props: { sessionId: string; className?: string; mode?: "inline" | "room" }) {
   return (
     <CallErrorBoundary>
       <SessionCallPanelInner {...props} />
@@ -311,7 +319,7 @@ export function SessionCallPanel(props: { sessionId: string; className?: string 
   );
 }
 
-function SessionCallPanelInner({ sessionId, className }: { sessionId: string; className?: string }) {
+function SessionCallPanelInner({ sessionId, className, mode = "inline" }: { sessionId: string; className?: string; mode?: "inline" | "room" }) {
   const router = useRouter();
   const [state, setState] = useState<CallState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -368,8 +376,21 @@ function SessionCallPanelInner({ sessionId, className }: { sessionId: string; cl
         )}
       </div>
 
-      {state.canCall && (
-        <InCall state={state} onDone={onDone} onActive={setInCall} />
+      {state.canCall && mode === "room" && <InCall state={state} onDone={onDone} onActive={setInCall} />}
+
+      {mode === "inline" && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href={callRoomHref(sessionId)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-blue-700/50 bg-blue-600 px-5 text-xs font-semibold uppercase tracking-[0.08em] text-white shadow-xs transition-colors hover:bg-blue-700"
+          >
+            {state.activeCall ? "📞 Unirme a la llamada" : state.canCall ? "📞 Abrir la llamada" : "Ver la pantalla de la llamada"}
+          </Link>
+          <p className="max-w-xl text-[11px] leading-relaxed text-slate-500">
+            La llamada se abre en su propia pantalla, con todo el contexto del proyecto a la vista: etapa, diagnóstico, hipótesis, acuerdos, tareas,
+            briefing, notas y documentos.
+          </p>
+        </div>
       )}
 
       {state.pastCalls.length > 0 && (
