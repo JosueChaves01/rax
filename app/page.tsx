@@ -1,4 +1,4 @@
-import { Onest } from "next/font/google";
+import localFont from "next/font/local";
 import { LandingSections } from "@/features/landing/baseline/sections";
 import { LandingShell } from "@/features/landing/baseline/shell";
 import "@/features/landing/baseline/baseline.css";
@@ -9,7 +9,17 @@ import "@/features/landing/baseline/baseline.css";
  * Los estilos están acotados a .bl-root: el resto de la app no cambia.
  */
 
-const onest = Onest({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-onest", display: "swap" });
+// Onest autoalojada (OFL, de @fontsource/onest): el build no depende de descargar Google Fonts,
+// que a veces falla en Vercel con «Cannot read properties of null (reading '1')».
+const onest = localFont({
+  src: [
+    { path: "../features/landing/baseline/fonts/onest-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../features/landing/baseline/fonts/onest-latin-500-normal.woff2", weight: "500", style: "normal" },
+  ],
+  variable: "--font-onest",
+  display: "swap",
+  fallback: ["system-ui", "sans-serif"],
+});
 
 export default function Home() {
   return (
