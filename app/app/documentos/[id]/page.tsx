@@ -1,21 +1,7 @@
 import { redirect } from "next/navigation";
-import { getDeps } from "@/lib/runtime";
-import { DocumentEditorView } from "@/shared/ui/document-editor-view";
 
-export const dynamic = "force-dynamic";
-
-export const metadata = { title: "Editor de Documentos · RAX" };
-
-export default async function DocumentEditorPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const d = await getDeps();
-  if (!d) redirect("/entrar");
-
+/** El editor de plantillas no guardaba nada: el recurso se abre en la biblioteca, donde se descarga. */
+export default async function DocumentEditorRedirect({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const doc = await d.repo.mentorResources.get(id);
-
-  return <DocumentEditorView docId={id} initialDoc={doc} />;
+  redirect(`/app/documentos?recurso=${encodeURIComponent(id)}`);
 }

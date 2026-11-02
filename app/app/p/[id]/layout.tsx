@@ -22,8 +22,8 @@ export default async function WorkspaceLayout({ children, params }: { children: 
   const tasksOpen = w.tasks.filter((t) => t.status !== "done").length;
 
   return (
-    <div className="mx-auto grid max-w-[1400px] gap-6 px-4 pb-28 pt-6 sm:px-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:pb-6">
-      <aside aria-label="Contexto del proyecto" className="hidden space-y-4 lg:sticky lg:top-20 lg:block lg:h-fit">
+    <div className="mx-auto grid max-w-[1400px] gap-6 px-4 pb-28 pt-6 sm:px-6 xl:grid-cols-[300px_minmax(0,1fr)] lg:pb-6">
+      <aside aria-label="Contexto del proyecto" className="hidden space-y-4 xl:sticky xl:top-20 xl:block xl:h-fit">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
           <div className="flex flex-wrap items-center gap-2">
             {w.isMentorView && <Tag color="var(--color-cyan)">Vista de mentor</Tag>}
@@ -86,7 +86,7 @@ export default async function WorkspaceLayout({ children, params }: { children: 
 
       <div className="min-w-0 space-y-6">
         {w.project.status === "paused" && <Notice tone="warn">El proceso está pausado. La información se conserva; podés retomarlo cuando quieras.</Notice>}
-        <div className="lg:hidden">
+        <div className="xl:hidden">
           <p className="eyebrow">
             Etapa {stage.n} de {STAGES.length} · {stageState(stage, w.phase) === "done" ? "concluida" : PHASE_LABEL[w.phase]}
           </p>

@@ -3,7 +3,7 @@ import { getDeps } from "@/lib/runtime";
 import { isDomainError } from "@/lib/errors";
 import { renderDocument } from "@/lib/documents";
 import { isDocumentFormat } from "@/lib/documents/types";
-import { documentFromMessage, documentFromProject } from "@/lib/services/agent-documents";
+import { documentFromMessage, documentFromProject, documentFromResource } from "@/lib/services/agent-documents";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
  * Descarga de documentos en PDF o Word, armados al momento a partir de su contenido:
  * - del agente: ?mensaje=<id>&artefacto=<id>&formato=pdf|docx
  * - del conocimiento del proyecto: ?proyecto=<id>&documento=<id>&formato=pdf|docx
+ * - de la biblioteca metodológica: ?recurso=<id>&formato=pdf|docx
  */
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
@@ -26,12 +27,15 @@ export async function GET(req: NextRequest) {
     const artifact = q.get("artefacto");
     const project = q.get("proyecto");
     const document = q.get("documento");
+    const resource = q.get("recurso");
     const source =
       message && artifact
         ? await documentFromMessage(d, message, artifact)
         : project && document
           ? await documentFromProject(d, project, document)
-          : null;
+          : resource
+            ? await documentFromResource(d, resource)
+            : null;
     if (!source) return NextResponse.json({ error: "Falta indicar qué documento descargar." }, { status: 400 });
 
     const file = await renderDocument(source, format);
