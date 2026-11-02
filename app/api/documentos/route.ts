@@ -3,7 +3,7 @@ import { getDeps } from "@/lib/runtime";
 import { isDomainError } from "@/lib/errors";
 import { renderDocument } from "@/lib/documents";
 import { isDocumentFormat } from "@/lib/documents/types";
-import { documentFromMessage, documentFromProject, documentFromResource } from "@/lib/services/agent-documents";
+import { documentSourceFromQuery } from "./source";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
  * - del agente: ?mensaje=<id>&artefacto=<id>&formato=pdf|docx
  * - del conocimiento del proyecto: ?proyecto=<id>&documento=<id>&formato=pdf|docx
  * - de la biblioteca metodológica: ?recurso=<id>&formato=pdf|docx
+ * Con «ver=1» el PDF se abre en el navegador (el visor lo muestra en un iframe) en vez de descargarse.
  */
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
@@ -23,26 +24,14 @@ export async function GET(req: NextRequest) {
   if (!d) return NextResponse.json({ error: "Inicia sesión para descargar el documento." }, { status: 401 });
 
   try {
-    const message = q.get("mensaje");
-    const artifact = q.get("artefacto");
-    const project = q.get("proyecto");
-    const document = q.get("documento");
-    const resource = q.get("recurso");
-    const source =
-      message && artifact
-        ? await documentFromMessage(d, message, artifact)
-        : project && document
-          ? await documentFromProject(d, project, document)
-          : resource
-            ? await documentFromResource(d, resource)
-            : null;
+    const source = await documentSourceFromQuery(d, q);
     if (!source) return NextResponse.json({ error: "Falta indicar qué documento descargar." }, { status: 400 });
 
     const file = await renderDocument(source, format);
     return new NextResponse(new Uint8Array(file.body), {
       headers: {
         "Content-Type": file.mime,
-        "Content-Disposition": `attachment; filename="${file.filename}"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+        "Content-Disposition": `${q.get("ver") === "1" ? "inline" : "attachment"}; filename="${file.filename}"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
         "Cache-Control": "private, no-store",
       },
     });

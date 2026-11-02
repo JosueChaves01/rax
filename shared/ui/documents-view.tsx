@@ -6,6 +6,8 @@ import { Tag, cx, formatDate } from "@/shared/ui/primitives";
 import { RESOURCE_CATEGORY_LABEL } from "@/features/labels";
 import type { MentorResource, ResourceCategory } from "@/types/domain";
 import type { LibraryDocument } from "@/lib/services/project-knowledge";
+import { ViewDocumentButton, documentKindLabel } from "@/shared/ui/document-viewer";
+import { MarkdownView } from "@/shared/ui/markdown-view";
 
 type Tab = "proyectos" | "biblioteca";
 
@@ -19,7 +21,7 @@ const searchIn = (q: string, ...texts: string[]) => texts.some((t) => t.toLowerC
 
 /**
  * Biblioteca de documentos: los documentos reales de tus proyectos (lo que compartió el mentor, lo que
- * generó el asistente, las transcripciones) y la biblioteca metodológica. Todo se descarga en PDF o Word.
+ * generó el asistente, las transcripciones) y la biblioteca metodológica. Todo se puede ver acá mismo o descargar en PDF o Word.
  */
 export function DocumentsView({
   documents,
@@ -43,7 +45,7 @@ export function DocumentsView({
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Documentos</h1>
           <p className="mt-1 max-w-xl text-sm text-slate-500">
             Los documentos de tus proyectos (lo que compartió tu mentor, lo que generó el asistente y las transcripciones) y la biblioteca de guías y
-            plantillas. Todo se descarga en PDF o Word.
+            plantillas. Todo se puede ver acá mismo o descargar en PDF o Word.
           </p>
         </div>
         <div role="tablist" className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
@@ -136,9 +138,16 @@ function ProjectDocuments({ documents, q }: { documents: LibraryDocument[]; q: s
           {shown.map((doc) => (
             <li key={doc.id} className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">{doc.title}</p>
+                <ViewDocumentButton
+                  docRef={{ proyecto: doc.projectId, documento: doc.id }}
+                  title={doc.title}
+                  className="block max-w-full cursor-pointer truncate text-left text-sm font-semibold text-slate-900 hover:text-blue-600"
+                >
+                  {doc.title}
+                </ViewDocumentButton>
                 <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                   {doc.fromMentor ? <Tag color="var(--color-cyan)">Del mentor</Tag> : <Tag>{SOURCE_LABEL[doc.source]}</Tag>}
+                  <Tag>{documentKindLabel(doc.filename, doc.fileType)}</Tag>
                   <Link href={`/app/p/${doc.projectId}/documentos`} className="font-medium text-slate-700 hover:text-blue-600 hover:underline">
                     {doc.projectName}
                   </Link>
@@ -148,6 +157,7 @@ function ProjectDocuments({ documents, q }: { documents: LibraryDocument[]; q: s
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3 text-xs font-semibold">
+                <ViewDocumentButton docRef={{ proyecto: doc.projectId, documento: doc.id }} title={doc.title} />
                 <a href={`/api/documentos?proyecto=${doc.projectId}&documento=${doc.id}&formato=pdf`} className="text-blue-600 hover:underline">
                   PDF
                 </a>
@@ -224,8 +234,8 @@ function Library({ resources, q, initialId }: { resources: MentorResource[]; q: 
               <h2 className="mt-2 text-lg font-bold text-slate-900">{selected.title}</h2>
               <p className="mt-1 text-sm text-slate-600">{selected.description}</p>
             </div>
-            <div className="max-h-96 overflow-y-auto whitespace-pre-line rounded-xl border border-slate-200/80 bg-slate-50 p-4 text-xs leading-relaxed text-slate-700">
-              {selected.content}
+            <div className="max-h-96 overflow-y-auto rounded-xl border border-slate-200/80 bg-slate-50 p-4">
+              <MarkdownView content={selected.content} className="text-xs" />
             </div>
             {selected.tags.length > 0 && (
               <div className="flex flex-wrap gap-1">
@@ -235,6 +245,13 @@ function Library({ resources, q, initialId }: { resources: MentorResource[]; q: 
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+              <ViewDocumentButton
+                docRef={{ recurso: selected.id }}
+                title={selected.title}
+                className="inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold uppercase tracking-[0.08em] text-slate-700 hover:bg-slate-50"
+              >
+                Ver
+              </ViewDocumentButton>
               <a
                 href={`/api/documentos?recurso=${selected.id}&formato=pdf`}
                 className="inline-flex h-9 items-center rounded-full bg-blue-600 px-4 text-xs font-semibold uppercase tracking-[0.08em] text-white hover:bg-blue-700"

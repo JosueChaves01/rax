@@ -14,6 +14,10 @@ export interface DocumentSource {
   title: string;
   subtitle?: string;
   content: string;
+  /** Cómo está guardado el contenido (para el visor): «csv» son tablas de un Excel o CSV. */
+  fileType?: "markdown" | "text" | "csv" | "code" | "pdf" | "json";
+  /** Nombre del archivo original, si se subió uno. */
+  filename?: string;
 }
 
 export const isDocumentFormat = (v: unknown): v is DocumentFormat => v === "pdf" || v === "docx";
