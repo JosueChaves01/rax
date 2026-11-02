@@ -1,4 +1,5 @@
 "use client";
+import { ACCEPTED_UPLOADS, uploadForText } from "@/lib/documents/uploads";
 
 import { useEffect, useState, useCallback } from "react";
 import { projectDocumentUrl } from "./document-card";
@@ -64,7 +65,7 @@ export function ProjectKnowledgePanel({
 
   if (!isOpen) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -72,6 +73,20 @@ export function ProjectKnowledgePanel({
     if (!title) setTitle(file.name.replace(/\.[^/.]+$/, ""));
 
     const ext = file.name.split(".").pop()?.toLowerCase();
+    // PDF, Word, Excel y CSV se leen en el servidor (los CSV quedan como tabla con totales por columna); el texto queda acá para revisarlo antes de guardar.
+    if (ext === "pdf" || ext === "docx" || ext === "xlsx" || ext === "csv" || ext === "tsv") {
+      setError(null);
+      setContent("Leyendo el archivo…");
+      const res = await uploadForText(file);
+      if (!res.ok) {
+        setContent("");
+        setError(res.error);
+        return;
+      }
+      setFileType(res.extracted.fileType);
+      setContent(res.extracted.content ?? "");
+      return;
+    }
     if (ext === "csv") setFileType("csv");
     else if (ext === "json") setFileType("json");
     else if (ext === "py" || ext === "js" || ext === "ts" || ext === "tsx") setFileType("code");
@@ -259,7 +274,7 @@ export function ProjectKnowledgePanel({
                 <label className="block text-[0.7rem] font-semibold text-slate-600 mb-1">O sube un archivo:</label>
                 <input
                   type="file"
-                  accept=".md,.txt,.csv,.json,.py,.ts,.tsx,.js"
+                  accept={`${ACCEPTED_UPLOADS},.py,.ts,.tsx,.js`}
                   onChange={handleFileUpload}
                   className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200 cursor-pointer"
                 />

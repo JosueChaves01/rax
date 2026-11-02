@@ -6,6 +6,8 @@ import { addProjectDocumentAction, deleteProjectDocumentAction } from "@/app/act
 import { Button, Field, Notice, Tag, cx, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
 import type { ProjectDocRow } from "./data";
+import type { ProjectDocumentFileType } from "@/types/domain";
+import { ACCEPTED_UPLOADS, uploadForText } from "@/lib/documents/uploads";
 
 const SOURCE_LABEL: Record<ProjectDocRow["source"], string> = {
   upload: "Compartido",
@@ -168,18 +170,30 @@ const slug = (s: string) =>
     .replace(/^-|-$/g, "")
     .slice(0, 60) || "documento";
 
-/** Compartir un documento pegando el texto o subiendo un archivo de texto (.md o .txt). */
+/** Compartir un documento pegando el texto o subiendo un archivo (texto, PDF, Word, Excel o CSV). */
 function ShareForm({ projectId, viewerIsMentor, onDone }: { projectId: string; viewerIsMentor: boolean; onDone: () => void }) {
   const { run, pending, error } = useAction();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [filename, setFilename] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const [fileType, setFileType] = useState<ProjectDocumentFileType>("markdown");
 
   const readFile = async (file: File) => {
     setFileError(null);
     if (!/\.(md|markdown|txt)$/i.test(file.name)) {
-      setFileError("Por ahora se pueden subir archivos de texto (.md o .txt). Para un PDF o Word, pegá el texto.");
+      setReading(true);
+      const res = await uploadForText(file);
+      setReading(false);
+      if (!res.ok) {
+        setFileError(res.error);
+        return;
+      }
+      setContent(res.extracted.content ?? "");
+      setFileType(res.extracted.fileType);
+      setFilename(file.name);
+      if (!title) setTitle(res.extracted.title);
       return;
     }
     if (file.size > 900_000) {
@@ -188,6 +202,7 @@ function ShareForm({ projectId, viewerIsMentor, onDone }: { projectId: string; v
     }
     const text = await file.text();
     setContent(text);
+    setFileType("markdown");
     setFilename(file.name);
     if (!title) setTitle(file.name.replace(/\.[^.]+$/, ""));
   };
@@ -198,7 +213,7 @@ function ShareForm({ projectId, viewerIsMentor, onDone }: { projectId: string; v
       onSubmit={(e) => {
         e.preventDefault();
         run(
-          () => addProjectDocumentAction(projectId, { title: title.trim(), filename: filename || `${slug(title)}.md`, content, fileType: "markdown" }),
+          () => addProjectDocumentAction(projectId, { title: title.trim(), filename: filename || `${slug(title)}.md`, content, fileType }),
           onDone,
         );
       }}
@@ -211,13 +226,13 @@ function ShareForm({ projectId, viewerIsMentor, onDone }: { projectId: string; v
       <Field id="doc-title" label="Título">
         <input id="doc-title" className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required />
       </Field>
-      <Field id="doc-content" label="Contenido" hint="Pegá el texto o subí un archivo .md o .txt.">
+      <Field id="doc-content" label="Contenido" hint="Pegá el texto o subí un archivo: PDF, Word, Excel, CSV o texto.">
         <textarea id="doc-content" rows={6} className={inputClass} value={content} onChange={(e) => setContent(e.target.value)} required />
       </Field>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline">
-          Subir archivo de texto
-          <input type="file" accept=".md,.markdown,.txt,text/plain,text/markdown" className="sr-only" onChange={(e) => e.target.files?.[0] && void readFile(e.target.files[0])} />
+          {reading ? "Leyendo el archivo…" : "Subir archivo"}
+          <input type="file" accept={ACCEPTED_UPLOADS} disabled={reading} className="sr-only" onChange={(e) => e.target.files?.[0] && void readFile(e.target.files[0])} />
         </label>
         <div className="flex gap-2">
           <Button size="sm" variant="ghost" type="button" onClick={onDone}>

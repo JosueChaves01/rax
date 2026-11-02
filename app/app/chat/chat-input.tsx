@@ -9,6 +9,12 @@ interface ChatInputProps {
   isLoading: boolean;
   disabled?: boolean;
   placeholder?: string;
+  /**
+   * Adjuntar un archivo (PDF, Word, Excel, CSV). Lo sube al conocimiento del proyecto y devuelve el texto
+   * que se agrega al mensaje para que el agente sepa cuál revisar; con error, devuelve { error }.
+   */
+  onAttach?: (file: File) => Promise<{ note: string } | { error: string }>;
+  attachAccept?: string;
 }
 
 const TEMPLATES = [
@@ -120,7 +126,12 @@ export function ChatInput({
   isLoading,
   disabled = false,
   placeholder = "Escribe tu consulta o pega tu texto largo aquí... (Soporta Markdown con **negrita**, listas y código)",
+  onAttach,
+  attachAccept,
 }: ChatInputProps) {
+  const [attaching, setAttaching] = useState<string | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [activeTab, setActiveTab] = useState<"write" | "preview">("write");
   const [sendOnEnter, setSendOnEnter] = useState(true);
@@ -467,7 +478,62 @@ export function ChatInput({
       )}
 
       {/* 3. Área de entrada o Vista Previa */}
+      {(attaching || attachError) && (
+        <div
+          role="status"
+          className={cx("mx-2.5 @2xl:mx-3 mt-2 rounded-lg px-3 py-1.5 text-xs", attachError ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700")}
+        >
+          {attachError ?? `Subiendo «${attaching}» al proyecto…`}
+          {attachError && (
+            <button type="button" onClick={() => setAttachError(null)} className="ml-2 font-semibold underline cursor-pointer">
+              Cerrar
+            </button>
+          )}
+        </div>
+      )}
       <div className="p-2.5 @2xl:p-3 flex items-end gap-2">
+        {onAttach && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={attachAccept}
+              className="sr-only"
+              tabIndex={-1}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                setAttachError(null);
+                setAttaching(file.name);
+                const res = await onAttach(file);
+                setAttaching(null);
+                if ("error" in res) {
+                  setAttachError(res.error);
+                  return;
+                }
+                setText((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${res.note}` : `${res.note}\n\n`));
+                requestAnimationFrame(() => textareaRef.current?.focus());
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={disabled || isLoading || attaching !== null}
+              aria-label="Adjuntar archivo"
+              title="Adjuntar PDF, Word, Excel o CSV: queda en los documentos del proyecto y el asistente lo puede leer"
+              className="shrink-0 w-11 h-11 @2xl:w-10 @2xl:h-10 mb-0.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 flex items-center justify-center cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {attaching ? (
+                <span className="w-4 h-4 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21.4 11.1l-9.2 9.2a6 6 0 01-8.5-8.5l9.2-9.2a4 4 0 015.7 5.7l-9.2 9.2a2 2 0 01-2.8-2.8l8.5-8.5" />
+                </svg>
+              )}
+            </button>
+          </>
+        )}
         <div className="flex-1 min-w-0">
         {activeTab === "write" ? (
           <textarea
