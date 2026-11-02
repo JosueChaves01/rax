@@ -14,6 +14,7 @@ const path = require("node:path");
 
 const URL = process.argv[2] || "http://localhost:3100/promo?grabar=1";
 const OUT = process.argv[3] || path.join(__dirname, "..", "public", "promo", "rax-promo.mp4");
+const VOICE = path.join(__dirname, "..", "public", "promo", "narracion.mp3");
 const FPS = 30;
 const TAIL_MS = 600; // cuadros extra al final para que el cierre respire
 
@@ -140,7 +141,15 @@ function virtualTime() {
   await new Promise((res, rej) => {
     const ff = spawn(
       "ffmpeg",
-      ["-y", "-framerate", String(FPS), "-i", path.join(tmp, "f%05d.jpg"), "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-pix_fmt", "yuv420p", "-movflags", "+faststart", OUT],
+      [
+        "-y",
+        "-framerate", String(FPS),
+        "-i", path.join(tmp, "f%05d.jpg"),
+        // Si existe la narración (scripts/narrate-promo.py), se agrega como pista de audio.
+        ...(fs.existsSync(VOICE) ? ["-i", VOICE, "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "160k", "-shortest"] : []),
+        "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+        OUT,
+      ],
       { stdio: "inherit" },
     );
     ff.on("exit", (code) => (code === 0 ? res() : rej(new Error(`ffmpeg salió con ${code}`))));

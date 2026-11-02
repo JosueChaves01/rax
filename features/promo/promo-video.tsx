@@ -51,6 +51,11 @@ export function PromoVideo({ record = false }: { record?: boolean }) {
   const [take, setTake] = useState(0); // fuerza a remontar la escena al saltar o reiniciar
   const [scale, setScale] = useState(1);
   const last = useRef<number | null>(null);
+  // Narración: arranca apagada porque el navegador no deja reproducir sonido sin un clic.
+  const audio = useRef<HTMLAudioElement>(null);
+  const [sound, setSound] = useState(false);
+  const tRef = useRef(0);
+  tRef.current = t;
 
   // Escala la escena a la ventana manteniendo 16:9.
   useLayoutEffect(() => {
@@ -90,6 +95,18 @@ export function PromoVideo({ record = false }: { record?: boolean }) {
     window.__promo = { start: () => setPlaying(true), done: false, total: TOTAL_MS };
   }, [record]);
 
+  // Mantiene la narración alineada con el reloj al reproducir, pausar o saltar de escena.
+  useEffect(() => {
+    const a = audio.current;
+    if (!a || record) return;
+    if (playing && sound) {
+      a.currentTime = tRef.current / 1000;
+      a.play().catch(() => setSound(false));
+    } else {
+      a.pause();
+    }
+  }, [playing, sound, take, record]);
+
   const jump = useCallback((i: number) => {
     setT(STARTS[i]);
     setTake((k) => k + 1);
@@ -120,6 +137,14 @@ export function PromoVideo({ record = false }: { record?: boolean }) {
           <button onClick={replay} className="inline-flex h-9 items-center rounded-full border border-slate-700 px-4 text-xs font-semibold uppercase tracking-[0.08em] hover:border-slate-500">
             Reiniciar
           </button>
+          <button
+            onClick={() => setSound((v) => !v)}
+            aria-pressed={sound}
+            className="inline-flex h-9 items-center rounded-full border border-slate-700 px-4 text-xs font-semibold uppercase tracking-[0.08em] hover:border-slate-500"
+          >
+            {sound ? "Sonido: sí" : "Activar voz"}
+          </button>
+          <audio ref={audio} src="/promo/narracion.mp3" preload="auto" />
           <span className="font-mono tabular-nums text-slate-500">
             {fmt(t)} / {fmt(TOTAL_MS)}
           </span>
