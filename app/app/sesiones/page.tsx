@@ -30,7 +30,7 @@ export default async function SessionsPage() {
           Ver en calendario →
         </Link>
       </div>
-      <SessionsView initialSessions={sessions} projects={projects} goals={goals} />
+      <SessionsView initialSessions={sessions} projects={projects} goals={goals} viewerId={d.actor.id} />
     </div>
   );
 }

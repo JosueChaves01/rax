@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { publicSupabaseConfig } from "./config";
+import { resolveSupabaseSecretKey } from "./secret-key";
 
 /** Cliente con la sesión de la persona (cookies): todo lo que hace pasa por RLS. */
 export async function createUserClient(): Promise<SupabaseClient> {
@@ -39,7 +40,7 @@ function extractServiceRoleKey(): string {
 
   for (const c of candidates) {
     if (!c) continue;
-    const clean = c.trim().replace(/^["']|["']$/g, "");
+    const clean = c.trim().replace(/^['"]|['"]$/g, "");
     try {
       const parts = clean.split(".");
       if (parts.length === 3) {
@@ -64,7 +65,7 @@ function extractServiceRoleKey(): string {
 export function createSystemClient(): SupabaseClient {
   const cfg = publicSupabaseConfig();
   if (!cfg) throw new Error("Supabase no está configurado.");
-  const secret = extractServiceRoleKey();
+  const secret = resolveSupabaseSecretKey();
   system ??= createClient(cfg.url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
   return system;
 }

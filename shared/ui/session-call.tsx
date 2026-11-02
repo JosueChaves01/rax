@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { Component, useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { SessionCall } from "@/types/domain";
@@ -145,7 +145,13 @@ function Result({ projectId, sessionId, result }: { projectId: string; sessionId
             </div>
           )}
           {syn.nextSteps && <p><span className="font-semibold">Próximos pasos:</span> {syn.nextSteps}</p>}
+          <p className="text-[11px] text-slate-500">Puedes corregirla o agregar puntos con «Editar o agregar» en la síntesis de la sesión.</p>
         </div>
+      ) : result.synthesisPending ? (
+        <p className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600" aria-live="polite">
+          <span className="h-2 w-2 animate-ping rounded-full bg-emerald-600" />
+          El agente está preparando la síntesis de la llamada…
+        </p>
       ) : (
         result.synthesisError && <Notice tone="warn">No se pudo generar la síntesis ahora: {result.synthesisError}. Puedes generarla luego con «Síntesis pos-sesión».</Notice>
       )}
@@ -277,8 +283,35 @@ function InCall({ state, onDone, onActive }: { state: CallState; onDone: () => v
   );
 }
 
+/** Si algo de la llamada falla en el navegador, se avisa aquí y el resto de la página sigue funcionando. */
+class CallErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    console.error("[llamada] Error en la interfaz de la llamada:", error);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <Notice tone="error">
+        La llamada tuvo un problema en este navegador ({this.state.error.message}). Lo transcrito ya quedó guardado; recarga la página para ver la transcripción y la síntesis.
+      </Notice>
+    );
+  }
+}
+
 /** Llamada con transcripción dentro de una sesión de mentoría. */
-export function SessionCallPanel({ sessionId, className }: { sessionId: string; className?: string }) {
+export function SessionCallPanel(props: { sessionId: string; className?: string }) {
+  return (
+    <CallErrorBoundary>
+      <SessionCallPanelInner {...props} />
+    </CallErrorBoundary>
+  );
+}
+
+function SessionCallPanelInner({ sessionId, className }: { sessionId: string; className?: string }) {
   const router = useRouter();
   const [state, setState] = useState<CallState | null>(null);
   const [error, setError] = useState<string | null>(null);

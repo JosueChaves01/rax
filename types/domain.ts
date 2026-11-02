@@ -301,6 +301,27 @@ export interface AgentMessage {
   errorCode?: string;
   errorMessage?: string;
   createdAt: ISODate;
+  /** Cómo se generó la respuesta del agente (modelo, tiempos, tokens, herramientas). Solo del servidor. */
+  metrics?: AgentTurnMetrics;
+}
+
+/** Métricas de un turno del agente, para saber qué está lento o fallando. */
+export interface AgentTurnMetrics {
+  model?: string;
+  /** Tiempo total del turno, desde que llegó el mensaje hasta guardar la respuesta. */
+  latencyMs: number;
+  /** Tiempo hasta la primera respuesta del modelo. */
+  firstTokenMs?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  /** Herramientas que usó el agente, en orden. */
+  tools: string[];
+  /** Llamadas al modelo en el turno (incluye las vueltas con herramientas). */
+  modelCalls: number;
+  /** Modelos que fallaron antes del que respondió. */
+  failedModels?: string[];
+  knowledgeMode?: "in_context" | "rag";
+  streamed?: boolean;
 }
 
 /* ───────────── Diagnóstico ───────────── */
@@ -455,6 +476,11 @@ export interface PostSessionSynthesis {
   }>;
   nextSteps?: string;
   suggestedNextSessionInDays?: number;
+  /** De dónde salió: la transcripción de la llamada, las notas o escrita a mano. */
+  basedOn?: "transcript" | "notes" | "manual";
+  /** Última corrección hecha por una persona. */
+  editedAt?: ISODate;
+  editedBy?: Id;
 }
 
 export interface MentorSession {
@@ -889,6 +915,7 @@ export type AuditAction =
   | "session.started"
   | "session.briefing_generated"
   | "session.synthesis_generated"
+  | "session.synthesis_edited"
   | "session.commitments_adopted"
   | "session.completed"
   | "session.call_started"

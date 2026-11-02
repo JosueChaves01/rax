@@ -31,7 +31,17 @@ En cada turno el modelo recibe, de lo más estable a lo más variable (para apro
 
 Modelos: `CLAUDE_PROJECTS_MODEL` (o `OPENROUTER_MODEL`, o el gratuito por defecto) y después `OPENROUTER_FALLBACK_MODELS`, en orden (`lib/ai/openrouter-chat.ts`). Si un modelo no acepta herramientas o rol de sistema, se reintenta sin ellos.
 
-Herramientas: si el modelo pide herramientas, se ejecutan con los permisos de la persona y sus resultados vuelven al modelo, que redacta la respuesta final (`tool_choice: none`). Las herramientas solo generan **propuestas**; se guardan cuando la persona las aplica. Los borradores de campos de formulario usan `draft_field_value` y no se guardan en el hilo.
+Herramientas: si el modelo pide herramientas, se ejecutan con los permisos de la persona y sus resultados vuelven al modelo. Puede encadenar hasta 3 vueltas (p. ej. leer otro hilo y luego proponer); la última redacta sin herramientas (`tool_choice: none`). Las herramientas distintas de una misma vuelta corren en paralelo; las repetidas, en orden. Las herramientas solo generan **propuestas**; se guardan cuando la persona las aplica. Los borradores de campos de formulario usan `draft_field_value` y no se guardan en el hilo.
+
+### Rendimiento del turno
+
+- **En vivo**: `/app/chat` usa `POST /api/agente/turno`, que responde NDJSON: el mensaje de la persona ya guardado, el estado («Leyendo el proyecto…», «Redactando el documento…»), el texto a medida que el modelo lo escribe (`stream: true` de OpenRouter) y al final el mensaje guardado. Si la ruta no responde, el chat usa `sendClaudeAgentMessageAction`.
+- **Plazos** (`lib/ai/openrouter-chat.ts`): 50 s por turno (`TURN_BUDGET_MS`), 30 s por modelo (20 s hasta el primer trozo con streaming). Un modelo que dio 429 o no respondió pasa al final de la lista por unos minutos en esa instancia.
+- **Lecturas acotadas**: el turno lee los últimos ~50 mensajes del hilo más conteos (no el hilo entero) y el estado del proyecto sin historial, comentarios ni auditoría (`getWorkspace(..., { forAgent: true })`).
+- **Después de responder** (`lib/services/background.ts`, `after()` de Next): el pliegue de la memoria del hilo. La síntesis pos-llamada se pide aparte (`synthesizeCallAction`) para que colgar sea inmediato.
+- **Conocimiento**: documentos completos hasta 12.000 tokens; por encima, `search_project_chunks` (texto completo en Postgres con el índice `tsv`). Sin la función, ranking por palabras en memoria.
+- **Límites diarios por persona** (`lib/services/ai-quota.ts`, tabla `ai_usage`): `RAX_AI_DAILY_MESSAGES` y `RAX_AUDIO_DAILY_CHUNKS`. Sin la tabla no se bloquea.
+- **Métricas** por respuesta en `agent_messages.metrics`: modelo, latencia total y hasta el primer token, tokens, herramientas, llamadas al modelo y modelos que fallaron. Sin la columna, la respuesta se guarda sin métricas.
 
 ### Recorrido completo desde el chat
 

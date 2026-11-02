@@ -123,3 +123,77 @@ describe("Llamadas con transcripción entre mentor y emprendedor", () => {
     expect(withTurn[1]).toEqual({ urls: ["turn:a.example:3478", "turns:a.example:443"], username: "u", credential: "c" });
   });
 });
+
+describe("Síntesis pos-sesión con modelos gratuitos", () => {
+  it("acepta próximos pasos devueltos como lista", async () => {
+    const { PostSessionSynthesisSchema } = await import("@/lib/ai/schema");
+    const r = PostSessionSynthesisSchema.parse({ summary: "Resumen de la llamada.", nextSteps: ["Entrevistar oficinas", "Medir costos"] });
+    expect(r.nextSteps).toBe("Entrevistar oficinas\nMedir costos");
+  });
+});
+
+describe("Briefing del mentor y síntesis editable", () => {
+  it("solo el mentor de la sesión prepara el briefing", async () => {
+    const { ent, mentor, session } = await setup();
+    const { generatePreSessionBriefing } = await import("@/lib/services/mentoring");
+    await expect(generatePreSessionBriefing(ent, session.id)).rejects.toMatchObject({ code: "forbidden" });
+    const b = await generatePreSessionBriefing(mentor, session.id);
+    expect(b.suggestedAgenda.length).toBeGreaterThan(0);
+  });
+
+  it("la síntesis sale de la transcripción y se puede editar o escribir a mano", async () => {
+    const { ent, mentor, session, as, repo } = await setup();
+    const { generatePostSessionSynthesis, updatePostSessionSynthesis } = await import("@/lib/services/mentoring");
+    // Sin llamada ni notas no hay de dónde sacar la síntesis.
+    await expect(generatePostSessionSynthesis(ent, session.id)).rejects.toMatchObject({ code: "validation" });
+
+    const call = await startCall(mentor, session.id);
+    await transcribeCallAudio(ent, call.id, audio(), 0, fakeTranscriber(["Voy a llamar a tres proveedores de café."]));
+    const res = await endCall(mentor, call.id);
+    expect(res.synthesis?.basedOn).toBe("transcript");
+
+    await expect(updatePostSessionSynthesis(as("ent2"), session.id, { summary: "x", agreedDecisions: [], entrepreneurCommitments: [], mentorCommitments: [] })).rejects.toMatchObject({ code: "not_found" });
+    const edited = await updatePostSessionSynthesis(ent, session.id, {
+      summary: "Resumen corregido por la emprendedora.",
+      agreedDecisions: ["Priorizar oficinas", "  "],
+      entrepreneurCommitments: [...res.synthesis!.entrepreneurCommitments, { title: "Armar precio de suscripción", actionType: "financial_review" }],
+      mentorCommitments: [{ title: "Pasar contactos" }],
+      nextSteps: "Revisar en dos semanas",
+      suggestedNextSessionInDays: 14,
+    });
+    expect(edited.basedOn).toBe("transcript");
+    expect(edited.agreedDecisions).toEqual(["Priorizar oficinas"]);
+    expect(edited.editedBy).toBe(ent.actor.id);
+    expect((await repo.mentorSessions.get(session.id))?.postSessionSynthesis?.summary).toBe("Resumen corregido por la emprendedora.");
+    expect(edited.entrepreneurCommitments.map((c) => c.title)).toContain("Armar precio de suscripción");
+  });
+});
+
+describe("Briefing: temas pendientes legibles (Capa 3)", () => {
+  it("toma compromisos de la síntesis anterior y solo lo que planteó la persona, sin markdown", async () => {
+    const { ent, mentor, session, p } = await setup();
+    const { generatePreSessionBriefing } = await import("@/lib/services/mentoring");
+    const { setConversationSharing } = await import("@/lib/services/projects");
+    const { createAgentThread, appendAgentUserMessage, appendAgentAssistantMessage } = await import("@/lib/services/agent-chat");
+
+    // Sesión anterior con llamada: deja compromisos en la síntesis.
+    const call = await startCall(mentor, session.id);
+    await transcribeCallAudio(ent, call.id, audio(), 0, fakeTranscriber(["Voy a entrevistar a diez oficinas antes del viernes."]));
+    await endCall(mentor, call.id);
+
+    await setConversationSharing(ent, p.id, true);
+    const thread = await createAgentThread(ent, p.id);
+    await appendAgentUserMessage(ent, thread.id, "¿Cómo defino el **precio** de la *suscripción* semanal para oficinas?");
+    await appendAgentAssistantMessage(ent, thread.id, { content: "**Briefing listo.** Te dejo los *temas* de la sesión..." });
+    await appendAgentUserMessage(ent, thread.id, "Si porfavor");
+
+    const next = await scheduleSession(ent, p.id, { kind: "follow_up", scheduledAt: "2026-11-19T15:00:00.000Z" });
+    const b = await generatePreSessionBriefing(mentor, next.id);
+    const pending = b.pendingTopicsSummary;
+    expect(pending).toMatch(/Compromiso del emprendedor: .*Voy a entrevistar a diez oficinas/);
+    expect(pending).toContain("¿Cómo defino el precio de la suscripción semanal para oficinas?");
+    expect(pending).not.toMatch(/\*/);
+    expect(pending).not.toContain("Briefing listo");
+    expect(pending).not.toContain("Si porfavor");
+  });
+});

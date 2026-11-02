@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ callId: st
   } catch (e) {
     if (e instanceof TranscriptionUnavailableError) return NextResponse.json({ error: e.message, code: "transcription_unavailable" }, { status: 503 });
     if (isDomainError(e)) {
-      const status = e.code === "not_found" ? 404 : e.code === "forbidden" ? 403 : 400;
+      const status = e.code === "not_found" ? 404 : e.code === "forbidden" ? 403 : e.code === "rate_limited" ? 429 : 400;
       return NextResponse.json({ error: e.message, code: e.code }, { status });
     }
     console.error("[llamadas] No se pudo transcribir el fragmento:", e instanceof Error ? e.message : e);

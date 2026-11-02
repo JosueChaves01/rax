@@ -12,6 +12,12 @@ export interface Db {
   insert(table: string, row: Row): Promise<Row>;
   /** Devuelve las filas actualizadas; [] si ninguna coincidió o RLS no lo permitió. */
   update(table: string, match: Row, patch: Row): Promise<Row[]>;
+  /** Las `limit` filas más nuevas según `orderColumn` (descendente). Opcional: sin esto se filtra en memoria. */
+  selectLatest?(table: string, match: Row, orderColumn: string, limit: number): Promise<Row[]>;
+  /** Cuántas filas coinciden, sin traerlas. Opcional: sin esto se cuentan en memoria. */
+  count?(table: string, match: Row): Promise<number>;
+  /** Llama a una función SQL expuesta (RPC). Opcional: sin esto las funciones del repositorio no existen. */
+  rpc?(fn: string, args: Row): Promise<unknown>;
 }
 
 /** Traduce errores de Postgres a errores de dominio sin exponer detalles internos. */

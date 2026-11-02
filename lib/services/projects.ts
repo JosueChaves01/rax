@@ -106,16 +106,21 @@ async function ensureDiagnosis(d: ServiceDeps, projectId: string, fallbackDate: 
 }
 
 /** Vista agregada del espacio de trabajo. Los permisos se calculan aquí, en el servidor. */
-export async function getWorkspace(d: ServiceDeps, projectId: string) {
+/**
+ * Espacio de trabajo autorizado del proyecto. Con `forAgent` se omite lo que el estado del agente no usa
+ * (historial de cambios, comentarios y auditoría, que crecen sin límite): el agente lo arma en cada turno.
+ */
+export async function getWorkspace(d: ServiceDeps, projectId: string, opts: { forAgent?: boolean } = {}) {
   const { project, rel } = await guard(d, projectId, "project.read");
   const r = d.repo;
   const where = { projectId };
+  const skip = <T,>(load: () => Promise<T[]>): Promise<T[]> => (opts.forAgent ? Promise.resolve([]) : load());
   const [diagnoses, items, history, comments, messages, sessions, notes, hypotheses, experiments, results, tasks, evidence, assignments, auditEvents, mentorshipRelations, roadmapMilestones, cycleEvaluations] =
     await Promise.all([
       r.diagnoses.list(where),
       r.diagnosisItems.list(where),
-      r.diagnosisItemHistory.list(where),
-      r.comments.list(where),
+      skip(() => r.diagnosisItemHistory.list(where)),
+      skip(() => r.comments.list(where)),
       r.messages.list(where),
       r.mentorSessions.list(where),
       r.sessionNotes.list(where),
@@ -125,7 +130,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string) {
       r.tasks.list(where),
       r.evidence.list(where),
       r.mentorAssignments.list({ projectId, status: "active" }),
-      r.auditEvents.list(where),
+      skip(() => r.auditEvents.list(where)),
       r.mentorshipRelations.list(where),
       r.roadmapMilestones.list(where),
       r.cycleEvaluations.list(where),

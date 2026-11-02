@@ -178,7 +178,7 @@ export function ProjectKnowledgePanel({
                 </span>
               </span>
               <span className="text-xs font-mono text-slate-500">
-                {(stats?.totalTokens ?? 0).toLocaleString()} / {(stats?.evaluation.threshold ?? 80000).toLocaleString()} tokens
+                {(stats?.totalTokens ?? 0).toLocaleString()} / {(stats?.evaluation.threshold ?? 12000).toLocaleString()} tokens
               </span>
             </div>
 
