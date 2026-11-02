@@ -131,7 +131,7 @@ import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
 import { executeClaudeAgentTurn, type SessionContext } from "@/lib/ai/claude-orchestrator";
 import { AiProposalItemSchema, type AiProposalItem } from "@/lib/n8n/contracts";
 import { applyAgentProposal } from "@/lib/services/agent-actions";
-import { loadProjectState, runAgentTurn } from "@/lib/services/agent-turn";
+import { agentTurnPayload, loadProjectState, runAgentTurn } from "@/lib/services/agent-turn";
 import type { z } from "zod";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 import { generateMentorshipExplorationData, type MentorshipExplorationAiResult } from "@/lib/ai/exploration-ai";
@@ -1475,32 +1475,14 @@ export async function sendClaudeAgentMessageAction(input: {
   return chat(input.projectId, async (d) => {
     const { project } = await guard(d, input.projectId, "agent.chat");
 
-    const { thread, userMessage, assistantMessage, result } = await runAgentTurn(d, {
+    const turn = await runAgentTurn(d, {
       projectId: project.id,
       threadId: input.threadId,
       message: input.message,
       // El campo de formulario solo lo define el servidor (sendMainAgentMessageAction), nunca el navegador.
       sessionContext: input.sessionContext ? { ...input.sessionContext, field: undefined } : undefined,
     });
-    if (!userMessage || !assistantMessage) throw new Error("agent_turn_not_persisted");
-
-    return {
-      threadId: thread.id,
-      userMessage,
-      assistantMessage,
-      reply: assistantMessage.content,
-      artifacts: result.artifacts,
-      citations: result.citations,
-      proposals: result.proposals,
-      mode: result.mode,
-      cachedPromptUsed: result.cachedPromptUsed ?? false,
-      cacheStatus: result.cacheStatus ?? "simulated",
-      cachedTokens: result.cachedTokens ?? 0,
-      unavailable: result.unavailable ?? null,
-      sessionId: thread.sessionId ?? null,
-      sessionUpdated: result.sessionUpdated === true,
-      followUps: assistantMessage.status === "failed" ? [] : (result.followUps ?? []),
-    };
+    return agentTurnPayload(turn);
   });
 }
 

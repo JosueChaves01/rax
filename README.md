@@ -49,6 +49,9 @@ npm run build
 | `OPENROUTER_API_KEY` | solo servidor | Activa OpenRouter. Vacía = simulación. |
 | `OPENROUTER_MODEL` | solo servidor | Id de modelo; por defecto uno `:free`. |
 | `OPENROUTER_FALLBACK_MODELS` | solo servidor | Modelos `:free` de respaldo, separados por coma. |
+| `RAX_AI_DAILY_MESSAGES` | solo servidor | Mensajes al agente por persona y día (150 por defecto; 0 = sin límite). Necesita la migración `20261102000001`. |
+| `RAX_AUDIO_DAILY_CHUNKS` | solo servidor | Fragmentos de audio (~15 s) transcritos por persona y día (720 ≈ 3 h). |
+| `RAX_KNOWLEDGE_IN_CONTEXT_TOKENS` | solo servidor | Tokens de documentos que van completos al agente (12.000 por defecto); por encima, búsqueda de fragmentos. |
 | `NEXT_PUBLIC_APP_URL` | público | Enlaces de confirmación de correo y `HTTP-Referer` de OpenRouter. |
 | `NEXT_PUBLIC_SUPABASE_URL` | público | URL del proyecto Supabase. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (o `NEXT_PUBLIC_SUPABASE_ANON_KEY`) | público | Clave publishable; RLS decide qué ve cada persona. |

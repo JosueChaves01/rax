@@ -122,6 +122,31 @@ export async function runAgentTurn(
   return { thread, userMessage, assistantMessage, result };
 }
 
+/** Lo que recibe la pantalla del chat al terminar un turno (por acción o por streaming). */
+export function agentTurnPayload(turn: AgentTurnResult) {
+  const { thread, userMessage, assistantMessage, result } = turn;
+  if (!userMessage || !assistantMessage) throw new Error("agent_turn_not_persisted");
+  return {
+    threadId: thread.id,
+    userMessage,
+    assistantMessage,
+    reply: assistantMessage.content,
+    artifacts: result.artifacts,
+    citations: result.citations,
+    proposals: result.proposals,
+    mode: result.mode,
+    cachedPromptUsed: result.cachedPromptUsed ?? false,
+    cacheStatus: result.cacheStatus ?? "simulated",
+    cachedTokens: result.cachedTokens ?? 0,
+    unavailable: result.unavailable ?? null,
+    sessionId: thread.sessionId ?? null,
+    sessionUpdated: result.sessionUpdated === true,
+    followUps: assistantMessage.status === "failed" ? [] : (result.followUps ?? []),
+  };
+}
+
+export type AgentTurnPayload = ReturnType<typeof agentTurnPayload>;
+
 /** Contexto de la sesión del hilo. Si falla (p. ej. falta la migración), el agente sigue sin él. */
 async function loadSessionContext(d: ServiceDeps, thread: AgentThread): Promise<SessionAgentContext | undefined> {
   try {

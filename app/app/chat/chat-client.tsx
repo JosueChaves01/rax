@@ -26,6 +26,10 @@ import { ProjectOverview } from "./project-overview";
 import { SessionSidebar } from "./session-sidebar";
 import { FollowUpChips } from "./follow-up-chips";
 import { ThreadMessages, type MessageView } from "./thread-messages";
+import { FormattedText } from "./formatted-text";
+import { visibleStreamText } from "@/lib/ai/stream-text";
+import type { AgentTurnPayload } from "@/lib/services/agent-turn";
+import type { AgentStreamEvent } from "@/app/api/agente/turno/route";
 
 /** Borrar el proyecto es el único paso que no se deshace desde la pantalla: se confirma aparte. */
 const isDeleteProject = (proposal: Record<string, unknown>) =>
@@ -99,6 +103,8 @@ export default function ChatClient({
   const [messages, setMessages] = useState<MessageView[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  /** Respuesta en curso: estado del agente y texto que va llegando. */
+  const [live, setLive] = useState<{ status: string; text: string } | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -241,63 +247,119 @@ export default function ChatClient({
   }, [projectId, route.threadId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+    messagesEndRef.current?.scrollIntoView({ behavior: live?.text ? "auto" : "smooth", block: "end" });
+  }, [messages, isLoading, live]);
 
   /* ── Acciones ── */
 
+  /** Muestra el resultado final de un turno: el mensaje guardado de la persona y la respuesta del agente. */
+  const applyTurnResult = (tempId: string, data: AgentTurnPayload) => {
+    const { userMessage, assistantMessage, artifacts, citations, proposals } = data;
+    setMessages((prev) => [
+      ...prev.filter((m) => m.id !== tempId && m.id !== userMessage.id),
+      toView(userMessage),
+      {
+        ...toView(assistantMessage),
+        artifacts,
+        citations,
+        proposals,
+        cachedPromptUsed: data.cachedPromptUsed,
+        cacheStatus: data.unavailable ? "unavailable" : data.cacheStatus,
+        cachedTokens: data.cachedTokens,
+        followUps: data.followUps,
+      },
+    ]);
+    // Los documentos se descargan desde su tarjeta; el panel se abre solo para los demás artefactos.
+    const visual = artifacts?.find((a) => a.type !== "application/vnd.rax.document");
+    if (visual) {
+      setActiveArtifact(visual);
+      setActiveArtifactMessageId(assistantMessage.id);
+    }
+  };
+
+  const showTurnError = (text: string, label = "Aviso") =>
+    setMessages((prev) => [...prev, { id: `err-${Date.now()}`, sender: "ai", senderName: "RAX Copilot", text, time: label }]);
+
+  /**
+   * Envía un mensaje y muestra la respuesta mientras se escribe: el mensaje de la persona aparece al
+   * instante, luego el estado («leyendo el proyecto», «redactando el documento») y el texto en vivo.
+   * Si el streaming no está disponible, usa la acción del servidor (respuesta completa al final).
+   */
   const sendMessageToAgent = async (textToSend: string, explicitThreadId?: string) => {
     const threadId = explicitThreadId ?? route.threadId;
-    if (!textToSend.trim() || isLoading || !projectId || !threadId) return;
+    const text = textToSend.trim();
+    if (!text || isLoading || !projectId || !threadId) return;
     setIsLoading(true);
     setNotice(null);
+    const tempId = `tmp-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: tempId, sender: "user", senderName: "Tú", text, time: time(new Date().toISOString()) }]);
+    setLive({ status: "Enviando…", text: "" });
+    const sessionContext = { location: "global_assistant" as const, pageTitle: "Asistente de IA de RAX (/app/chat)" };
     try {
-      const res = await sendClaudeAgentMessageAction({
-        projectId,
-        threadId,
-        message: textToSend.trim(),
-        sessionContext: { location: "global_assistant", pageTitle: "Asistente de IA de RAX (/app/chat)" },
+      const res = await fetch("/api/agente/turno", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, threadId, message: text, sessionContext }),
       });
-      if (res.ok && res.data) {
-        const { userMessage, assistantMessage, artifacts, citations, proposals } = res.data;
-        setMessages((prev) => [
-          ...prev,
-          toView(userMessage),
-          {
-            ...toView(assistantMessage),
-            artifacts,
-            citations,
-            proposals,
-            cachedPromptUsed: res.data!.cachedPromptUsed,
-            cacheStatus: res.data!.unavailable ? "unavailable" : res.data!.cacheStatus,
-            cachedTokens: res.data!.cachedTokens,
-            followUps: res.data!.followUps,
-          },
-        ]);
-        // Los documentos se descargan desde su tarjeta; el panel se abre solo para los demás artefactos.
-        const visual = artifacts?.find((a) => a.type !== "application/vnd.rax.document");
-        if (visual) {
-          setActiveArtifact(visual);
-          setActiveArtifactMessageId(assistantMessage.id);
+      if (!res.ok || !res.body) {
+        const err = (await res.json().catch(() => null)) as { error?: string } | null;
+        if (res.status === 404 || !err?.error) {
+          // Sin la ruta de streaming (p. ej. un despliegue viejo): respuesta completa por acción.
+          const fallback = await sendClaudeAgentMessageAction({ projectId, threadId, message: text, sessionContext });
+          if (fallback.ok && fallback.data) applyTurnResult(tempId, fallback.data);
+          else showTurnError(!fallback.ok ? fallback.error : "No se pudo procesar la respuesta.");
+        } else {
+          showTurnError(err.error);
         }
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { id: `err-${Date.now()}`, sender: "ai", senderName: "RAX Copilot", text: !res.ok ? res.error : "No se pudo procesar la respuesta.", time: "Aviso" },
-        ]);
+        return;
       }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let raw = "";
+      let finished = false;
+      const handle = (event: AgentStreamEvent) => {
+        switch (event.type) {
+          case "user_message":
+            setMessages((prev) => prev.map((m) => (m.id === tempId ? toView(event.message) : m)));
+            break;
+          case "status":
+            setLive((prev) => ({ text: prev?.text ?? "", status: event.label }));
+            break;
+          case "delta":
+            raw += event.text;
+            setLive((prev) => ({ status: prev?.status ?? "", text: visibleStreamText(raw) }));
+            break;
+          case "reset":
+            raw = "";
+            setLive((prev) => ({ status: prev?.status ?? "", text: "" }));
+            break;
+          case "done":
+            finished = true;
+            applyTurnResult(tempId, event.data);
+            break;
+          case "error":
+            finished = true;
+            showTurnError(event.error);
+            break;
+        }
+      };
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (value) buffer += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          if (line) handle(JSON.parse(line) as AgentStreamEvent);
+        }
+        if (done) break;
+      }
+      if (!finished) showTurnError("La conexión se cortó antes de terminar. Recarga el hilo: si la respuesta se alcanzó a guardar, aparecerá.", "Error");
     } catch (err: unknown) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err-${Date.now()}`,
-          sender: "ai",
-          senderName: "RAX Copilot",
-          text: `Error al comunicar con el agente: ${err instanceof Error ? err.message : String(err)}`,
-          time: "Error",
-        },
-      ]);
+      showTurnError(`Error al comunicar con el agente: ${err instanceof Error ? err.message : String(err)}`, "Error");
     } finally {
+      setLive(null);
       setIsLoading(false);
       // Títulos automáticos, notas que escribió el agente y orden por actividad.
       await loadSessions(projectId);
@@ -608,12 +670,25 @@ export default function ChatClient({
             )}
 
             {isLoading && (
-              <div className="flex flex-col items-start space-y-1">
-                <span className="text-[10px] text-slate-400 font-mono px-1">RAX Copilot • pensando con el contexto de la sesión…</span>
-                <div className="bg-white text-slate-600 border border-slate-200/80 rounded-2xl p-3.5 text-xs flex items-center gap-2.5 shadow-2xs">
-                  <span className="w-2 h-2 rounded-full bg-orange-600 animate-ping" />
-                  <span>Generando respuesta…</span>
-                </div>
+              <div className="flex flex-col items-start space-y-1" aria-live="polite">
+                <span className="text-[10px] text-slate-400 font-mono px-1 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-600 animate-ping" />
+                  RAX Copilot • {live?.status || "Pensando…"}
+                </span>
+                {live?.text ? (
+                  <div className="max-w-[92%] @lg:max-w-[80%] bg-white text-slate-800 border border-slate-200/80 rounded-2xl rounded-tl-sm p-3.5 text-sm shadow-2xs">
+                    <FormattedText content={live.text} />
+                  </div>
+                ) : (
+                  <div className="bg-white text-slate-600 border border-slate-200/80 rounded-2xl p-3.5 text-xs flex items-center gap-2.5 shadow-2xs">
+                    <span className="flex gap-1" aria-hidden>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
+                    </span>
+                    <span>{live?.status || "Generando respuesta…"}</span>
+                  </div>
+                )}
               </div>
             )}
             <div ref={messagesEndRef} />
