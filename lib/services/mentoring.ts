@@ -6,6 +6,7 @@ import type {
   PreSessionBriefing,
   SessionNote,
   SessionNoteKind,
+  Project,
   Task,
 } from "@/types/domain";
 import { buildBriefing } from "@/features/mentoring/briefing";
@@ -31,13 +32,21 @@ import { touch } from "./projects";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 import { sessionTranscriptForAi } from "./session-transcript";
 import { isFiller, plainText } from "@/lib/ai/plain-text";
+import { inBackground } from "./background";
+import { changeItem } from "./diagnosis";
 
 /**
  * El emprendedor solicita una revisión. La primera requiere el resumen confirmado;
  * la segunda, al menos un resultado registrado. Si no hay mentor asignado, se informa sin bloquear
  * el resto de la plataforma.
  */
-export async function requestReview(d: ServiceDeps, projectId: string, kind: MentorSessionKind): Promise<MentorSession> {
+export async function requestReview(
+  d: ServiceDeps,
+  projectId: string,
+  kind: MentorSessionKind,
+  opts: { scheduledAt?: string } = {},
+): Promise<MentorSession> {
+  if (kind !== "first_review" && kind !== "second_review") throw validation("Solo se piden la primera y la segunda revisión.");
   const { project } = await guard(d, projectId, "mentor.request_review");
   const [dx] = await d.repo.diagnoses.list({ projectId });
   const sessions = await d.repo.mentorSessions.list({ projectId, kind });
@@ -57,12 +66,28 @@ export async function requestReview(d: ServiceDeps, projectId: string, kind: Men
     mentorId: assignment.mentorId,
     kind,
     status: "pending",
+    scheduledAt: validDate(opts.scheduledAt),
     briefing: buildBriefing(project, dx, items, d.now()),
     createdAt: d.now(),
   };
   await d.repo.mentorSessions.insert(session);
   await touch(d, projectId);
+  // El mentor encuentra el briefing listo al abrir la revisión, sin tener que pedirlo.
+  await inBackground("briefing", () => autoPrepareBriefing(d, session.id));
   return session;
+}
+
+function validDate(x?: string): string | undefined {
+  if (!x || Number.isNaN(Date.parse(x))) return undefined;
+  return new Date(x).toISOString();
+}
+
+/** Prepara el briefing con IA al crear una sesión (lo pide quien la abre, no el mentor). */
+async function autoPrepareBriefing(d: ServiceDeps, sessionId: string) {
+  const s = await loadSession(d, sessionId);
+  const { project } = await guard(d, s.projectId, "project.read");
+  if (!project) return;
+  await savePreSessionBriefing(d, s, project);
 }
 
 async function loadSession(d: ServiceDeps, sessionId: string) {
@@ -291,6 +316,7 @@ export async function completeFirstReview(d: ServiceDeps, sessionId: string, agr
   if (s.status === "completed") throw validation("La sesión ya terminó.");
   if (agreement.trim().length < 10) throw validation("Registrá el acuerdo: qué problema investigar y qué falta saber.");
   await addNote(d, sessionId, "agreement", agreement);
+  await adoptPendingCommitments(d, s);
   await d.repo.mentorSessions.update(sessionId, { status: "completed", completedAt: d.now() });
   await audit(d, "mentor.session_completed", { projectId: s.projectId, targetId: sessionId, meta: { kind: s.kind } });
 }
@@ -320,6 +346,7 @@ export async function completeSecondReview(d: ServiceDeps, sessionId: string, de
     await sysRepo(d).projects.update(s.projectId, { status: "paused", updatedAt: d.now() });
     await audit(d, "project.status_changed", { projectId: s.projectId, meta: { to: "paused", by: "mentor_decision" } });
   }
+  await adoptPendingCommitments(d, s);
   const experiments = await d.repo.experiments.list({ projectId: s.projectId, hypothesisId });
   for (const e of experiments.filter((x) => x.status === "results_pending")) {
     await d.repo.experiments.update(e.id, { status: "reviewed", updatedAt: d.now() }, e.version);
@@ -361,6 +388,8 @@ export async function scheduleSession(
     relationId?: string;
   },
 ): Promise<MentorSession> {
+  // Las revisiones tienen requisitos (resumen confirmado, resultados): se piden con requestReview.
+  if (input.kind !== "follow_up") throw validation("Agendar es para sesiones de seguimiento. Las revisiones se piden con «Pedir revisión».");
   const { project } = await guard(d, projectId, "mentorship.manage");
   const [assignment] = await d.repo.mentorAssignments.list({ projectId, status: "active" });
   if (!assignment) {
@@ -378,7 +407,7 @@ export async function scheduleSession(
     relationId: input.relationId,
     kind: input.kind,
     status: "pending",
-    scheduledAt: input.scheduledAt,
+    scheduledAt: validDate(input.scheduledAt),
     briefing: dx ? buildBriefing(project, dx, items, now) : undefined,
     createdAt: now,
   };
@@ -407,6 +436,7 @@ export async function scheduleSession(
       mentorId: session.mentorId,
     },
   }).catch((err) => console.warn("[n8n-dispatch] No se pudo despachar session.scheduled:", err));
+  await inBackground("briefing", () => autoPrepareBriefing(d, session.id));
   return session;
 }
 
@@ -420,6 +450,12 @@ export async function generatePreSessionBriefing(
   if (s.mentorId !== d.actor.id || !rel.isAssignedMentor) {
     throw forbidden("Solo el mentor de la sesión puede preparar el briefing.");
   }
+  if (!project) throw notFound("Proyecto no encontrado.");
+  return savePreSessionBriefing(d, s, project);
+}
+
+async function savePreSessionBriefing(d: ServiceDeps, s: MentorSession, project: Project): Promise<PreSessionBriefing> {
+  const sessionId = s.id;
 
   const [diagnoses, allSessions, allNotes, allTasks, allExps, allRelations, diagnosisItems] = await Promise.all([
     d.repo.diagnoses.list({ projectId: s.projectId }),
@@ -656,6 +692,8 @@ export async function generatePostSessionSynthesis(
     generatedAt: d.now(),
     ...res.synthesis,
     basedOn: callTranscript ? "transcript" : "notes",
+    // Si los compromisos ya se volvieron tareas, regenerar la síntesis no los vuelve a crear.
+    commitmentsAdoptedAt: s.postSessionSynthesis?.commitmentsAdoptedAt,
   };
 
   await sysRepo(d).mentorSessions.update(sessionId, {
@@ -719,6 +757,7 @@ export async function updatePostSessionSynthesis(
     suggestedNextSessionInDays: days && Number.isInteger(days) && days >= 1 && days <= 90 ? days : undefined,
     editedAt: now,
     editedBy: d.actor.id,
+    commitmentsAdoptedAt: prev?.commitmentsAdoptedAt,
   };
   await sysRepo(d).mentorSessions.update(sessionId, { postSessionSynthesis: synthesis });
   await audit(d, "session.synthesis_edited", { projectId: s.projectId, targetId: sessionId });
@@ -736,6 +775,7 @@ export async function adoptPostSessionCommitments(
   if (!s.postSessionSynthesis?.entrepreneurCommitments?.length) {
     throw validation("La sesión no tiene compromisos generados para adoptar.");
   }
+  if (s.postSessionSynthesis.commitmentsAdoptedAt) throw validation("Los compromisos de esta sesión ya son tareas.");
 
   const allCommitments = s.postSessionSynthesis.entrepreneurCommitments;
   const toAdopt = selectedIndices && selectedIndices.length
@@ -753,6 +793,9 @@ export async function adoptPostSessionCommitments(
     createdTasks.push(task);
   }
 
+  await sysRepo(d).mentorSessions.update(sessionId, {
+    postSessionSynthesis: { ...s.postSessionSynthesis, commitmentsAdoptedAt: d.now() },
+  });
   await audit(d, "session.commitments_adopted", {
     projectId: s.projectId,
     targetId: sessionId,
@@ -760,6 +803,13 @@ export async function adoptPostSessionCommitments(
   });
   await touch(d, s.projectId);
   return createdTasks;
+}
+
+/** Al cerrar una sesión, los compromisos del emprendedor de la síntesis pasan a ser tareas (una sola vez). */
+async function adoptPendingCommitments(d: ServiceDeps, s: MentorSession) {
+  const syn = s.postSessionSynthesis;
+  if (!syn?.entrepreneurCommitments?.length || syn.commitmentsAdoptedAt) return;
+  await adoptPostSessionCommitments(d, s.id);
 }
 
 export async function completeSession(
@@ -776,6 +826,7 @@ export async function completeSession(
   if (summary && summary.trim()) {
     await addNote(d, sessionId, "agreement", summary.trim());
   }
+  await adoptPendingCommitments(d, s);
 
   const updated = await d.repo.mentorSessions.update(sessionId, {
     status: "completed",
@@ -829,4 +880,55 @@ export async function getMentorSessionWorkspace(d: ServiceDeps, sessionId: strin
       canAddDocuments: rel.isOwner || rel.isCollaborator,
     },
   };
+}
+
+export interface CloseSessionInput {
+  /** Primera revisión: qué investigar y qué falta saber. */
+  agreement?: string;
+  /** Primera revisión: el problema que se investiga primero y por qué. */
+  priority?: { itemId: string; rationale: string };
+  /** Segunda revisión: decisión formal sobre una hipótesis. */
+  decision?: { value: MentorDecision; hypothesisId: string; justification: string };
+  /** Seguimiento: acuerdos finales (opcional). */
+  summary?: string;
+}
+
+/**
+ * Cierre único de una sesión, desde el borrador que el mentor revisa al terminar: registra el acuerdo
+ * (y la prioridad) o la decisión, convierte los compromisos en tareas y cierra la sesión.
+ * Todo se valida antes de escribir nada.
+ */
+export async function closeSession(d: ServiceDeps, sessionId: string, input: CloseSessionInput): Promise<MentorSession> {
+  const s = await loadSession(d, sessionId);
+  await guard(d, s.projectId, "mentor.decide");
+  if (s.mentorId !== d.actor.id) throw forbidden("Esta sesión está asignada a otra persona.");
+  if (s.status === "completed") throw validation("La sesión ya terminó.");
+
+  if (s.kind === "first_review") {
+    const agreement = (input.agreement ?? "").trim();
+    if (agreement.length < 10) throw validation("Registrá el acuerdo: qué problema investigar y qué falta saber.");
+    const items = await d.repo.diagnosisItems.list({ projectId: s.projectId });
+    const problems = items.filter((i) => isCurrent(i) && i.category === "problem" && i.reviewStatus !== "rejected" && i.infoType !== "unknown");
+    const alreadyPrioritized = problems.some((i) => i.priority);
+    let toPrioritize: { item: (typeof problems)[number]; rationale: string } | undefined;
+    if (input.priority?.itemId) {
+      const item = problems.find((i) => i.id === input.priority!.itemId);
+      if (!item) throw notFound("Ese problema no pertenece al diagnóstico de este proyecto.");
+      const rationale = input.priority.rationale.trim();
+      if (!rationale) throw validation("Explicá por qué ese problema va primero.");
+      if (item.priority?.rank !== 1 || item.priority.rationale !== rationale) toPrioritize = { item, rationale };
+    } else if (problems.length > 0 && !alreadyPrioritized) {
+      throw validation("Elegí el problema a investigar primero.");
+    }
+    if (toPrioritize) {
+      await changeItem(d, toPrioritize.item.id, { kind: "prioritize", rank: 1, rationale: toPrioritize.rationale.slice(0, 2000) }, toPrioritize.item.version);
+    }
+    await completeFirstReview(d, sessionId, agreement);
+  } else if (s.kind === "second_review") {
+    if (!input.decision) throw validation("Elegí la decisión y la hipótesis sobre la que se toma.");
+    await completeSecondReview(d, sessionId, input.decision.value, input.decision.justification, input.decision.hypothesisId);
+  } else {
+    await completeSession(d, sessionId, input.summary);
+  }
+  return loadSession(d, sessionId);
 }

@@ -13,7 +13,17 @@ type Draft = { key: number; kind: SessionNoteKind; body: string; relatedItemId: 
  * Notas con IA: el mentor pide un borrador a partir de la reunión (transcripción de la llamada) y del
  * contexto actual del proyecto, lo corrige y guarda solo las notas que quiere conservar.
  */
-export function AiNotesDraft({ projectId, sessionId, items }: { projectId: string; sessionId: string; items: Array<{ id: string; title: string }> }) {
+export function AiNotesDraft({
+  projectId,
+  sessionId,
+  items,
+  onSaved,
+}: {
+  projectId: string;
+  sessionId: string;
+  items: Array<{ id: string; title: string }>;
+  onSaved?: () => void;
+}) {
   const router = useRouter();
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [basedOn, setBasedOn] = useState<"transcript" | "context" | null>(null);
@@ -59,6 +69,7 @@ export function AiNotesDraft({ projectId, sessionId, items }: { projectId: strin
       setNotice(selected.length === 1 ? "Se guardó 1 nota." : `Se guardaron ${selected.length} notas.`);
       setDrafts(null);
       setBasedOn(null);
+      onSaved?.();
       router.refresh();
     });
 

@@ -8,7 +8,6 @@ import type {
   Hypothesis,
   MentorDecision,
   MentorSessionKind,
-  MentorshipRelation,
   ResultOutcome,
   SessionNoteKind,
   TaskStatus,
@@ -23,7 +22,7 @@ import { addNote, completeFirstReview, completeSecondReview, completeSession, re
 import {
   confirmMentorshipAgreement,
   createMentorshipGoal,
-  initiateMentorshipRelation,
+  ensureMentorshipRelation,
   saveMentorshipAgreement,
 } from "./mentorship-relation";
 import { recordCycleEvaluation } from "./evaluation";
@@ -179,18 +178,7 @@ async function openSession(d: ServiceDeps, projectId: string, kind?: MentorSessi
 }
 
 /** La relación de mentoría se abre sola la primera vez que se acuerda algo con el mentor asignado. */
-async function ensureRelation(d: ServiceDeps, projectId: string): Promise<MentorshipRelation> {
-  const relations = await d.repo.mentorshipRelations.list({ projectId });
-  const open = relations.find((r) => r.stage !== "closed");
-  if (open) return open;
-  const [project, [assignment]] = await Promise.all([
-    d.repo.projects.get(projectId),
-    d.repo.mentorAssignments.list({ projectId, status: "active" }),
-  ]);
-  if (!project) throw notFound();
-  if (!assignment) throw validation("Los objetivos y el acuerdo se definen con el mentor: todavía no hay uno asignado.");
-  return initiateMentorshipRelation(d, projectId, project.ownerId, assignment.mentorId);
-}
+const ensureRelation = ensureMentorshipRelation;
 
 async function applyExperiment(d: ServiceDeps, projectId: string, item: AiProposalItem): Promise<AppliedProposal> {
   const m = meta(item);
@@ -245,7 +233,7 @@ async function runStepAction(d: ServiceDeps, projectId: string, p: StepActionPar
     }
     case "request_review": {
       const kind: MentorSessionKind = p.kind === "second_review" ? "second_review" : "first_review";
-      const s = await requestReview(d, projectId, kind);
+      const s = await requestReview(d, projectId, kind, { scheduledAt: p.scheduledAt });
       return done(s.id, "Pedido enviado al mentor.");
     }
     case "add_session_note": {

@@ -20,6 +20,7 @@ const INBOX_TITLE = {
   first_review: "Primera revisión pedida",
   hypothesis: "Hipótesis por aprobar",
   second_review: "Segunda revisión pedida",
+  follow_up: "Sesión de seguimiento",
 } as const;
 
 /** Carga los proyectos de la persona; uno dañado no tumba el resto. */

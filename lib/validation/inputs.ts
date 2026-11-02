@@ -20,6 +20,14 @@ export const ProjectStatus = z.enum(["active", "paused", "archived"]);
 export const SessionKind = z.enum(["first_review", "second_review", "exploratory", "follow_up", "evaluation"]);
 export const NoteKind = z.enum(["observation", "question", "suggestion", "agreement", "commitment", "blocker", "decision"]);
 export const Decision = z.enum(["continue", "reformulate", "deepen", "pause", "discard"]);
+/** Cierre único de una sesión de mentoría (ver closeSession). */
+export const CloseSession = z.object({
+  agreement: z.string().max(2000).optional(),
+  priority: z.object({ itemId: id, rationale: z.string().max(2000) }).optional(),
+  decision: z.object({ value: Decision, hypothesisId: id, justification: z.string().max(2000) }).optional(),
+  summary: z.string().max(2000).optional(),
+});
+export const OptionalDate = z.string().max(40).optional();
 export const Outcome = z.enum(["positive", "negative", "mixed", "inconclusive"]);
 export const TaskStatus = z.enum(["todo", "doing", "done", "blocked"]);
 export const CommentTarget = z.enum(["diagnosis_item", "hypothesis", "experiment"]);

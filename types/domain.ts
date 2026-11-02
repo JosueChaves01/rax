@@ -481,6 +481,8 @@ export interface PostSessionSynthesis {
   /** Última corrección hecha por una persona. */
   editedAt?: ISODate;
   editedBy?: Id;
+  /** Cuándo los compromisos del emprendedor se convirtieron en tareas (una sola vez). */
+  commitmentsAdoptedAt?: ISODate;
 }
 
 export interface MentorSession {

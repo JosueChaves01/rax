@@ -1,36 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import type {
-  AgreementFrequency,
-  CompatibilityStatus,
-  GoalKind,
-  GoalPriority,
-  GoalStatus,
-  MentorshipStage,
-  Profile,
-} from "@/types/domain";
+import type { AgreementFrequency, GoalKind, GoalPriority, GoalStatus, Profile } from "@/types/domain";
 import type { Workspace } from "@/lib/services/projects";
 import {
   confirmMentorshipAgreementAction,
   createMentorshipGoalAction,
-  decideCompatibilityAction,
-  initiateMentorshipRelationAction,
+  ensureMentorshipRelationAction,
   saveMentorshipAgreementAction,
   suggestGoalsAndAgreementAction,
-  transitionMentorshipStageAction,
   updateMentorshipGoalStatusAction,
 } from "@/app/actions";
 import {
   AGREEMENT_FREQUENCY_LABEL,
   AGREEMENT_STATUS_LABEL,
-  COMPATIBILITY_STATUS_LABEL,
   GOAL_KIND_LABEL,
   GOAL_PRIORITY_LABEL,
   GOAL_STATUS_LABEL,
-  MENTORSHIP_STAGE_LABEL,
 } from "@/features/labels";
-import { Button, Card, Empty, Field, Notice, Tag, formatDate, inputClass } from "@/shared/ui/primitives";
+import { Button, Card, Empty, Field, Notice, Tag, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
 import type { GoalsSuggestion, SuggestedGoal } from "@/lib/ai/schema";
 
@@ -47,16 +35,14 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
   const latestAgreement = agreements[agreements.length - 1];
 
   const perms = w.permissions;
-  const canManageMentorship = !!perms["mentorship.manage"];
   const canEditAgreement = !!perms["agreement.edit"];
   const canConfirmAgreement = !!perms["agreement.confirm"];
   const canManageGoal = !!perms["goal.manage"];
-  const isMentor = actor.id === rel?.mentorId;
-  const isEntrepreneur = actor.id === rel?.entrepreneurId;
+  const isMentor = rel ? actor.id === rel.mentorId : w.mentors.includes(actor.id);
+  const isEntrepreneur = rel ? actor.id === rel.entrepreneurId : actor.id === w.project.ownerId;
+  const hasMentor = !!rel || w.mentors.length > 0;
 
-  // Estados de modales y formularios
-  const [showDeclineModal, setShowDeclineModal] = useState(false);
-  const [declineRationale, setDeclineRationale] = useState("");
+  // Estados de formularios
 
   const [showAgreementForm, setShowAgreementForm] = useState(false);
   const [agreementForm, setAgreementForm] = useState({
@@ -96,35 +82,21 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
   const action = useAction();
 
   // Handlers
-  function handleInitiateRelation(mentorId: string) {
-    action.run(async () => {
-      return initiateMentorshipRelationAction(projectId, w.project.ownerId, mentorId);
-    });
+  /**
+   * La relación con el mentor se crea sola la primera vez que se guarda algo: el mentor ya fue asignado
+   * por la administración, así que no hay una etapa previa de compatibilidad.
+   */
+  async function withRelation<R>(fn: (relationId: string) => Promise<R>): Promise<R | { ok: false; error: string }> {
+    if (rel) return fn(rel.id);
+    const res = await ensureMentorshipRelationAction(projectId);
+    if (!res.ok || !res.data) return { ok: false, error: res.ok ? "No se pudo preparar la relación de mentoría." : res.error };
+    return fn(res.data.id);
   }
-
-  function handleDecideCompatibility(status: CompatibilityStatus, rationale?: string) {
-    if (!rel) return;
-    action.run(async () => {
-      return decideCompatibilityAction(projectId, rel.id, status, rationale);
-    }, () => {
-      setShowDeclineModal(false);
-      setDeclineRationale("");
-    });
-  }
-
-  function handleTransitionStage(nextStage: MentorshipStage) {
-    if (!rel) return;
-    action.run(async () => {
-      return transitionMentorshipStageAction(projectId, rel.id, nextStage);
-    });
-  }
-
   function handleSaveAgreement(e: React.FormEvent) {
     e.preventDefault();
-    if (!rel) return;
     action.run(
-      async () => {
-        return saveMentorshipAgreementAction(projectId, rel.id, {
+      async () =>
+        withRelation((relationId) => saveMentorshipAgreementAction(projectId, relationId, {
           frequency: agreementForm.frequency,
           sessionDurationMinutes: Number(agreementForm.sessionDurationMinutes),
           authorizedChannels: agreementForm.authorizedChannels
@@ -136,8 +108,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
           entrepreneurCommitments: agreementForm.entrepreneurCommitments,
           confidentialityTerms: agreementForm.confidentialityTerms,
           expectedDurationWeeks: Number(agreementForm.expectedDurationWeeks),
-        });
-      },
+        })),
       () => {
         setShowAgreementForm(false);
       },
@@ -152,10 +123,9 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
 
   function handleCreateGoal(e: React.FormEvent) {
     e.preventDefault();
-    if (!rel) return;
     action.run(
-      async () => {
-        return createMentorshipGoalAction(projectId, rel.id, {
+      async () =>
+        withRelation((relationId) => createMentorshipGoalAction(projectId, relationId, {
           title: goalForm.title,
           description: goalForm.description,
           whyItMatters: goalForm.whyItMatters,
@@ -164,8 +134,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
           targetResult: goalForm.targetResult,
           metricIndicator: goalForm.metricIndicator || undefined,
           priority: goalForm.priority,
-        });
-      },
+        })),
       () => {
         setShowGoalForm(false);
         setGoalForm({
@@ -189,12 +158,9 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
   }
 
   function handleRequestAiSuggestions() {
-    if (!rel) return;
     setAiModalOpen(true);
     action.run(
-      async () => {
-        return suggestGoalsAndAgreementAction(projectId, rel.id);
-      },
+      async () => withRelation((relationId) => suggestGoalsAndAgreementAction(projectId, relationId)),
       (res) => {
         if ("data" in res && res.data?.suggestion) {
           setAiSuggestions(res.data.suggestion);
@@ -204,9 +170,8 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
   }
 
   function handleAdoptSuggestedGoal(sug: SuggestedGoal) {
-    if (!rel) return;
-    action.run(async () => {
-      return createMentorshipGoalAction(projectId, rel.id, {
+    action.run(async () =>
+      withRelation((relationId) => createMentorshipGoalAction(projectId, relationId, {
         title: sug.title,
         description: sug.description,
         whyItMatters: sug.whyItMatters,
@@ -215,8 +180,8 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
         targetResult: sug.targetResult,
         metricIndicator: sug.metricIndicator,
         priority: sug.priority,
-      });
-    });
+      })),
+    );
   }
 
   function handleApplySuggestedTerms() {
@@ -245,9 +210,8 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
           Acuerdos y <span className="text-highlight">objetivos de mentoría.</span>
         </h2>
         <p className="mt-2 max-w-3xl text-sm text-muted">
-          RAX estructura el acompañamiento sobre acuerdos claros y criterios compartidos: evaluamos la afinidad mutua,
-          formalizamos los compromisos de trabajo bilateral y fijamos objetivos con su línea base actual documentada y
-          resultados observables.
+          Opcional: dejan por escrito cómo van a trabajar y qué quieren lograr. Enriquece el briefing y la síntesis de cada
+          sesión, pero no frena el avance del proyecto.
         </p>
       </div>
 
@@ -257,166 +221,14 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
         </Notice>
       )}
 
-      {/* ── BLOQUE 1: Exploración y Compatibilidad ── */}
-      <Card className="p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
-          <div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted">Etapa 1 del proceso</span>
-            <h3 className="display text-xl text-slate-900">Relación y evaluación de compatibilidad</h3>
-          </div>
-          {rel && (
-            <div className="flex items-center gap-2">
-              <Tag color="var(--color-cyan)">{MENTORSHIP_STAGE_LABEL[rel.stage]}</Tag>
-              <Tag
-                color={
-                  rel.compatibilityStatus === "proceed"
-                    ? "var(--color-ok)"
-                    : rel.compatibilityStatus === "declined"
-                      ? "var(--color-danger)"
-                      : "var(--color-highlight)"
-                }
-              >
-                {COMPATIBILITY_STATUS_LABEL[rel.compatibilityStatus]}
-              </Tag>
-            </div>
-          )}
-        </div>
-
-        {!rel ? (
-          <div className="mt-4 space-y-3">
-            <p className="text-sm text-muted">
-              Todavía no se ha formalizado una relación de mentoría en RAX para este proyecto.
-            </p>
-            {w.mentors.length > 0 ? (
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="primary"
-                  disabled={action.pending || !canManageMentorship}
-                  onClick={() => handleInitiateRelation(w.mentors[0])}
-                >
-                  Iniciar relación de mentoría con {w.people[w.mentors[0]]?.name ?? "mentor/a"}
-                </Button>
-              </div>
-            ) : (
-              <Notice tone="info">
-                El proyecto todavía no tiene mentor/a asignado/a. Podés solicitar acompañamiento desde la pantalla de
-                diagnóstico.
-              </Notice>
-            )}
-          </div>
-        ) : (
-          <div className="mt-4 space-y-4">
-            {rel.compatibilityStatus === "pending" && (
-              <div className="rounded-xl border border-highlight/30 bg-highlight/5 p-4">
-                <p className="text-sm text-slate-900">
-                  <strong>Evaluación mutua en curso:</strong> Antes de fijar compromisos formales, ambas partes verifican
-                  que haya química de trabajo, disponibilidad real de tiempo y expectativas equilibradas. Si alguna de las
-                  dos partes siente que no es el momento o perfil adecuado, se puede declinar con respeto sin forzar el
-                  proceso.
-                </p>
-                {canManageMentorship && (
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Button
-                      variant="primary"
-                      disabled={action.pending}
-                      onClick={() => handleDecideCompatibility("proceed")}
-                    >
-                      ✓ Confirmar compatibilidad y avanzar a diagnóstico
-                    </Button>
-                    <Button
-                      variant="danger"
-                      disabled={action.pending}
-                      onClick={() => setShowDeclineModal(true)}
-                    >
-                      Declinar proceso
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {rel.compatibilityStatus === "proceed" && (
-              <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted">
-                <div>
-                  <p className="text-slate-900">
-                    ✓ Compatibilidad mutua confirmada el {formatDate(rel.compatibilityDecidedAt ?? rel.updatedAt)}.
-                  </p>
-                  {rel.compatibilityRationale && (
-                    <p className="mt-1 text-xs text-muted">Motivo / nota: «{rel.compatibilityRationale}»</p>
-                  )}
-                </div>
-
-                {canManageMentorship && rel.stage === "diagnosis" && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={action.pending}
-                    onClick={() => handleTransitionStage("agreement")}
-                  >
-                    Avanzar a etapa de acuerdos →
-                  </Button>
-                )}
-                {canManageMentorship && rel.stage === "agreement" && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={action.pending}
-                    onClick={() => handleTransitionStage("active_mentoring")}
-                  >
-                    Avanzar a acompañamiento activo →
-                  </Button>
-                )}
-              </div>
-            )}
-
-            {rel.compatibilityStatus === "declined" && (
-              <div className="rounded-xl border border-danger/30 bg-danger/5 p-4">
-                <p className="text-sm font-semibold text-danger">El proceso de mentoría fue declinado.</p>
-                {rel.compatibilityRationale && (
-                  <p className="mt-1 text-sm text-muted">Motivo expresado: «{rel.compatibilityRationale}»</p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
-
-      {/* Modal para declinar */}
-      {showDeclineModal && (
-        <Card className="border-danger/40 bg-slate-50 p-6">
-          <h4 className="text-base font-semibold text-danger">Declinar proceso de mentoría</h4>
-          <p className="mt-1 text-xs text-muted">
-            Declinar con respeto permite al emprendedor buscar un mentor con mayor afinidad sin desgastar expectativas.
-          </p>
-          <div className="mt-3">
-            <Field label="Motivo o devolución constructiva (opcional)" id="decline-rationale">
-              <textarea
-                id="decline-rationale"
-                rows={3}
-                className={inputClass}
-                placeholder="Ej: El proyecto requiere especialización técnica en biotecnología que excede mi experiencia actual..."
-                value={declineRationale}
-                onChange={(e) => setDeclineRationale(e.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="mt-4 flex gap-3">
-            <Button
-              variant="danger"
-              disabled={action.pending}
-              onClick={() => handleDecideCompatibility("declined", declineRationale)}
-            >
-              Confirmar y cerrar relación
-            </Button>
-            <Button variant="ghost" onClick={() => setShowDeclineModal(false)}>
-              Cancelar
-            </Button>
-          </div>
-        </Card>
+      {!hasMentor && (
+        <Notice tone="info">
+          Todavía no hay mentor asignado. El acuerdo y los objetivos se definen con el mentor cuando la administración lo asigne.
+        </Notice>
       )}
 
       {/* ── BLOQUE 2: Acuerdo Bilateral de Mentoría ── */}
-      {rel && rel.compatibilityStatus === "proceed" && (
+      {hasMentor && (
         <Card className="p-6">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
@@ -664,7 +476,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
       )}
 
       {/* ── BLOQUE 3: Objetivos de Mentoría ── */}
-      {rel && rel.compatibilityStatus === "proceed" && (
+      {hasMentor && (
         <Card className="p-6">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>

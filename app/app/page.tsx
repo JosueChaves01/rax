@@ -172,6 +172,7 @@ const INBOX_LABEL = {
   first_review: "Primera revisión",
   hypothesis: "Hipótesis por aprobar",
   second_review: "Segunda revisión",
+  follow_up: "Sesión de seguimiento",
 } as const;
 
 function MentorApplication({

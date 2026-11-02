@@ -6,22 +6,13 @@ import { SessionsView } from "@/shared/ui/sessions-view";
 
 export const metadata = { title: "Sesiones de mentoría · RAX" };
 
+/** Agenda de sesiones: un índice que lleva a cada proyecto, donde se trabaja la sesión. */
 export default async function SessionsPage() {
   const d = await getDeps();
   if (!d) redirect("/entrar");
 
   const projects = await listMyProjects(d);
-  const sessions = (
-    await Promise.all(projects.map((p) => d.repo.mentorSessions.list({ projectId: p.id })))
-  ).flat();
-
-  const relations = (
-    await Promise.all(projects.map((p) => d.repo.mentorshipRelations.list({ projectId: p.id })))
-  ).flat();
-
-  const goals = (
-    await Promise.all(relations.map((r) => d.repo.mentorshipGoals.list({ relationId: r.id })))
-  ).flat();
+  const sessions = (await Promise.all(projects.map((p) => d.repo.mentorSessions.list({ projectId: p.id })))).flat();
 
   return (
     <div className="space-y-4">
@@ -30,7 +21,7 @@ export default async function SessionsPage() {
           Ver en calendario →
         </Link>
       </div>
-      <SessionsView initialSessions={sessions} projects={projects} goals={goals} viewerId={d.actor.id} />
+      <SessionsView sessions={sessions} projects={projects} />
     </div>
   );
 }

@@ -97,6 +97,8 @@ describe("Fase 4: Ciclo de Sesiones, Briefing 4-Capas y Privacidad Dual (Princip
     });
     expect(session.status).toBe("pending");
     expect(session.scheduledAt).toBe("2026-11-05T15:00:00.000Z");
+    // El briefing se prepara solo al agendar: el mentor no tiene que pedirlo.
+    expect((await repo.mentorSessions.get(session.id))?.preSessionBriefing?.suggestedAgenda.length).toBeGreaterThan(0);
 
     // 5. Control de acceso: usuario ajeno no puede generar el briefing
     await expect(generatePreSessionBriefing(stranger, session.id)).rejects.toMatchObject({
@@ -112,9 +114,9 @@ describe("Fase 4: Ciclo de Sesiones, Briefing 4-Capas y Privacidad Dual (Princip
     expect(briefing.suggestedAgenda.length).toBeGreaterThanOrEqual(3);
     expect(briefing.suggestedQuestions.length).toBeGreaterThanOrEqual(2);
 
-    // Auditoría verificada
+    // Auditoría verificada: el automático al agendar y el que el mentor volvió a pedir.
     const audits = await repo.auditEvents.list({ projectId: p.id, action: "session.briefing_generated" });
-    expect(audits).toHaveLength(1);
+    expect(audits).toHaveLength(2);
   });
 
   it("Escenario E2 — Toma de notas en vivo con privacidad dual (notas privadas vs compartidas)", async () => {

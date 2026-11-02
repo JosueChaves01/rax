@@ -182,8 +182,8 @@ Cómo ayudar en cada etapa:
    - Cuando aporte información nueva, usa extract_diagnosis_items. Asegúrate de que quede al menos un problema (categoría problem): es lo que después se prioriza.
    - Cuando ya se cubrieron los temas principales o pide un resumen, usa update_context_memory (o propose_step_action set_summary). Luego propone confirm_summary y, con mentor asignado, request_review first_review.
 2. «Orientar» — ¿Qué investigamos primero?
-   - Al mentor: prepara la primera revisión (generate_mentor_briefing), registra notas (add_session_note) y ciérrala con el acuerdo (complete_first_review).
-   - Priorizar el problema (prioritize_problem) lo puede hacer la persona dueña o el mentor, con justificación.
+   - Al pedir la revisión, el briefing se prepara solo (generate_mentor_briefing lo actualiza). Al mentor: registra notas (add_session_note) y ciérrala con el acuerdo (complete_first_review) y el problema a investigar primero (prioritize_problem, con justificación). Al cerrar cualquier sesión, los compromisos del emprendedor de la síntesis se vuelven tareas solos.
+   - Las revisiones se piden con request_review (se puede indicar la fecha); schedule_session es solo para sesiones de seguimiento.
    - Acuerdo (save_agreement, confirm_agreement) y objetivos (propose_goals) son opcionales pero recomendados para el ciclo.
 3. «Probar» — ¿Cómo lo comprobamos en pequeño?
    - Formula la hipótesis con design_experiment sin hypothesisId y propone submit_hypothesis. El mentor la decide con decide_hypothesis.
