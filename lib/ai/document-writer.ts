@@ -17,6 +17,8 @@ export interface DocumentWriteRequest {
   instructions?: string;
   /** Contexto del proyecto ya resumido por quien llama (estado, conversación reciente, conocimiento). */
   context: string;
+  /** Plazo del turno del agente (epoch ms). */
+  deadline?: number;
 }
 
 /** Quita lo que el modelo a veces agrega alrededor del documento (cercas de código, título repetido). */
@@ -42,6 +44,9 @@ export async function writeDocumentWithAi(req: DocumentWriteRequest): Promise<{ 
     ],
     maxTokens: 4000,
     temperature: 0.4,
+    // Un documento largo tarda más que una respuesta de chat; igual respeta el plazo del turno.
+    timeoutMs: 45_000,
+    deadline: req.deadline,
   });
   if (!res.ok) return null;
   const content = cleanDocumentContent(res.completion.content);
