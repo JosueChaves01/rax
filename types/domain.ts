@@ -246,6 +246,16 @@ export interface AgentArtifact {
   subtitle?: string;
   /** Solo documentos: id en el conocimiento del proyecto, si se agregó. */
   documentId?: string;
+  /** Solo documentos: proyectos a los que se agregó después de generarlo (botón o pedido en el chat). */
+  savedTo?: AgentDocumentPlacement[];
+}
+
+/** Copia de un documento del agente en el conocimiento de un proyecto. */
+export interface AgentDocumentPlacement {
+  projectId: string;
+  projectName: string;
+  documentId: string;
+  addedAt: string;
 }
 
 export interface KnowledgeCitation {

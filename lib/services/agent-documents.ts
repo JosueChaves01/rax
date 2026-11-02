@@ -1,8 +1,9 @@
 import "server-only";
-import type { AgentArtifact } from "@/types/domain";
+import type { AgentArtifact, AgentDocumentPlacement, AgentMessage } from "@/types/domain";
+import { can } from "@/lib/authz";
 import { notFound, validation } from "@/lib/errors";
 import { documentSlug, isDocumentFormat, type DocumentFormat, type DocumentSource } from "@/lib/documents/types";
-import { guard, type ServiceDeps } from "./base";
+import { guard, relationOf, sysRepo, type ServiceDeps } from "./base";
 import { authorizedThread } from "./agent-chat";
 import { addProjectDocument, isActiveDocument } from "./project-knowledge";
 
@@ -82,4 +83,122 @@ export async function documentFromProject(d: ServiceDeps, projectId: string, doc
   const doc = await d.repo.projectDocuments.get(documentId);
   if (!doc || doc.projectId !== projectId || !isActiveDocument(doc)) throw notFound("Documento no encontrado.");
   return { title: doc.title, subtitle: `${project.name} · ${longDate(doc.updatedAt)}`, content: doc.content };
+}
+
+/* ── Agregar un documento ya generado a un proyecto ── */
+
+/** Proyecto al que se puede agregar un documento del agente. */
+export interface DocumentTargetProject {
+  id: string;
+  name: string;
+  /** Es el proyecto del hilo donde se generó el documento. */
+  current: boolean;
+  /** Ya tiene una copia (vigente) de este documento. */
+  saved: boolean;
+}
+
+/**
+ * Proyectos donde quien conversa puede guardar documentos: los suyos, donde colabora o, si es mentor,
+ * los que tiene asignados (asignación activa). La lista sale de la base con sus permisos y se vuelve a
+ * verificar con `guard` al guardar.
+ */
+export async function listDocumentTargetProjects(d: ServiceDeps): Promise<Array<{ id: string; name: string }>> {
+  if (d.actor.role === "admin") return [];
+  const projects = await d.repo.projects.list();
+  const allowed = await Promise.all(projects.map(async (p) => (can(d.actor, "agent.chat", await relationOf(d, p.id)) ? p : null)));
+  return allowed
+    .filter((p): p is NonNullable<typeof p> => p !== null)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map((p) => ({ id: p.id, name: p.name }));
+}
+
+async function documentArtifactOf(d: ServiceDeps, messageId: string, artifactId: string) {
+  const message = await d.repo.agentMessages.get(messageId);
+  if (!message) throw notFound("Este documento no existe o no tenés acceso.");
+  const thread = await authorizedThread(d, message.threadId);
+  const artifact = (message.artifacts ?? []).find((a) => a.id === artifactId && a.type === DOCUMENT_ARTIFACT_TYPE);
+  if (!artifact) throw notFound("Este documento no existe o no tenés acceso.");
+  return { message, thread, artifact };
+}
+
+/** Proyectos donde ya está el documento: el del hilo si se guardó al generarlo, más los que se agregaron después. */
+function placementsOf(artifact: AgentArtifact, threadProjectId: string): Array<{ projectId: string; documentId: string }> {
+  const list = [...(artifact.savedTo ?? [])];
+  if (artifact.documentId && !list.some((p) => p.documentId === artifact.documentId)) {
+    list.push({ projectId: threadProjectId, projectName: "", documentId: artifact.documentId, addedAt: "" });
+  }
+  return list;
+}
+
+async function activePlacement(d: ServiceDeps, artifact: AgentArtifact, threadProjectId: string, projectId: string) {
+  for (const p of placementsOf(artifact, threadProjectId)) {
+    if (p.projectId !== projectId) continue;
+    const doc = await sysRepo(d).projectDocuments.get(p.documentId);
+    if (doc && doc.projectId === projectId && isActiveDocument(doc)) return doc;
+  }
+  return undefined;
+}
+
+/** Proyectos a los que se puede agregar este documento, marcando el actual y los que ya lo tienen. */
+export async function documentTargets(d: ServiceDeps, messageId: string, artifactId: string): Promise<DocumentTargetProject[]> {
+  const { thread, artifact } = await documentArtifactOf(d, messageId, artifactId);
+  const projects = await listDocumentTargetProjects(d);
+  const out = await Promise.all(
+    projects.map(async (p) => ({
+      ...p,
+      current: p.id === thread.projectId,
+      saved: Boolean(await activePlacement(d, artifact, thread.projectId, p.id)),
+    })),
+  );
+  return out.sort((a, b) => Number(b.current) - Number(a.current));
+}
+
+/**
+ * Agrega a un proyecto un documento que el agente ya generó (desde la tarjeta o pidiéndolo en el chat).
+ * Solo quien creó el hilo, y solo en proyectos donde tiene acceso: para un mentor, los que tiene asignados.
+ * Si ya está en ese proyecto no lo duplica. Queda anotado en el mensaje para que la tarjeta lo muestre.
+ */
+export async function addAgentDocumentToProject(
+  d: ServiceDeps,
+  input: { messageId: string; artifactId: string; projectId: string },
+): Promise<{ placement: AgentDocumentPlacement; alreadySaved: boolean; artifact: AgentArtifact }> {
+  const { message, thread, artifact } = await documentArtifactOf(d, input.messageId, input.artifactId);
+  const { project } = await guard(d, input.projectId, "agent.chat");
+
+  const existing = await activePlacement(d, artifact, thread.projectId, project.id);
+  if (existing) {
+    return {
+      placement: { projectId: project.id, projectName: project.name, documentId: existing.id, addedAt: existing.createdAt },
+      alreadySaved: true,
+      artifact,
+    };
+  }
+
+  const doc = await addProjectDocument(d, project.id, {
+    title: artifact.title,
+    filename: `${artifact.identifier || documentSlug(artifact.title)}.${artifact.format ?? "pdf"}`,
+    content: artifact.content,
+    fileType: "markdown",
+    source: "chat_extracted",
+    sourceMessageId: message.id,
+  });
+  const placement: AgentDocumentPlacement = { projectId: project.id, projectName: project.name, documentId: doc.id, addedAt: d.now() };
+  const updated: AgentArtifact = {
+    ...artifact,
+    savedTo: [...(artifact.savedTo ?? []).filter((p) => p.projectId !== project.id), placement],
+  };
+  // agent_messages no tiene política de actualización: se escribe con la cuenta de servicio tras autorizar arriba.
+  await sysRepo(d).agentMessages.update(message.id, {
+    artifacts: (message.artifacts ?? []).map((a) => (a.id === artifact.id ? updated : a)),
+  } as Partial<AgentMessage>);
+  return { placement, alreadySaved: false, artifact: updated };
+}
+
+/** Documentos generados en un hilo, del más nuevo al más viejo (para que el agente sepa cuál agregar). */
+export async function threadDocuments(d: ServiceDeps, threadId: string, limit = 60): Promise<Array<{ messageId: string; artifact: AgentArtifact }>> {
+  await authorizedThread(d, threadId);
+  const messages = await d.repo.agentMessages.latest({ threadId } as Partial<AgentMessage>, limit);
+  return messages
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .flatMap((m) => (m.artifacts ?? []).filter((a) => a.type === DOCUMENT_ARTIFACT_TYPE).reverse().map((artifact) => ({ messageId: m.id, artifact })));
 }

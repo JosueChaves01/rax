@@ -116,6 +116,7 @@ import {
   listProjectThreads,
   renameAgentThread,
 } from "@/lib/services/agent-chat";
+import { addAgentDocumentToProject, documentTargets } from "@/lib/services/agent-documents";
 import {
   archiveAgentThread,
   createAgentSession,
@@ -1519,4 +1520,21 @@ export async function applyAiProposalAction(projectId: string, proposal: unknown
   if (!parsed.success) return { ok: false as const, error: "La propuesta no tiene un formato válido." };
   // Cada tipo (incluidos los pasos del recorrido) se aplica con su servicio de dominio y sus permisos.
   return run(projectId, (d) => applyAgentProposal(d, projectId, parsed.data));
+}
+
+/* ── Agregar a un proyecto un documento que generó el agente ── */
+
+/** Proyectos donde quien conversa puede guardar este documento (para un mentor, los que tiene asignados). */
+export async function documentTargetsAction(messageId: string, artifactId: string) {
+  return run(null, async (d) => {
+    return documentTargets(d, V.parse(V.Ids, messageId), V.parse(V.Ids, artifactId));
+  }, { revalidate: false });
+}
+
+export async function addAgentDocumentToProjectAction(messageId: string, artifactId: string, projectId: string) {
+  const checkedProjectId = V.parse(V.Ids, projectId);
+  return run(checkedProjectId, async (d) => {
+    const saved = await addAgentDocumentToProject(d, { messageId: V.parse(V.Ids, messageId), artifactId: V.parse(V.Ids, artifactId), projectId: checkedProjectId });
+    return { placement: saved.placement, alreadySaved: saved.alreadySaved };
+  });
 }
