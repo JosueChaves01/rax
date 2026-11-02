@@ -13,7 +13,7 @@ import { renderProjectState, type ProjectStateSnapshot } from "./project-state";
 import { foldDeterministic, MEMORY_SYSTEM_PROMPT, parseMemoryOutput, renderMemoryInput, renderThreadMemory, withSummary } from "./thread-memory";
 import { chatWithFallback, type ChatCompletion, type ChatMessage, type ChatToolCall, type ChatUsage } from "./openrouter-chat";
 import { readSessionThread, renderSessionState, updateSessionNotes, type SessionAgentContext } from "@/lib/services/agent-sessions";
-import { createAgentDocument } from "@/lib/services/agent-documents";
+import { addAgentDocumentToProject, createAgentDocument, listDocumentTargetProjects, threadDocuments } from "@/lib/services/agent-documents";
 import { addNoteReply, createSessionNote, isNoteKind, listProjectNotes, renderNotesForAgent, updateNoteReply, updateSessionNote } from "@/lib/services/session-notes";
 import { isDocumentFormat, DOCUMENT_FORMAT_LABEL, type DocumentFormat } from "@/lib/documents/types";
 import { simulatedDocumentContent, writeDocumentWithAi } from "./document-writer";
@@ -269,6 +269,7 @@ Usa herramientas cuando la persona quiera estructurar algo en el proyecto; para 
 - read_mentor_notes: leer las notas de las sesiones de mentoría del proyecto (observaciones, preguntas, acuerdos, compromisos…) con sus respuestas y sus ids. Úsala antes de responder o editar una nota, o cuando la persona pregunte qué se anotó o qué le preguntó/respondió su mentor.
 - save_note_reply: responder una nota de mentoría (o corregir una respuesta propia con reply_id). La puede usar el emprendedor/estudiante o el mentor. Escribe la respuesta con las palabras y decisiones de la persona; no inventes datos.${role === "mentor" || role === "admin" ? "\n- save_mentor_note: crear una nota en una sesión de mentoría abierta (solo el mentor de esa sesión) o corregir una nota propia (con note_id). Las privadas no las ve el emprendedor." : ""}
   Estas dos se guardan directo (no son tarjetas): úsalas solo cuando la persona pida guardar, crear, responder o corregir una nota, o confirme el texto. Después di qué guardaste y dónde se ve (pestaña Notas de la sesión).
+- add_document_to_project: agregar a los documentos de un proyecto un documento que ya generaste en este hilo, cuando la persona lo pida después («agrégalo al proyecto», «súbelo a Café Verde»). Pasa el nombre del proyecto que dijo; si dice «este proyecto» o «el proyecto» sin más, el proyecto actual. Si tiene varios proyectos y no queda claro cuál, llámala sin project: te devuelve la lista y le preguntas. Se guarda directo (no es una tarjeta); también puede usar el botón «Agregar a un proyecto» de la tarjeta del documento.
 - generate_document: crear un documento descargable (PDF o Word) sobre un tema: plan, informe, guía de estudio, resumen de decisiones, propuesta, acta de sesión, etc. Úsala cuando la persona pida un PDF, un Word, un documento o un archivo para descargar. Pon add_to_project en true cuando lo pida o cuando sea material de referencia del proyecto (plan, informe, guía, resumen); en false si es algo puntual o una prueba. El documento se redacta aparte con el contexto del proyecto: no lo copies en tu respuesta, solo di qué contiene y si quedó en el proyecto.
 - propose_step_action: dar cualquier paso del recorrido (confirmar resumen, pedir revisiones, priorizar, decidir hipótesis, iniciar experimentos, registrar resultados y evidencia, decisión del mentor, acuerdo, sesiones). Usa los ids entre corchetes de <project_state>.
 - Agendar y confirmar revisiones con el mentor:
@@ -424,11 +425,24 @@ const GENERATE_DOCUMENT_TOOL: WorkflowToolDefinition = {
   },
 };
 
+const ADD_DOCUMENT_TO_PROJECT_TOOL: WorkflowToolDefinition = {
+  name: "add_document_to_project",
+  description:
+    "Agrega a los documentos (conocimiento) de un proyecto un documento que el agente YA generó en este hilo. Solo proyectos donde la persona tiene acceso; para un mentor, los que tiene asignados. Si no se indica el proyecto y la persona tiene varios, devuelve la lista para preguntarle.",
+  parameters: {
+    type: "object",
+    properties: {
+      project: { type: "string", description: "Nombre (o id) del proyecto destino. Para «este proyecto» usa el nombre del proyecto actual. Omítelo si la persona no lo dijo." },
+      document_title: { type: "string", description: "Título del documento ya generado. Omítelo para el último documento del hilo." },
+    },
+  },
+};
+
 function toolsFor(input: ClaudeTurnInput): WorkflowToolDefinition[] {
   if (!input.deps) return [];
   const base = input.sessionContext?.field
     ? [DRAFT_FIELD_TOOL, ...RAX_WORKFLOW_TOOLS]
-    : [GENERATE_DOCUMENT_TOOL, ...noteToolsFor(input.role), ...RAX_WORKFLOW_TOOLS];
+    : [GENERATE_DOCUMENT_TOOL, ...(input.thread?.id ? [ADD_DOCUMENT_TO_PROJECT_TOOL] : []), ...noteToolsFor(input.role), ...RAX_WORKFLOW_TOOLS];
   if (!input.session || !input.thread?.id) return base;
   return [SESSION_NOTES_TOOL, ...(input.session.siblings.length ? [READ_SESSION_THREAD_TOOL] : []), ...base];
 }
@@ -442,6 +456,7 @@ async function runTool(
   args: Record<string, unknown>,
 ): Promise<{ summary: string; proposals: AiProposalItem[]; data?: unknown; sessionUpdated?: boolean; artifacts?: AgentArtifact[] }> {
   if (name === "generate_document" && input.deps) return generateDocumentTool(input, args);
+  if (name === "add_document_to_project" && input.deps && input.thread?.id) return addDocumentToProjectTool(input, args);
   if ((name === "read_mentor_notes" || name === "save_mentor_note" || name === "save_note_reply") && input.deps) return mentorNotesTool(input, name, args);
   if (name === "update_session_notes" && input.session && input.deps) {
     const updated = await updateSessionNotes(input.deps, input.session.id, {
@@ -556,6 +571,64 @@ async function generateDocumentTool(input: ClaudeTurnInput, args: Record<string,
     proposals: [],
     artifacts: [created.artifact],
     data: { title, format, savedToProject: created.savedToProject, sections: content.split("\n").filter((l) => l.startsWith("## ")).map((l) => l.slice(3)) },
+  };
+}
+
+const fold = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Elige entre opciones por id exacto, nombre exacto o nombre parcial; varias coincidencias quedan para preguntar. */
+function pickByName<T extends { id: string; name: string }>(options: T[], wanted: string): T[] {
+  const w = fold(wanted);
+  const byId = options.filter((o) => o.id === wanted.trim());
+  if (byId.length) return byId;
+  const exact = options.filter((o) => fold(o.name) === w);
+  if (exact.length) return exact;
+  return options.filter((o) => fold(o.name).includes(w) || (w.length >= 4 && w.includes(fold(o.name))));
+}
+
+/** Agrega un documento ya generado en este hilo al proyecto que pida la persona (solo proyectos con acceso). */
+async function addDocumentToProjectTool(input: ClaudeTurnInput, args: Record<string, unknown>) {
+  const d = input.deps!;
+  const docs = await threadDocuments(d, input.thread!.id!);
+  if (!docs.length) {
+    return { summary: "En este hilo todavía no hay documentos generados.", proposals: [], data: { ok: false, error: "Primero genera el documento con generate_document." } };
+  }
+  const wantedDoc = str(args.document_title);
+  const doc = wantedDoc
+    ? docs.find((x) => fold(x.artifact.title) === fold(wantedDoc)) ?? docs.find((x) => fold(x.artifact.title).includes(fold(wantedDoc)))
+    : docs[0];
+  if (!doc) {
+    return { summary: `No encontré el documento «${wantedDoc}» en este hilo.`, proposals: [], data: { ok: false, documents: docs.map((x) => x.artifact.title) } };
+  }
+
+  const targets = await listDocumentTargetProjects(d);
+  if (!targets.length) return { summary: "No tienes proyectos donde agregar documentos.", proposals: [], data: { ok: false } };
+  const label = (p: { id: string; name: string }) => (p.id === input.project.id ? `${p.name} (proyecto actual)` : p.name);
+  const wantedProject = str(args.project);
+  const matches = wantedProject ? pickByName(targets, wantedProject) : targets.length === 1 ? targets : [];
+  if (matches.length !== 1) {
+    const options = matches.length > 1 ? matches : targets;
+    return {
+      summary: wantedProject && !matches.length ? `No tienes acceso a un proyecto llamado «${wantedProject}».` : "Hay que elegir el proyecto.",
+      proposals: [],
+      data: {
+        ok: false,
+        needs_choice: true,
+        document: doc.artifact.title,
+        projects: options.map(label),
+        hint: "Pregúntale a la persona a cuál de estos proyectos lo agrega (o usa el botón «Agregar a un proyecto» de la tarjeta del documento). No lo agregues hasta que elija.",
+      },
+    };
+  }
+
+  const target = matches[0];
+  const saved = await addAgentDocumentToProject(d, { messageId: doc.messageId, artifactId: doc.artifact.id, projectId: target.id });
+  return {
+    summary: saved.alreadySaved
+      ? `«${doc.artifact.title}» ya estaba en los documentos de «${target.name}».`
+      : `Agregué «${doc.artifact.title}» a los documentos de «${target.name}».`,
+    proposals: [],
+    data: { ok: true, document: doc.artifact.title, project: target.name, already_saved: saved.alreadySaved },
   };
 }
 
