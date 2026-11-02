@@ -22,7 +22,7 @@ export default async function WorkspaceLayout({ children, params }: { children: 
   const tasksOpen = w.tasks.filter((t) => t.status !== "done").length;
 
   return (
-    <div className="mx-auto grid max-w-[1400px] gap-6 px-4 pb-28 pt-6 sm:px-6 xl:grid-cols-[300px_minmax(0,1fr)] lg:pb-6">
+    <div className="mx-auto grid max-w-[1400px] gap-6 px-4 pb-[calc(9rem+env(safe-area-inset-bottom))] pt-6 sm:px-6 xl:grid-cols-[300px_minmax(0,1fr)] lg:pb-6">
       <aside aria-label="Contexto del proyecto" className="hidden space-y-4 xl:sticky xl:top-20 xl:block xl:h-fit">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
           <div className="flex flex-wrap items-center gap-2">

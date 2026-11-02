@@ -52,10 +52,10 @@ export function MobileBottomNav({ role }: MobileBottomNavProps) {
       )}
 
       <nav
-        className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-white border-t border-slate-200 px-2 py-1 shadow-lg pb-[env(safe-area-inset-bottom)]"
+        className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-white border-t border-slate-200 px-2 shadow-lg pb-[env(safe-area-inset-bottom)]"
         aria-label="Navegación móvil"
       >
-        <div className={cx("grid items-center", rest.length > 0 ? "grid-cols-4" : bar.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
+        <div className={cx("grid h-16 items-center", rest.length > 0 ? "grid-cols-4" : bar.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
           {bar.map((item) => {
             const active = isActive(item, pathname);
             return (
