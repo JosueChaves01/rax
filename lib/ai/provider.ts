@@ -252,6 +252,9 @@ export interface PreSessionBriefingContext {
   experimentsInProgress: Array<{ question: string; status: string; metric?: string }>;
   // Capa 3: Temas pendientes y notas previas
   previousSessionNotes: Array<{ kind: string; body: string }>;
+  /** Lo que quedó pendiente en la síntesis de la sesión anterior (compromisos y próximos pasos). */
+  previousSessionPending?: string[];
+  /** Planteos recientes de la persona emprendedora en el chat, ya en texto plano (sin respuestas del asistente). */
   recentMessages?: Array<{ author: string; content: string }>;
 }
 

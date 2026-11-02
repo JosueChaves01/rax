@@ -1,3 +1,5 @@
+import { plainText } from "./plain-text";
+import { NOTE_KIND_LABEL } from "@/features/labels";
 import {
   DIMENSION_CATEGORY,
   DIMENSION_QUESTION,
@@ -404,15 +406,20 @@ export class SimulatedProvider implements AiProvider {
 
     const recentProgressSummary = `Avances realizados:\n${completed}\n\nDificultades y bloqueos:\n${blocked}${exps ? `\n\nExperimentos:\n${exps}` : ""}`;
 
-    const prevNotes = ctx.previousSessionNotes.length
-      ? ctx.previousSessionNotes.map((n) => `• [${n.kind}] ${n.body}`).join("\n")
-      : ctx.diagnosisUnknowns?.length
-      ? `Incógnitas críticas del diagnóstico a dilucidar:\n${ctx.diagnosisUnknowns.map((u) => `• ${u.title}: ${u.content}`).join("\n")}`
-      : ctx.recentMessages?.length
-      ? `Último intercambio en el chat:\n${ctx.recentMessages.slice(-3).map((m) => `• ${m.author}: «${m.content.slice(0, 100)}»`).join("\n")}`
-      : "Primera sesión o sin notas registradas de la reunión anterior.";
-
-    const pendingTopicsSummary = `Temas arrastrados de la última sesión:\n${prevNotes}`;
+    // Capa 3 en secciones legibles: lo que quedó de la sesión anterior, incógnitas y lo que la persona planteó.
+    const fromLastSession = [
+      ...ctx.previousSessionNotes.map((n) => `• ${(NOTE_KIND_LABEL as Record<string, string>)[n.kind] ?? "Nota"}: ${plainText(n.body, 160)}`),
+      ...(ctx.previousSessionPending ?? []).map((p) => `• ${p}`),
+    ].slice(0, 6);
+    const unknowns = (ctx.diagnosisUnknowns ?? []).slice(0, 4).map((u) => `• ${plainText(u.title, 120)}`);
+    const asked = (ctx.recentMessages ?? []).slice(-3).map((m) => `• «${plainText(m.content, 180)}»`);
+    const pendingTopicsSummary = [
+      `De la sesión anterior:\n${fromLastSession.length ? fromLastSession.join("\n") : "• No quedaron notas ni compromisos registrados de una sesión anterior."}`,
+      unknowns.length ? `Incógnitas del diagnóstico por aclarar:\n${unknowns.join("\n")}` : "",
+      asked.length ? `Lo que la persona planteó recientemente en el chat:\n${asked.join("\n")}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
     const suggestedAgenda = [
       "1. Revisión de estado de ánimo, disponibilidad de tiempo y contexto general (5 min)",
