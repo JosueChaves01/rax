@@ -7,6 +7,7 @@ import { generatePostSessionSynthesis } from "./mentoring";
 import { audit, guard, sysRepo, type ServiceDeps } from "./base";
 import { touch } from "./projects";
 import { bySpeech, names, transcriptLines } from "./session-transcript";
+import { enforceAiQuota } from "./ai-quota";
 
 /**
  * Llamadas entre el mentor de una sesión y la persona emprendedora (dueña o colaboradora del
@@ -139,6 +140,7 @@ export async function transcribeCallAudio(
   if (!transcriber.available) throw new TranscriptionUnavailableError();
   if (chunk.data.size === 0) return null;
   if (chunk.data.size > 4 * 1024 * 1024) throw validation("El fragmento de audio es demasiado grande.");
+  await enforceAiQuota(d, "audio_chunk");
   const text = await transcriber.transcribe(chunk);
   return addCallSegment(d, callId, text, offsetMs);
 }
@@ -161,13 +163,16 @@ export interface EndCallResult {
   synthesis?: PostSessionSynthesis;
   segments: number;
   synthesisError?: string;
+  /** La síntesis se genera aparte (synthesizeEndedCall) para que colgar sea inmediato. */
+  synthesisPending?: boolean;
 }
 
 /**
  * Cuelga la llamada. Con transcripción: la guarda como documento del proyecto (lo lee el agente
  * con el resto del conocimiento) y genera la síntesis pos-sesión con compromisos y próximos pasos.
  */
-export async function endCall(d: ServiceDeps, callId: string): Promise<EndCallResult> {
+export async function endCall(d: ServiceDeps, callId: string, opts: { synthesize?: boolean } = {}): Promise<EndCallResult> {
+  const synthesize = opts.synthesize ?? true;
   const { call, session } = await activeCallFor(d, callId);
   if (call.status === "ended") {
     return { call, documentId: call.transcriptDocumentId, synthesis: session.postSessionSynthesis, segments: 0 };
@@ -207,11 +212,15 @@ export async function endCall(d: ServiceDeps, callId: string): Promise<EndCallRe
     result.call = ended;
     result.documentId = doc.id;
 
-    try {
-      result.synthesis = await generatePostSessionSynthesis(d, session.id);
-    } catch (err) {
-      result.synthesisError = err instanceof Error ? err.message : "No se pudo generar la síntesis.";
-      console.warn("[session-calls] No se pudo generar la síntesis pos-llamada:", result.synthesisError);
+    if (synthesize) {
+      try {
+        result.synthesis = await generatePostSessionSynthesis(d, session.id);
+      } catch (err) {
+        result.synthesisError = err instanceof Error ? err.message : "No se pudo generar la síntesis.";
+        console.warn("[session-calls] No se pudo generar la síntesis pos-llamada:", result.synthesisError);
+      }
+    } else {
+      result.synthesisPending = true;
     }
   }
 
@@ -222,4 +231,15 @@ export async function endCall(d: ServiceDeps, callId: string): Promise<EndCallRe
   });
   await touch(d, call.projectId);
   return result;
+}
+
+/**
+ * Síntesis pos-sesión de una llamada ya colgada que dejó transcripción. Va en su propio pedido para
+ * que colgar no espere a la IA: la pantalla muestra «generando síntesis» mientras tanto.
+ */
+export async function synthesizeEndedCall(d: ServiceDeps, callId: string): Promise<PostSessionSynthesis> {
+  const { call, session } = await activeCallFor(d, callId);
+  if (call.status !== "ended") throw validation("La llamada todavía no terminó.");
+  if (!call.transcriptDocumentId) throw validation("Esta llamada no tiene transcripción para sintetizar.");
+  return generatePostSessionSynthesis(d, session.id);
 }

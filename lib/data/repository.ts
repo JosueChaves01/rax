@@ -47,7 +47,24 @@ export interface Table<T extends { id: string }> {
    * almacenada, debe lanzar un error de conflicto (concurrencia optimista).
    */
   update(id: string, patch: Partial<T>, expectedVersion?: number): Promise<T>;
+  /** Las `limit` filas más recientes por `createdAt`, de la más nueva a la más vieja. */
+  latest(where: Partial<T>, limit: number): Promise<T[]>;
+  /** Cuántas filas coinciden con el filtro, sin traerlas. */
+  count(where: Partial<T>): Promise<number>;
 }
+
+/**
+ * Funciones SQL del repositorio (RPC). Son opcionales: si la base no las tiene (migración sin aplicar)
+ * o la implementación no las ofrece, quien las usa sigue con su alternativa en memoria.
+ */
+export interface RepositoryFunctions {
+  /** Fragmentos de conocimiento del proyecto más relevantes para la consulta (búsqueda de texto completo). */
+  searchChunks?(projectId: string, query: string, limit: number): Promise<Array<{ chunk: ProjectDocumentChunk; score: number }>>;
+  /** Suma uso de IA de una persona en un día y devuelve el total acumulado de ese día. */
+  addAiUsage?(actorId: string, kind: AiUsageKind, day: string, amount: number): Promise<number>;
+}
+
+export type AiUsageKind = "agent_message" | "audio_chunk";
 
 /** Tablas con clave compuesta se exponen con un id sintético. */
 export type ProjectMemberRow = ProjectMember & { id: string };
@@ -85,4 +102,5 @@ export interface Repository {
   cycleEvaluations: Table<CycleEvaluation>;
   projectDocuments: Table<ProjectKnowledgeDocument>;
   projectDocumentChunks: Table<ProjectDocumentChunk>;
+  fn: RepositoryFunctions;
 }
