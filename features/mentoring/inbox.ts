@@ -1,6 +1,6 @@
 import type { Hypothesis, MentorSession } from "@/types/domain";
 
-export type InboxKind = "first_review" | "hypothesis" | "second_review";
+export type InboxKind = "first_review" | "hypothesis" | "second_review" | "follow_up";
 
 export interface InboxItem {
   kind: InboxKind;
@@ -24,11 +24,14 @@ export function mentorInbox(
   for (const p of projects) {
     for (const s of p.sessions) {
       if (s.status === "completed" || s.mentorId !== mentorId) continue;
-      items.push(
-        s.kind === "first_review"
-          ? { kind: "first_review", projectId: p.id, projectName: p.name, tab: "orientar", detail: "Pidió la primera revisión. El resumen preparado está listo.", since: s.createdAt }
-          : { kind: "second_review", projectId: p.id, projectName: p.name, tab: "decidir", detail: "Registró resultados y pidió la segunda revisión.", since: s.createdAt },
-      );
+      const when = s.scheduledAt ? ` Fecha: ${s.scheduledAt.slice(0, 10)}.` : "";
+      if (s.kind === "first_review")
+        items.push({ kind: "first_review", projectId: p.id, projectName: p.name, tab: "orientar", detail: `Pidió la primera revisión. El briefing está listo.${when}`, since: s.createdAt });
+      else if (s.kind === "second_review")
+        items.push({ kind: "second_review", projectId: p.id, projectName: p.name, tab: "decidir", detail: `Registró resultados y pidió la segunda revisión.${when}`, since: s.createdAt });
+      else
+        // Seguimientos (y sesiones viejas de otros tipos): se muestran en la página de Orientar o Decidir.
+        items.push({ kind: "follow_up", projectId: p.id, projectName: p.name, tab: s.kind === "evaluation" ? "decidir" : "orientar", detail: `Sesión de seguimiento agendada.${when}`, since: s.scheduledAt ?? s.createdAt });
     }
     for (const h of p.hypotheses) {
       if (h.status !== "pending_approval") continue;

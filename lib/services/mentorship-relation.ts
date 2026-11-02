@@ -69,6 +69,28 @@ export async function initiateMentorshipRelation(
   return relation;
 }
 
+/**
+ * La relación con el mentor del proyecto, creándola si falta. El mentor ya fue asignado por la
+ * administración, así que la compatibilidad se da por confirmada: no hay una etapa previa que la pida.
+ */
+export async function ensureMentorshipRelation(d: ServiceDeps, projectId: Id): Promise<MentorshipRelation> {
+  const relations = await d.repo.mentorshipRelations.list({ projectId });
+  let rel = relations.find((r) => r.stage !== "closed");
+  if (!rel) {
+    const [project, [assignment]] = await Promise.all([
+      d.repo.projects.get(projectId),
+      d.repo.mentorAssignments.list({ projectId, status: "active" }),
+    ]);
+    if (!project) throw notFound("El proyecto no existe.");
+    if (!assignment) throw validation("Los objetivos y el acuerdo se definen con el mentor: todavía no hay uno asignado.");
+    rel = await initiateMentorshipRelation(d, projectId, project.ownerId, assignment.mentorId);
+  }
+  if (rel.compatibilityStatus === "pending") {
+    rel = await decideCompatibility(d, rel.id, "proceed", "Mentor asignado por la administración.");
+  }
+  return rel;
+}
+
 export async function decideCompatibility(
   d: ServiceDeps,
   relationId: Id,

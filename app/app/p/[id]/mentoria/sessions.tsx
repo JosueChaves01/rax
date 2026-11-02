@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
   Experiment,
@@ -13,35 +13,27 @@ import type {
   PreSessionBriefing,
   PostSessionSynthesis,
   RoadmapMilestone,
-  SessionNote,
-  SessionNoteKind,
 } from "@/types/domain";
 import {
-  addNoteAction,
   adoptPostSessionCommitmentsAction,
-  completeFirstReviewAction,
-  completeSecondReviewAction,
-  completeSessionAction,
+  closeSessionAction,
   generatePostSessionSynthesisAction,
   generatePreSessionBriefingAction,
   requestReviewAction,
   scheduleSessionAction,
   setSharingAction,
+  suggestFirstReviewAction,
 } from "@/app/actions";
-import {
-  ACTION_TYPE_LABEL,
-  DECISION_LABEL,
-  HYPOTHESIS_STATUS_LABEL,
-  NOTE_KIND_LABEL,
-  OUTCOME_LABEL,
-} from "@/features/labels";
+import { ACTION_TYPE_LABEL, DECISION_LABEL, HYPOTHESIS_STATUS_LABEL, OUTCOME_LABEL } from "@/features/labels";
 import { Button, Card, Field, Notice, Tag, formatDate, inputClass } from "@/shared/ui/primitives";
 import { useAction } from "@/shared/ui/use-action";
 import { SessionCallPanel } from "@/shared/ui/session-call";
+import { NotesTab, useSessionWorkspace } from "@/shared/ui/session-tabs";
 import { SynthesisEditor } from "./synthesis-editor";
 import { AiNotesDraft } from "./ai-notes-draft";
 
 type People = Record<string, { id: string; name: string; role: string }>;
+export type ProblemOption = { id: string; title: string; priority?: { rank: number; rationale: string } };
 
 const KIND_TITLE: Record<MentorSessionKind, readonly [string, string]> = {
   first_review: ["Primera revisión", "orientar el enfoque."],
@@ -56,6 +48,9 @@ const STATUS_TAG = {
   in_progress: ["En curso", "var(--color-cyan)"],
   completed: ["Completada", "var(--color-ok)"],
 } as const;
+
+/** `datetime-local` → ISO (vacío = sin fecha). */
+const toIso = (v: string) => (v ? new Date(v).toISOString() : undefined);
 
 export function SharingToggle({ projectId, shared }: { projectId: string; shared: boolean }) {
   const { run, pending, error } = useAction();
@@ -81,6 +76,10 @@ export function SharingToggle({ projectId, shared }: { projectId: string; shared
   );
 }
 
+/**
+ * Lo que pide el emprendedor: la revisión de esta etapa (con fecha opcional) y, aparte, sesiones de
+ * seguimiento. Las revisiones solo se piden por aquí, con sus requisitos.
+ */
 export function ReviewRequests({
   projectId,
   sessions,
@@ -96,117 +95,89 @@ export function ReviewRequests({
   only?: MentorSession["kind"];
 }) {
   const { run, pending, error } = useAction();
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [scheduleKind, setScheduleKind] = useState<MentorSessionKind>("follow_up");
-  const [scheduledDate, setScheduledDate] = useState("");
+  const [reviewDate, setReviewDate] = useState("");
+  const [showFollowUp, setShowFollowUp] = useState(false);
+  const [followUpDate, setFollowUpDate] = useState("");
 
   const open = (k: MentorSession["kind"]) => sessions.some((s) => s.kind === k && s.status !== "completed");
   const done = (k: MentorSession["kind"]) => sessions.some((s) => s.kind === k && s.status === "completed");
 
-  const handleScheduleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    run(
-      () =>
-        scheduleSessionAction(projectId, {
-          kind: scheduleKind,
-          scheduledAt: scheduledDate ? new Date(scheduledDate).toISOString() : undefined,
-        }),
-      () => {
-        setShowScheduleModal(false);
-        setScheduledDate("");
-      },
+  const row = (kind: "first_review" | "second_review") => {
+    const isFirst = kind === "first_review";
+    const ready = isFirst ? summaryConfirmed : hasResults;
+    const blocked = open(kind) || (isFirst && done(kind));
+    return (
+      <div className="space-y-3 rounded-xl border border-slate-200/60 bg-slate-50/60 p-3">
+        <div>
+          <span className="font-semibold text-slate-900">{isFirst ? "Primera revisión" : "Segunda revisión"}</span>
+          <span className="mt-0.5 block text-xs text-slate-500">
+            {blocked
+              ? open(kind)
+                ? "Pedida: el mentor ya tiene el briefing listo."
+                : "Hecha."
+              : !ready
+                ? isFirst
+                  ? "Disponible al confirmar el resumen inicial."
+                  : "Disponible cuando registres al menos un resultado."
+                : "Elegí una fecha si ya la acordaron. El mentor recibe el pedido con el briefing preparado."}
+          </span>
+        </div>
+        {!blocked && (
+          <div className="flex flex-wrap items-end gap-2">
+            <Field id={`${kind}-date`} label="Fecha y hora (opcional)">
+              <input id={`${kind}-date`} type="datetime-local" className={inputClass} value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} />
+            </Field>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={pending || !ready}
+              onClick={() => run(() => requestReviewAction(projectId, kind, toIso(reviewDate)), () => setReviewDate(""))}
+            >
+              {pending ? "Pidiendo..." : "Pedir revisión"}
+            </Button>
+          </div>
+        )}
+      </div>
     );
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
-        <p className="eyebrow text-slate-500">Sesiones y Revisiones</p>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => setShowScheduleModal((v) => !v)}
-        >
-          {showScheduleModal ? "Cancelar" : "+ Agendar sesión"}
-        </Button>
+    <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
+      <p className="eyebrow border-b border-slate-200/80 pb-3 text-slate-500">Revisión con tu mentor</p>
+      <div className="space-y-3 text-sm">
+        {only !== "second_review" && row("first_review")}
+        {only !== "first_review" && row("second_review")}
       </div>
 
-      {showScheduleModal && (
-        <form onSubmit={handleScheduleSubmit} className="rounded-xl border border-blue-200/90 bg-blue-50/50 p-4 space-y-3.5 shadow-2xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-            Nueva sesión de mentoría
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field id="sched-kind" label="Tipo de encuentro">
-              <select
-                id="sched-kind"
-                className={inputClass}
-                value={scheduleKind}
-                onChange={(e) => setScheduleKind(e.target.value as MentorSessionKind)}
-              >
-                <option value="follow_up">Sesión de seguimiento y ejecución</option>
-                <option value="exploratory">Sesión exploratoria de compatibilidad</option>
-                <option value="first_review">Primera revisión de diagnóstico</option>
-                <option value="second_review">Segunda revisión con resultados</option>
-                <option value="evaluation">Evaluación de ciclo / Cierre</option>
-              </select>
+      <div className="border-t border-slate-200/80 pt-3">
+        {showFollowUp ? (
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(
+                () => scheduleSessionAction(projectId, { kind: "follow_up", scheduledAt: toIso(followUpDate) }),
+                () => {
+                  setShowFollowUp(false);
+                  setFollowUpDate("");
+                },
+              );
+            }}
+          >
+            <Field id="follow-up-date" label="Sesión de seguimiento · fecha y hora">
+              <input id="follow-up-date" type="datetime-local" className={inputClass} value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
             </Field>
-
-            <Field id="sched-date" label="Fecha y hora prevista (opcional)">
-              <input
-                id="sched-date"
-                type="datetime-local"
-                className={inputClass}
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-              />
-            </Field>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button size="sm" variant="ghost" type="button" onClick={() => setShowScheduleModal(false)}>
-              Descartar
-            </Button>
             <Button size="sm" variant="primary" type="submit" disabled={pending}>
-              {pending ? "Agendando..." : "Confirmar sesión"}
+              Agendar
             </Button>
-          </div>
-        </form>
-      )}
-
-      <div className="space-y-3 text-sm">
-        {only !== "second_review" && (
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/60 border border-slate-200/60">
-            <div>
-              <span className="font-semibold text-slate-900">Primera revisión</span>
-              {!summaryConfirmed && <span className="block text-xs text-slate-500 mt-0.5">Disponible al confirmar el resumen inicial.</span>}
-            </div>
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={pending || open("first_review") || done("first_review")}
-              onClick={() => run(() => requestReviewAction(projectId, "first_review"))}
-            >
-              {done("first_review") ? "Hecha" : open("first_review") ? "Pedida" : "Pedir"}
+            <Button size="sm" variant="ghost" type="button" onClick={() => setShowFollowUp(false)}>
+              Cancelar
             </Button>
-          </div>
-        )}
-
-        {only !== "first_review" && (
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/60 border border-slate-200/60">
-            <div>
-              <span className="font-semibold text-slate-900">Segunda revisión</span>
-              {!hasResults && <span className="block text-xs text-slate-500 mt-0.5">Disponible cuando registres al menos un resultado.</span>}
-            </div>
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={pending || open("second_review")}
-              onClick={() => run(() => requestReviewAction(projectId, "second_review"))}
-            >
-              {open("second_review") ? "Pedida" : "Pedir"}
-            </Button>
-          </div>
+          </form>
+        ) : (
+          <button type="button" onClick={() => setShowFollowUp(true)} className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline">
+            + Agendar una sesión de seguimiento
+          </button>
         )}
       </div>
 
@@ -215,137 +186,52 @@ export function ReviewRequests({
   );
 }
 
-function SessionCopilotBar({
-  projectId,
-  sessionId,
-  disabled,
-  canBrief,
-  onBriefingGenerated,
-  onSynthesisGenerated,
-}: {
-  projectId: string;
-  sessionId: string;
-  disabled?: boolean;
-  /** Solo el mentor de la sesión prepara el briefing. */
-  canBrief: boolean;
-  onBriefingGenerated: (briefing: PreSessionBriefing) => void;
-  onSynthesisGenerated: (synthesis: PostSessionSynthesis) => void;
-}) {
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiNotice, setAiNotice] = useState<string | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
-
-  const handleGenerateBriefing = async () => {
-    setIsAiLoading(true);
-    setAiError(null);
-    setAiNotice(null);
-    try {
-      const res = await generatePreSessionBriefingAction(projectId, sessionId);
-      if (res.ok) {
-        if (res.data) {
-          setAiNotice("Briefing estructurado en 4 capas generado y actualizado con el contexto actual.");
-          onBriefingGenerated(res.data);
-        }
-      } else {
-        setAiError(res.error || "No se pudo generar el briefing.");
-      }
-    } catch {
-      setAiError("No se pudo conectar con el asistente de IA para el briefing.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  const handleGenerateSynthesis = async () => {
-    setIsAiLoading(true);
-    setAiError(null);
-    setAiNotice(null);
-    try {
-      const res = await generatePostSessionSynthesisAction(projectId, sessionId);
-      if (res.ok) {
-        if (res.data) {
-          setAiNotice(
-            res.data.basedOn === "transcript"
-              ? "Síntesis generada a partir de la transcripción de la llamada. Revísala y edítala si hace falta."
-              : "No hay transcripción de llamada: la síntesis salió de las notas compartidas. Revísala y edítala si hace falta.",
-          );
-          onSynthesisGenerated(res.data);
-        }
-      } else {
-        setAiError(res.error || "No se pudo generar la síntesis.");
-      }
-    } catch {
-      setAiError("No se pudo conectar con el asistente de IA para la síntesis.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
+/** El briefing se prepara solo al pedir la revisión; el mentor puede actualizarlo con el contexto de hoy. */
+function RefreshBriefing({ projectId, sessionId, onDone }: { projectId: string; sessionId: string; onDone: (b: PreSessionBriefing) => void }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   return (
-    <div className="rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-white p-5 space-y-3.5 shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600 text-white text-xs shadow-2xs">✨</span>
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-900">
-              Copiloto Metodológico de Sesiones
-            </p>
-          </div>
-          <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
-            {canBrief
-              ? "Prepara la reunión con el briefing de 4 capas. Al terminar, la síntesis sale de la transcripción de la llamada y se puede editar."
-              : "El mentor prepara el briefing antes de la sesión. Al terminar, la síntesis sale de la transcripción de la llamada y puedes editarla o completarla."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {canBrief && (
-            <Button
-              size="sm"
-              variant="secondary"
-              type="button"
-              className="border-blue-300 text-blue-800 hover:bg-blue-50/80 font-semibold"
-              disabled={isAiLoading || disabled}
-              onClick={handleGenerateBriefing}
-            >
-              {isAiLoading ? "Procesando..." : "✨ Briefing 4 capas"}
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="secondary"
-            type="button"
-            className="border-blue-300 text-blue-800 hover:bg-blue-50/80 font-semibold"
-            disabled={isAiLoading || disabled}
-            onClick={handleGenerateSynthesis}
-          >
-            {isAiLoading ? "Procesando..." : "✨ Síntesis desde la transcripción"}
-          </Button>
-        </div>
-      </div>
-      {aiNotice && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/90 px-3.5 py-2 text-xs text-emerald-800 font-medium">
-          <span>✓</span>
-          <span>{aiNotice}</span>
-        </div>
-      )}
-      {aiError && (
-        <div role="alert" className="flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-800">
-          <span>⚠️</span>
-          <span className="flex-1">{aiError}</span>
-        </div>
-      )}
-    </div>
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        disabled={pending}
+        className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline disabled:opacity-50"
+        onClick={() =>
+          start(async () => {
+            setError(null);
+            const res = await generatePreSessionBriefingAction(projectId, sessionId);
+            if (res.ok && res.data) onDone(res.data);
+            else if (!res.ok) setError(res.error);
+          })
+        }
+      >
+        {pending ? "Actualizando briefing..." : "↻ Actualizar briefing"}
+      </button>
+      {error && <span className="text-xs text-rose-700">{error}</span>}
+    </span>
   );
+}
+
+/** Notas de la sesión con sus respuestas: el mentor escribe; el equipo del proyecto responde. */
+function SessionNotes({ projectId, sessionId, refreshKey }: { projectId: string; sessionId: string; refreshKey: number }) {
+  const ws = useSessionWorkspace(projectId, sessionId);
+  const { reload } = ws;
+  useEffect(() => {
+    if (refreshKey) void reload();
+  }, [refreshKey, reload]);
+  if (ws.error) return <Notice tone="error">{ws.error}</Notice>;
+  if (!ws.data) return <p className="text-xs text-slate-500">Cargando notas…</p>;
+  return <NotesTab ws={ws.data} onChanged={reload} />;
 }
 
 export function SessionCard(props: {
   projectId: string;
   session: MentorSession;
-  notes: SessionNote[];
   people: People;
   isSessionMentor: boolean;
   isOwner?: boolean;
   items: Array<{ id: string; title: string }>;
+  problems: ProblemOption[];
   hypotheses: Hypothesis[];
   experiments: Experiment[];
   results: ExperimentResult[];
@@ -359,11 +245,11 @@ export function SessionCard(props: {
   const b = s.briefing;
   const [preBrief, setPreBrief] = useState<PreSessionBriefing | undefined>(s.preSessionBriefing);
   const [postSyn, setPostSyn] = useState<PostSessionSynthesis | undefined>(s.postSessionSynthesis);
-  const canAct = props.isSessionMentor && s.status !== "completed";
-  const canUseCopilot = (props.isSessionMentor || props.isOwner) && s.status !== "completed";
-  const canEditSynthesis = Boolean(props.isSessionMentor || props.isOwner);
   const [editingSyn, setEditingSyn] = useState(false);
-  const itemTitle = (id?: string) => props.items.find((i) => i.id === id)?.title;
+  const [notesKey, setNotesKey] = useState(0);
+  const isOpen = s.status !== "completed";
+  const canAct = props.isSessionMentor && isOpen;
+  const canEditSynthesis = Boolean(props.isSessionMentor || props.isOwner);
 
   useEffect(() => {
     if (s.preSessionBriefing) setPreBrief(s.preSessionBriefing);
@@ -373,21 +259,8 @@ export function SessionCard(props: {
     if (s.postSessionSynthesis) setPostSyn(s.postSessionSynthesis);
   }, [s.postSessionSynthesis]);
 
-  const { run, pending } = useAction();
-  const [onlySharedNotes, setOnlySharedNotes] = useState(false);
-
-  const displayedNotes = useMemo(() => {
-    if (onlySharedNotes) return props.notes.filter((n) => !n.isPrivate);
-    return props.notes;
-  }, [props.notes, onlySharedNotes]);
-
-  const handleAdoptCommitments = (indices?: number[]) => {
-    run(() => adoptPostSessionCommitmentsAction(props.projectId, s.id, indices));
-  };
-
   return (
     <Card as="li" className="p-6 space-y-6 bg-white border border-slate-200/80 shadow-xs">
-      {/* Cabecera de la tarjeta de sesión */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="display text-2xl text-slate-900">
@@ -400,37 +273,24 @@ export function SessionCard(props: {
             </span>
           )}
         </div>
-        <span className="text-xs text-slate-500">
-          {props.people[s.mentorId]?.name ?? "Mentor"} · creada {formatDate(s.createdAt)}
+        <span className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          {canAct && (
+            <RefreshBriefing
+              projectId={props.projectId}
+              sessionId={s.id}
+              onDone={(briefing) => {
+                setPreBrief(briefing);
+                router.refresh();
+              }}
+            />
+          )}
+          <span>
+            {props.people[s.mentorId]?.name ?? "Mentor"} · creada {formatDate(s.createdAt)}
+          </span>
         </span>
       </div>
 
-      {/* ───────────────────────────────────────────────────────────── */}
-      {/* COPILOTO METODOLÓGICO DE SESIONES                             */}
-      {/* ───────────────────────────────────────────────────────────── */}
-      {canUseCopilot && (
-        <SessionCopilotBar
-          projectId={props.projectId}
-          sessionId={s.id}
-          disabled={pending}
-          canBrief={props.isSessionMentor}
-          onBriefingGenerated={(briefing) => {
-            setPreBrief(briefing);
-            router.refresh();
-          }}
-          onSynthesisGenerated={(synthesis) => {
-            setPostSyn(synthesis);
-            router.refresh();
-          }}
-        />
-      )}
-
-      {/* Llamada con transcripción (mentor de la sesión y equipo del proyecto) */}
-      <SessionCallPanel sessionId={s.id} />
-
-      {/* ───────────────────────────────────────────────────────────── */}
-      {/* 1. BRIEFING PRE-SESIÓN (4 CAPAS DE MEMORIA)                   */}
-      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 1. Preparación: el briefing (con IA si ya está, si no el resumen del diagnóstico) */}
       {preBrief && (
         <details className="rounded-2xl border border-blue-200/80 bg-blue-50/30 p-5 shadow-xs" open={true}>
           <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center justify-between">
@@ -520,76 +380,14 @@ export function SessionCard(props: {
         <ResultsDigest hypotheses={props.hypotheses} experiments={props.experiments} results={props.results} />
       )}
 
-      {/* ───────────────────────────────────────────────────────────── */}
-      {/* 2. NOTAS EN VIVO Y PRIVACIDAD DUAL                           */}
-      {/* ───────────────────────────────────────────────────────────── */}
-      {props.notes.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="eyebrow text-slate-500">Notas y acuerdos de la sesión ({displayedNotes.length})</p>
-            {props.isSessionMentor && props.notes.some((n) => n.isPrivate) && (
-              <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={onlySharedNotes}
-                  onChange={(e) => setOnlySharedNotes(e.target.checked)}
-                  className="rounded accent-blue-600"
-                />
-                <span>Ocultar notas privadas (vista del emprendedor)</span>
-              </label>
-            )}
-          </div>
+      {/* 2. La reunión: llamada con transcripción */}
+      {isOpen && <SessionCallPanel sessionId={s.id} />}
 
-          <ul className="space-y-2.5">
-            {displayedNotes.map((n) => (
-              <li
-                key={n.id}
-                className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
-                  n.isPrivate
-                    ? "border-purple-200 bg-purple-50/60"
-                    : "border-slate-200/80 bg-white shadow-2xs"
-                }`}
-              >
-                <div className="flex flex-wrap items-center gap-2 text-[0.6875rem] text-slate-500">
-                  <Tag
-                    color={
-                      n.kind === "agreement"
-                        ? "var(--color-ok)"
-                        : n.kind === "commitment"
-                          ? "var(--color-accent)"
-                          : n.kind === "blocker"
-                            ? "var(--color-danger)"
-                            : n.kind === "decision"
-                              ? "var(--color-highlight)"
-                              : "var(--color-cyan)"
-                    }
-                  >
-                    {NOTE_KIND_LABEL[n.kind]}
-                  </Tag>
-                  {n.isPrivate && (
-                    <span className="rounded bg-purple-100 text-purple-800 px-2 py-0.5 font-semibold text-[0.625rem]">
-                      🔒 Privada del mentor
-                    </span>
-                  )}
-                  <span>{props.people[n.authorId]?.name} · {formatDate(n.createdAt)}</span>
-                  {n.relatedItemId && <span>· sobre «{itemTitle(n.relatedItemId) ?? "elemento"}»</span>}
-                </div>
-                <p className="mt-1.5 text-slate-800 whitespace-pre-wrap leading-relaxed">{n.body}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* 3. Notas (y respuestas) */}
+      <SessionNotes projectId={props.projectId} sessionId={s.id} refreshKey={notesKey} />
 
-      {/* ───────────────────────────────────────────────────────────── */}
-      {/* 3. SÍNTESIS POS-SESIÓN Y ADOPCIÓN DE COMPROMISOS              */}
-      {/* ───────────────────────────────────────────────────────────── */}
-      {!postSyn && canEditSynthesis && !editingSyn && (
-        <button type="button" onClick={() => setEditingSyn(true)} className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline">
-          ✎ Escribir la síntesis a mano
-        </button>
-      )}
-      {editingSyn && (
+      {/* 4. Síntesis */}
+      {editingSyn ? (
         <SynthesisEditor
           projectId={props.projectId}
           sessionId={s.id}
@@ -601,8 +399,287 @@ export function SessionCard(props: {
             router.refresh();
           }}
         />
+      ) : postSyn ? (
+        <SynthesisView
+          projectId={props.projectId}
+          sessionId={s.id}
+          postSyn={postSyn}
+          people={props.people}
+          canEdit={canEditSynthesis}
+          canAdopt={!isOpen && canEditSynthesis}
+          onEdit={() => setEditingSyn(true)}
+        />
+      ) : (
+        canEditSynthesis &&
+        isOpen && (
+          <GenerateSynthesis
+            projectId={props.projectId}
+            sessionId={s.id}
+            onGenerated={(syn) => {
+              setPostSyn(syn);
+              router.refresh();
+            }}
+            onWrite={() => setEditingSyn(true)}
+          />
+        )
       )}
-      {postSyn && !editingSyn && (
+
+      {s.decision && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+          <p className="eyebrow text-blue-700">Decisión formal del mentor</p>
+          <p className="display mt-1 text-2xl text-slate-900">{DECISION_LABEL[s.decision.value]}</p>
+          <p className="mt-1 text-sm text-slate-700">{s.decision.justification}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Sobre: {props.hypotheses.find((h) => h.id === s.decision!.hypothesisId)?.statement ?? "hipótesis"} · {formatDate(s.decision.decidedAt)}
+          </p>
+        </div>
+      )}
+
+      {!props.isSessionMentor && isOpen && (
+        <p className="text-sm text-slate-600">
+          Después de la llamada, la síntesis se arma sola. Podés corregirla y responder las notas del mentor; al cerrar la sesión, tus compromisos se vuelven tareas.
+        </p>
+      )}
+
+      {/* 5. Cierre único del mentor */}
+      {canAct && (
+        <ClosePanel
+          projectId={props.projectId}
+          session={s}
+          synthesis={postSyn}
+          items={props.items}
+          problems={props.problems}
+          hypotheses={props.hypotheses}
+          onNotesSaved={() => setNotesKey((k) => k + 1)}
+        />
+      )}
+    </Card>
+  );
+}
+
+/** Sin síntesis todavía: se genera desde la llamada (o las notas) o se escribe a mano. */
+function GenerateSynthesis({ projectId, sessionId, onGenerated, onWrite }: { projectId: string; sessionId: string; onGenerated: (s: PostSessionSynthesis) => void; onWrite: () => void }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">
+      <p>La síntesis se arma sola al colgar la llamada. Si se reunieron fuera de RAX, generala desde las notas o escribila.</p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              setError(null);
+              const res = await generatePostSessionSynthesisAction(projectId, sessionId);
+              if (res.ok && res.data) onGenerated(res.data);
+              else if (!res.ok) setError(res.error);
+            })
+          }
+        >
+          {pending ? "Generando..." : "✨ Generar síntesis"}
+        </Button>
+        <button type="button" onClick={onWrite} className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline">
+          ✎ Escribirla a mano
+        </button>
+      </div>
+      {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
+    </div>
+  );
+}
+
+/** Propuesta inicial del acuerdo desde la síntesis: lo decidido y los próximos pasos. */
+function agreementFrom(syn?: PostSessionSynthesis): string {
+  if (!syn) return "";
+  return [...syn.agreedDecisions, syn.nextSteps ?? ""].map((x) => x.trim()).filter(Boolean).join("\n");
+}
+
+/**
+ * Borrador de cierre: el mentor revisa lo que preparó RAX (acuerdo o decisión, prioridad, notas sugeridas)
+ * y confirma una sola vez. Al confirmar, los compromisos del emprendedor pasan a ser tareas.
+ */
+function ClosePanel({
+  projectId,
+  session: s,
+  synthesis,
+  items,
+  problems,
+  hypotheses,
+  onNotesSaved,
+}: {
+  projectId: string;
+  session: MentorSession;
+  synthesis?: PostSessionSynthesis;
+  items: Array<{ id: string; title: string }>;
+  problems: ProblemOption[];
+  hypotheses: Hypothesis[];
+  onNotesSaved: () => void;
+}) {
+  const { run, pending, error } = useAction();
+  const [suggesting, startSuggest] = useTransition();
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+  const [closing, setClosing] = useState(() => agreementFrom(synthesis));
+  const [touched, setTouched] = useState(false);
+  const current = problems.find((p) => p.priority?.rank === 1);
+  const [problemId, setProblemId] = useState(current?.id ?? problems[0]?.id ?? "");
+  const [rationale, setRationale] = useState(current?.priority?.rationale ?? "");
+  const [decision, setDecision] = useState<MentorDecision>("continue");
+  const decidable = useMemo(() => hypotheses.filter((h) => !["draft", "pending_approval", "discarded", "reformulated"].includes(h.status)), [hypotheses]);
+  const [hyp, setHyp] = useState(decidable[0]?.id ?? "");
+  const fid = (x: string) => `${s.id}-${x}`;
+
+  // Cuando llega la síntesis (al colgar), el acuerdo se propone solo, salvo que el mentor ya escribió.
+  useEffect(() => {
+    if (!touched && synthesis) setClosing(agreementFrom(synthesis));
+  }, [synthesis, touched]);
+
+  const isFirst = s.kind === "first_review";
+  const isSecond = s.kind === "second_review";
+  const commitments = synthesis?.entrepreneurCommitments.length ?? 0;
+  const pendingTasks = synthesis && !synthesis.commitmentsAdoptedAt ? commitments : 0;
+
+  const suggest = () =>
+    startSuggest(async () => {
+      setSuggestError(null);
+      const res = await suggestFirstReviewAction(projectId, s.id);
+      if (res.ok && res.data) {
+        setClosing(res.data.agreement);
+        setTouched(true);
+      } else if (!res.ok) setSuggestError(res.error);
+    });
+
+  return (
+    <div className="space-y-5 border-t border-slate-200/80 pt-5">
+      <AiNotesDraft projectId={projectId} sessionId={s.id} items={items} onSaved={onNotesSaved} />
+
+      <form
+        className="space-y-4 rounded-2xl border border-blue-200/80 bg-blue-50/30 p-5 shadow-xs"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(() =>
+            closeSessionAction(projectId, s.id, {
+              agreement: isFirst ? closing : undefined,
+              priority: isFirst && problemId ? { itemId: problemId, rationale } : undefined,
+              decision: isSecond ? { value: decision, hypothesisId: hyp, justification: closing } : undefined,
+              summary: !isFirst && !isSecond ? closing || undefined : undefined,
+            }),
+          );
+        }}
+      >
+        <div>
+          <p className="text-sm font-bold text-slate-900">
+            {isFirst ? "Cerrar la primera revisión" : isSecond ? "Registrar la decisión y cerrar" : "Cerrar la sesión de seguimiento"}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-600">
+            {synthesis ? "RAX lo propuso desde la síntesis; revisalo antes de confirmar." : "Completalo vos o generá la síntesis primero para que RAX lo proponga."}
+            {pendingTasks > 0 && ` Al confirmar se crean ${pendingTasks === 1 ? "1 tarea" : `${pendingTasks} tareas`} con los compromisos del emprendedor.`}
+          </p>
+        </div>
+
+        {isSecond && (
+          <>
+            <fieldset>
+              <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Decisión</legend>
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(DECISION_LABEL) as MentorDecision[]).map((k) => (
+                  <label
+                    key={k}
+                    className="cursor-pointer rounded-full border border-slate-300 px-3.5 py-1 text-xs font-medium has-[:checked]:border-blue-600 has-[:checked]:bg-blue-600 has-[:checked]:text-white transition-colors"
+                  >
+                    <input type="radio" name={fid("dec")} value={k} className="sr-only" checked={decision === k} onChange={() => setDecision(k)} />
+                    {DECISION_LABEL[k]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <Field id={fid("h")} label="Hipótesis">
+              <select id={fid("h")} className={inputClass} value={hyp} onChange={(e) => setHyp(e.target.value)} required>
+                {decidable.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.statement.slice(0, 90)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
+        )}
+
+        <Field
+          id={fid("c")}
+          label={isFirst ? "Acuerdo: qué investigar y qué falta saber" : isSecond ? "Justificación de la decisión" : "Acuerdos finales (opcional)"}
+        >
+          <textarea
+            id={fid("c")}
+            rows={3}
+            className={inputClass}
+            value={closing}
+            onChange={(e) => {
+              setClosing(e.target.value);
+              setTouched(true);
+            }}
+            maxLength={2000}
+            required={isFirst || isSecond}
+          />
+        </Field>
+        {isFirst && (
+          <div className="-mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" disabled={suggesting} onClick={suggest} className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline disabled:opacity-50">
+              {suggesting ? "Proponiendo..." : "✨ Proponer el acuerdo con IA"}
+            </button>
+            {suggestError && <span className="text-xs text-rose-700">{suggestError}</span>}
+          </div>
+        )}
+
+        {isFirst && problems.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id={fid("p")} label="Problema a investigar primero">
+              <select id={fid("p")} className={inputClass} value={problemId} onChange={(e) => setProblemId(e.target.value)} required>
+                {problems.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field id={fid("pr")} label="Por qué va primero">
+              <input id={fid("pr")} className={inputClass} value={rationale} onChange={(e) => setRationale(e.target.value)} maxLength={2000} required />
+            </Field>
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <Button size="sm" variant="primary" type="submit" disabled={pending || (isSecond && !hyp)}>
+            {pending ? "Cerrando..." : isFirst ? "Confirmar acuerdo y cerrar" : isSecond ? "Registrar decisión y cerrar" : "Cerrar sesión"}
+          </Button>
+        </div>
+        {error && <Notice tone="error">{error}</Notice>}
+      </form>
+    </div>
+  );
+}
+
+function SynthesisView({
+  projectId,
+  sessionId,
+  postSyn,
+  people,
+  canEdit,
+  canAdopt,
+  onEdit,
+}: {
+  projectId: string;
+  sessionId: string;
+  postSyn: PostSessionSynthesis;
+  people: People;
+  canEdit: boolean;
+  /** Solo después del cierre: si la síntesis llegó tarde, los compromisos se pasan a tareas a mano. */
+  canAdopt: boolean;
+  onEdit: () => void;
+}) {
+  const { run, pending, error } = useAction();
+  return (
+    <>
         <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/30 p-5 space-y-4 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 pb-2.5">
             <div>
@@ -612,25 +689,20 @@ export function SessionCard(props: {
               <h4 className="font-bold text-slate-900">Resumen ejecutivo y compromisos formalizados</h4>
               <p className="mt-0.5 text-[11px] text-slate-500">
                 {postSyn.basedOn === "transcript" ? "Desde la transcripción de la llamada" : postSyn.basedOn === "manual" ? "Escrita a mano" : postSyn.basedOn === "notes" ? "Desde las notas de la sesión" : "Generada por el copiloto"}
-                {postSyn.editedAt ? ` · editada por ${props.people[postSyn.editedBy ?? ""]?.name ?? "el equipo"} ${formatDate(postSyn.editedAt)}` : ""}
+                {postSyn.editedAt ? ` · editada por ${people[postSyn.editedBy ?? ""]?.name ?? "el equipo"} ${formatDate(postSyn.editedAt)}` : ""}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-            {canEditSynthesis && (
-              <Button size="sm" type="button" onClick={() => setEditingSyn(true)}>
-                ✎ Editar o agregar
-              </Button>
-            )}
-            {(props.isSessionMentor || props.isOwner) && postSyn.entrepreneurCommitments.length > 0 && (
-              <Button
-                size="sm"
-                variant="primary"
-                disabled={pending}
-                onClick={() => handleAdoptCommitments()}
-              >
-                {pending ? "Adoptando..." : "✓ Adoptar compromisos en Hoja de Ruta"}
-              </Button>
-            )}
+              {canEdit && (
+                <Button size="sm" type="button" onClick={onEdit}>
+                  ✎ Editar o agregar
+                </Button>
+              )}
+              {canAdopt && !postSyn.commitmentsAdoptedAt && postSyn.entrepreneurCommitments.length > 0 && (
+                <Button size="sm" variant="primary" disabled={pending} onClick={() => run(() => adoptPostSessionCommitmentsAction(projectId, sessionId))}>
+                  {pending ? "Creando..." : "Crear tareas con los compromisos"}
+                </Button>
+              )}
             </div>
           </div>
 
@@ -653,7 +725,7 @@ export function SessionCard(props: {
             {postSyn.entrepreneurCommitments.length > 0 && (
               <div className="rounded-xl bg-white p-4 border border-slate-200/80 shadow-2xs">
                 <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-emerald-800">
-                  Compromisos del Emprendedor ({postSyn.entrepreneurCommitments.length})
+                  Compromisos del Emprendedor ({postSyn.entrepreneurCommitments.length}){postSyn.commitmentsAdoptedAt ? " · ya son tareas" : ""}
                 </p>
                 <ul className="mt-2 space-y-2 text-xs text-slate-800">
                   {postSyn.entrepreneurCommitments.map((c, idx) => (
@@ -691,29 +763,8 @@ export function SessionCard(props: {
             </p>
           )}
         </div>
-      )}
-
-      {/* Decisión del mentor (si aplica en segunda revisión) */}
-      {s.decision && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
-          <p className="eyebrow text-blue-700">Decisión formal del mentor</p>
-          <p className="display mt-1 text-2xl text-slate-900">{DECISION_LABEL[s.decision.value]}</p>
-          <p className="mt-1 text-sm text-slate-700">{s.decision.justification}</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Sobre: {props.hypotheses.find((h) => h.id === s.decision!.hypothesisId)?.statement ?? "hipótesis"} · {formatDate(s.decision.decidedAt)}
-          </p>
-        </div>
-      )}
-
-      {!props.isSessionMentor && s.status !== "completed" && (
-        <p className="text-sm text-slate-600">
-          Mientras la sesión está abierta, podés registrar avances en la hoja de ruta y apoyarte en el copiloto metodológico para preparar las reuniones.
-        </p>
-      )}
-
-      {/* Herramientas de interacción del mentor asignado */}
-      {canAct && <MentorTools {...props} />}
-    </Card>
+      {error && <Notice tone="error">{error}</Notice>}
+    </>
   );
 }
 
@@ -773,211 +824,3 @@ function ResultsDigest({ hypotheses, experiments, results }: { hypotheses: Hypot
   );
 }
 
-function MentorTools({
-  projectId,
-  session: s,
-  items,
-  hypotheses,
-}: {
-  projectId: string;
-  session: MentorSession;
-  items: Array<{ id: string; title: string }>;
-  hypotheses: Hypothesis[];
-}) {
-  const { run, pending, error } = useAction();
-  const [kind, setKind] = useState<SessionNoteKind>("observation");
-  const [body, setBody] = useState("");
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [related, setRelated] = useState("");
-  const [closing, setClosing] = useState("");
-  const [decision, setDecision] = useState<MentorDecision>("continue");
-  const decidable = hypotheses.filter((h) => !["draft", "pending_approval", "discarded", "reformulated"].includes(h.status));
-  const [hyp, setHyp] = useState(decidable[0]?.id ?? "");
-
-  const fid = (x: string) => `${s.id}-${x}`;
-
-  return (
-    <div className="space-y-5 border-t border-slate-200/80 pt-5">
-      {/* Borrador de notas con IA desde la reunión y el contexto del proyecto */}
-      <AiNotesDraft projectId={projectId} sessionId={s.id} items={items} />
-
-      {/* Formulario de toma de notas en vivo con privacidad dual */}
-      <form
-        className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-xs"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run(
-            () => addNoteAction(projectId, s.id, kind, body, related || undefined, isPrivate),
-            () => {
-              setBody("");
-              setIsPrivate(false);
-            },
-          );
-        }}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-bold text-slate-900">Tomar nota en vivo</p>
-          <label className="flex items-center gap-2 text-xs text-purple-700 cursor-pointer font-medium">
-            <input
-              type="checkbox"
-              checked={isPrivate}
-              onChange={(e) => setIsPrivate(e.target.checked)}
-              className="rounded accent-purple-600"
-            />
-            <span>🔒 Nota privada (no visible para el emprendedor)</span>
-          </label>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field id={fid("k")} label="Categoría de la nota">
-            <select
-              id={fid("k")}
-              className={inputClass}
-              value={kind}
-              onChange={(e) => setKind(e.target.value as SessionNoteKind)}
-            >
-              {(Object.keys(NOTE_KIND_LABEL) as SessionNoteKind[]).map((k) => (
-                <option key={k} value={k}>
-                  {NOTE_KIND_LABEL[k]}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field id={fid("rel")} label="Sobre (opcional)">
-            <select id={fid("rel")} className={inputClass} value={related} onChange={(e) => setRelated(e.target.value)}>
-              <option value="">Todo el proyecto</option>
-              {items.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.title}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-
-        <Field id={fid("b")} label={isPrivate ? "Contenido de la nota privada" : "Contenido de la nota compartida"}>
-          <textarea
-            id={fid("b")}
-            rows={2}
-            className={inputClass}
-            placeholder={
-              isPrivate
-                ? "Reflexión o apunte privado del mentor para seguimiento posterior..."
-                : "Acuerdo, compromiso, pregunta u observación visible para ambas partes..."
-            }
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            maxLength={2000}
-            required
-          />
-        </Field>
-
-        <div className="flex justify-end">
-          <Button size="sm" variant="primary" type="submit" disabled={pending || !body.trim()}>
-            {pending ? "Guardando..." : "Guardar nota"}
-          </Button>
-        </div>
-      </form>
-
-      {/* Cierre de sesión o registro de decisión */}
-      <form
-        className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-xs"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run(async () => {
-            if (s.kind === "first_review") {
-              return completeFirstReviewAction(projectId, s.id, closing);
-            }
-            if (s.kind === "second_review") {
-              return completeSecondReviewAction(projectId, s.id, decision, closing, hyp);
-            }
-            const res = await completeSessionAction(projectId, s.id, closing || undefined);
-            return res.ok ? { ok: true, data: undefined } : res;
-          });
-        }}
-      >
-        <p className="text-sm font-bold text-slate-900">
-          {s.kind === "first_review"
-            ? "Cerrar primera revisión con un acuerdo"
-            : s.kind === "second_review"
-              ? "Registrar decisión formal de la segunda revisión"
-              : "Finalizar sesión de acompañamiento"}
-        </p>
-
-        {s.kind === "second_review" && (
-          <>
-            <fieldset>
-              <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Decisión</legend>
-              <div className="flex flex-wrap gap-2">
-                {(Object.keys(DECISION_LABEL) as MentorDecision[]).map((k) => (
-                  <label
-                    key={k}
-                    className="cursor-pointer rounded-full border border-slate-300 px-3.5 py-1 text-xs font-medium has-[:checked]:border-blue-600 has-[:checked]:bg-blue-600 has-[:checked]:text-white transition-colors"
-                  >
-                    <input
-                      type="radio"
-                      name={fid("dec")}
-                      value={k}
-                      className="sr-only"
-                      checked={decision === k}
-                      onChange={() => setDecision(k)}
-                    />
-                    {DECISION_LABEL[k]}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <Field id={fid("h")} label="Hipótesis">
-              <select id={fid("h")} className={inputClass} value={hyp} onChange={(e) => setHyp(e.target.value)} required>
-                {decidable.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.statement.slice(0, 90)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </>
-        )}
-
-        <Field
-          id={fid("c")}
-          label={
-            s.kind === "first_review"
-              ? "Acuerdo explícito: qué investigar y prioridades iniciales"
-              : s.kind === "second_review"
-                ? "Justificación formal de la decisión"
-                : "Acuerdos finales o resumen de cierre (opcional)"
-          }
-        >
-          <textarea
-            id={fid("c")}
-            rows={2}
-            className={inputClass}
-            value={closing}
-            onChange={(e) => setClosing(e.target.value)}
-            maxLength={2000}
-            required={s.kind === "first_review" || s.kind === "second_review"}
-          />
-        </Field>
-
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            variant="primary"
-            type="submit"
-            disabled={pending || (s.kind === "second_review" && !hyp)}
-          >
-            {s.kind === "first_review"
-              ? "Completar primera revisión"
-              : s.kind === "second_review"
-                ? "Registrar decisión"
-                : "Finalizar y archivar sesión"}
-          </Button>
-        </div>
-      </form>
-
-      {error && <Notice tone="error">{error}</Notice>}
-    </div>
-  );
-}

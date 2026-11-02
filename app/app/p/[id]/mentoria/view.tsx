@@ -50,6 +50,10 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
       ? w.sessions.filter((s) => s.kind === "second_review" || s.kind === "evaluation").reverse()
       : w.sessions.filter((s) => s.kind !== "second_review" && s.kind !== "evaluation").reverse();
   const firstDone = w.sessions.some((s) => s.kind === "first_review" && s.status === "completed");
+  // Problemas que se pueden priorizar al cerrar la primera revisión (los mismos que el panel de prioridad).
+  const problems = w.items
+    .filter((i) => i.category === "problem" && i.reviewStatus !== "rejected" && i.infoType !== "unknown")
+    .map((i) => ({ id: i.id, title: i.title, priority: i.priority && { rank: i.priority.rank, rationale: i.priority.rationale } }));
 
   return (
     <div className="space-y-6">
@@ -144,11 +148,11 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
               key={s.id}
               projectId={id}
               session={s}
-              notes={w.notes.filter((n) => n.sessionId === s.id)}
               people={w.people as Record<string, { id: string; name: string; role: string }>}
               isSessionMentor={s.mentorId === actor.id}
               isOwner={w.project.ownerId === actor.id}
               items={w.items.filter((i) => i.reviewStatus !== "rejected").map((i) => ({ id: i.id, title: i.title }))}
+              problems={problems}
               hypotheses={w.hypotheses}
               experiments={w.experiments}
               results={w.results}
@@ -159,20 +163,42 @@ export async function MentoringView({ id, kind }: { id: string; kind: MentorSess
         </ul>
       )}
 
+      {/* La prioridad se elige al cerrar la revisión. El panel aparece abierto solo si quedó sin elegir; si no, plegado para revisarla. */}
       {kind === "first_review" && firstDone && (
-        <PriorityPanel
-          projectId={id}
-          canPrioritize={w.permissions["diagnosis.prioritize"]}
-          problems={w.items
-            .filter((i) => i.category === "problem" && i.reviewStatus !== "rejected" && i.infoType !== "unknown")
-            .map((i) => ({
-              id: i.id,
-              title: i.title,
-              content: i.content,
-              version: i.version,
-              priority: i.priority && { rank: i.priority.rank, rationale: i.priority.rationale, setByName: w.people[i.priority.setBy]?.name ?? "Persona" },
-            }))}
-        />
+        w.phase === "prioritizing" ? (
+          <PriorityPanel
+            projectId={id}
+            canPrioritize={w.permissions["diagnosis.prioritize"]}
+            problems={w.items
+              .filter((i) => i.category === "problem" && i.reviewStatus !== "rejected" && i.infoType !== "unknown")
+              .map((i) => ({
+                id: i.id,
+                title: i.title,
+                content: i.content,
+                version: i.version,
+                priority: i.priority && { rank: i.priority.rank, rationale: i.priority.rationale, setByName: w.people[i.priority.setBy]?.name ?? "Persona" },
+              }))}
+          />
+        ) : (
+          <details className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Revisar la prioridad de los problemas</summary>
+            <div className="mt-3">
+              <PriorityPanel
+                projectId={id}
+                canPrioritize={w.permissions["diagnosis.prioritize"]}
+                problems={w.items
+                  .filter((i) => i.category === "problem" && i.reviewStatus !== "rejected" && i.infoType !== "unknown")
+                  .map((i) => ({
+                    id: i.id,
+                    title: i.title,
+                    content: i.content,
+                    version: i.version,
+                    priority: i.priority && { rank: i.priority.rank, rationale: i.priority.rationale, setByName: w.people[i.priority.setBy]?.name ?? "Persona" },
+                  }))}
+              />
+            </div>
+          </details>
+        )
       )}
 
       {kind === "first_review" && firstDone && w.phase !== "prioritizing" && (

@@ -1,320 +1,84 @@
-"use client";
-
-import { useState, useTransition } from "react";
 import Link from "next/link";
 import { cx, formatDate } from "@/shared/ui/primitives";
-import type { MentorSession, MentorshipGoal, Project } from "@/types/domain";
-import { generatePreSessionBriefingAction } from "@/app/actions";
-import { DocumentsTab, NotesTab, TasksTab, useSessionWorkspace } from "@/shared/ui/session-tabs";
-import { SessionCallPanel } from "@/shared/ui/session-call";
+import type { MentorSession, MentorSessionKind, Project } from "@/types/domain";
 
-type Tab = "agenda" | "notas" | "documentos" | "tareas";
+const KIND_LABEL: Record<MentorSessionKind, string> = {
+  first_review: "Primera revisión",
+  second_review: "Segunda revisión",
+  follow_up: "Seguimiento",
+  exploratory: "Sesión exploratoria",
+  evaluation: "Evaluación de ciclo",
+};
 
-interface SessionsViewProps {
-  initialSessions: MentorSession[];
-  projects: Project[];
-  goals: MentorshipGoal[];
-  /** Quien mira: solo el mentor de la sesión prepara el briefing y la agenda. */
-  viewerId: string;
+/** Página del proyecto donde se trabaja la sesión (briefing, llamada, notas, síntesis y cierre). */
+export function sessionHref(s: Pick<MentorSession, "projectId" | "kind">): string {
+  return `/app/p/${s.projectId}/${s.kind === "second_review" || s.kind === "evaluation" ? "decidir" : "orientar"}`;
 }
 
-export function SessionsView({ initialSessions, projects, goals, viewerId }: SessionsViewProps) {
-  const [sessions, setSessions] = useState<MentorSession[]>(initialSessions);
-  const [selectedSessionId, setSelectedSessionId] = useState<string>(
-    initialSessions[0]?.id || ""
+/**
+ * Agenda de sesiones de mentoría de todos los proyectos. Es solo un índice: cada sesión se prepara,
+ * se hace y se cierra dentro de su proyecto, para que haya un único lugar de trabajo.
+ */
+export function SessionsView({ sessions, projects }: { sessions: MentorSession[]; projects: Project[] }) {
+  const name = (id: string) => projects.find((p) => p.id === id)?.name ?? "Proyecto";
+  const when = (s: MentorSession) => s.scheduledAt ?? s.createdAt;
+  const open = sessions.filter((s) => s.status !== "completed").sort((a, b) => when(a).localeCompare(when(b)));
+  const done = sessions
+    .filter((s) => s.status === "completed")
+    .sort((a, b) => (b.completedAt ?? when(b)).localeCompare(a.completedAt ?? when(a)))
+    .slice(0, 20);
+
+  const row = (s: MentorSession) => (
+    <li key={s.id}>
+      <Link
+        href={sessionHref(s)}
+        className="flex flex-col gap-1 rounded-xl border border-slate-200/80 bg-white p-4 shadow-2xs transition-colors hover:border-blue-300 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div>
+          <p className="text-sm font-semibold text-slate-900">
+            {KIND_LABEL[s.kind]} · {name(s.projectId)}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {s.scheduledAt ? `📅 ${formatDate(s.scheduledAt)}` : "Sin fecha acordada"}
+            {s.preSessionBriefing && s.status !== "completed" ? " · briefing listo" : ""}
+            {s.postSessionSynthesis ? " · con síntesis" : ""}
+          </p>
+        </div>
+        <span
+          className={cx(
+            "self-start rounded-full px-2.5 py-0.5 text-xs font-semibold sm:self-center",
+            s.status === "completed" ? "bg-emerald-50 text-emerald-700" : s.status === "in_progress" ? "bg-cyan-50 text-cyan-700" : "bg-amber-50 text-amber-700",
+          )}
+        >
+          {s.status === "completed" ? "Cerrada" : s.status === "in_progress" ? "En curso" : "Pendiente"}
+        </span>
+      </Link>
+    </li>
   );
-  const [isPending, startTransition] = useTransition();
-  const [actionNotice, setActionNotice] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("agenda");
-
-  const activeSession = sessions.find((s) => s.id === selectedSessionId) || sessions[0];
-  const activeProject = projects.find((p) => p.id === activeSession?.projectId);
-  const activeGoals = goals.filter((g) => g.status !== "discarded");
-  const workspace = useSessionWorkspace(activeSession?.projectId, activeSession?.id);
-  const counts: Partial<Record<Tab, number>> = workspace.data
-    ? {
-        notas: workspace.data.notes.length,
-        documentos: workspace.data.documents.length + workspace.data.evidence.length,
-        tareas: workspace.data.tasks.filter((t) => t.status !== "done").length,
-      }
-    : {};
-
-  // La agenda se muestra solo cuando existe en el briefing persistido de la sesión.
-  const agendaList = activeSession?.preSessionBriefing?.suggestedAgenda?.length
-    ? activeSession.preSessionBriefing.suggestedAgenda.map((item, idx) => ({
-        id: idx + 1,
-        title: item,
-        desc: "Punto estratégico estructurado para el encuentro.",
-      }))
-    : [];
-
-  const handleGenerateAgendaWithN8n = () => {
-    if (!activeSession) return;
-    startTransition(async () => {
-      setActionNotice(null);
-      try {
-        const res = await generatePreSessionBriefingAction(activeSession.projectId, activeSession.id);
-        if (res.ok && res.data) {
-          setActionNotice("✓ Briefing y agenda generados y guardados en esta sesión.");
-          setSessions((prev) =>
-            prev.map((s) =>
-              s.id === activeSession.id ? { ...s, preSessionBriefing: res.data } : s
-            )
-          );
-        } else {
-          setActionNotice("No se pudo generar el briefing. El servicio de IA no devolvió un resultado.");
-        }
-      } catch (err: unknown) {
-        setActionNotice(`Aviso: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    });
-  };
 
   return (
-    <div className="space-y-6">
-      {/* 1. Encabezado de Sesión */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
-              {activeSession ? (activeSession.status === "completed" ? "Completada" : "Encuentro activo") : "Sin sesiones"}
-            </span>
-            <span className="text-xs text-slate-500 font-mono">
-              {activeSession?.scheduledAt ? formatDate(activeSession.scheduledAt) : "Programación flexible"}
-            </span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">
-            Sesión de mentoría — {activeProject?.name || "Proyecto Activo"}
-          </h1>
-          <p className="text-xs text-slate-500">
-            Tipo: {activeSession?.kind || "first_review"} • Preparación asistida por IA de RAX
-          </p>
-          {sessions.length > 1 && (
-            <div className="flex items-center gap-1.5 mt-2 overflow-x-auto">
-              {sessions.map((s, idx) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSelectedSessionId(s.id)}
-                  className={cx(
-                    "px-2.5 py-1 text-xs rounded-lg border transition-colors cursor-pointer",
-                    activeSession?.id === s.id
-                      ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                  )}
-                >
-                  Sesión #{idx + 1}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Pestañas: [Agenda] | [Notas] | [Documentos] | [Tareas] */}
-        <div role="tablist" aria-label="Secciones de la sesión" className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0 overflow-x-auto">
-          {(
-            [
-              ["agenda", "Agenda"],
-              ["notas", "Notas"],
-              ["documentos", "Documentos"],
-              ["tareas", "Tareas"],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={tab === key}
-              disabled={!activeSession}
-              onClick={() => setTab(key)}
-              className={cx(
-                "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50",
-                tab === key ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
-              )}
-            >
-              {label}
-              {counts[key] ? <span className="ml-1 text-[10px] text-slate-400">{counts[key]}</span> : null}
-            </button>
-          ))}
-        </div>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Sesiones de mentoría</h1>
+        <p className="mt-1 max-w-2xl text-sm text-slate-600">
+          Tu agenda de todos los proyectos. Cada sesión se prepara, se hace y se cierra dentro de su proyecto: abrila para ver el briefing, entrar a la
+          llamada y cerrar con el acuerdo o la decisión.
+        </p>
       </div>
-
-      {actionNotice && (
-        <div className="p-3.5 bg-blue-50 border border-blue-200 text-xs text-blue-900 rounded-xl">
-          {actionNotice}
-        </div>
+      <section aria-labelledby="ses-open" className="space-y-3">
+        <h2 id="ses-open" className="eyebrow text-slate-500">
+          Próximas y abiertas ({open.length})
+        </h2>
+        {open.length ? <ul className="space-y-2.5">{open.map(row)}</ul> : <p className="text-sm text-slate-500">No hay sesiones abiertas.</p>}
+      </section>
+      {done.length > 0 && (
+        <section aria-labelledby="ses-done" className="space-y-3">
+          <h2 id="ses-done" className="eyebrow text-slate-500">
+            Cerradas recientemente
+          </h2>
+          <ul className="space-y-2.5">{done.map(row)}</ul>
+        </section>
       )}
-
-      {/* La llamada queda fuera de las pestañas: cambiar de pestaña no la corta. */}
-      {activeSession && <SessionCallPanel key={activeSession.id} sessionId={activeSession.id} />}
-
-      {tab !== "agenda" && activeSession && (
-        <div role="tabpanel">
-          {workspace.error ? (
-            <div className="p-4 text-xs rounded-xl bg-red-50 border border-red-200 text-red-800">{workspace.error}</div>
-          ) : !workspace.data ? (
-            <div className="h-48 rounded-2xl bg-white border border-slate-200/80 animate-pulse" aria-busy="true" />
-          ) : tab === "notas" ? (
-            <NotesTab ws={workspace.data} onChanged={workspace.reload} />
-          ) : tab === "documentos" ? (
-            <DocumentsTab ws={workspace.data} onChanged={workspace.reload} />
-          ) : (
-            <TasksTab ws={workspace.data} onChanged={workspace.reload} />
-          )}
-        </div>
-      )}
-
-      {/* 2. Distribución en 2 Columnas (Panel 6 del Mock) */}
-      <div className={cx("grid grid-cols-1 lg:grid-cols-12 gap-6", tab !== "agenda" && "hidden")} role="tabpanel">
-        {/* Columna Izquierda: Agenda propuesta por IA (7 cols) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 shadow-xs flex flex-col justify-between">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Agenda propuesta por IA
-                </h2>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Estructurada en bloques de tiempo (timeboxes)
-                </p>
-              </div>
-              {activeSession?.mentorId === viewerId ? (
-                <button
-                  type="button"
-                  disabled={isPending || !activeSession}
-                  onClick={handleGenerateAgendaWithN8n}
-                  className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer disabled:opacity-50"
-                >
-                  {isPending ? "Generando…" : "↻ Regenerar agenda"}
-                </button>
-              ) : (
-                <span className="text-[11px] text-slate-500">La prepara el mentor</span>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              {agendaList.length > 0 ? (
-                agendaList.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-start justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900">
-                        {item.title}
-                      </p>
-                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                        {item.desc}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-8 text-center text-slate-500 text-xs border border-dashed border-slate-200 rounded-xl">
-                  {activeSession
-                    ? (activeSession?.mentorId === viewerId ? "No se ha generado una agenda aún. Pulsa «Regenerar agenda» para preparar una propuesta a partir del contexto del proyecto." : "El mentor todavía no preparó la agenda de esta sesión.")
-                    : "No hay una sesión activa seleccionada."}
-                </div>
-              )}
-            </div>
-
-            <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-xs text-blue-800">
-              💡 <strong>Contexto disponible:</strong> objetivos registrados y agenda guardada en el briefing de esta sesión.
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-            {activeProject ? (
-              <Link
-                href={`/app/p/${activeProject.id}/orientar`}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 shadow-xs"
-              >
-                Abrir sala de notas del proyecto →
-              </Link>
-            ) : (
-              <span className="text-xs text-slate-500">Selecciona un proyecto para abrir notas</span>
-            )}
-          </div>
-        </div>
-
-        {/* Columna Derecha: Contexto Relevante Real (5 cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 shadow-xs flex flex-col justify-between">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h2 className="text-base font-bold text-slate-900">
-                Contexto relevante
-              </h2>
-              <span className="text-xs text-slate-500 font-mono">Datos registrados</span>
-            </div>
-
-            <div className="space-y-4">
-              <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Objetivo principal activo
-                </p>
-                <p className="text-xs font-bold text-slate-900 mt-1">
-                  {activeGoals[0]?.title || "Sin objetivos registrados aún"}
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
-                  <span>Progreso del ciclo</span>
-                  <span className="font-mono text-emerald-700 font-bold">
-                    {activeGoals.length > 0
-                      ? `${Math.round(
-                          (activeGoals.filter((g) => g.status === "achieved").length / activeGoals.length) * 100
-                        )}%`
-                      : "0%"}
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-600 rounded-full transition-all"
-                    style={{
-                      width:
-                        activeGoals.length > 0
-                          ? `${Math.round(
-                              (activeGoals.filter((g) => g.status === "achieved").length / activeGoals.length) * 100
-                            )}%`
-                          : "0%",
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Diagnóstico y bloqueos
-                </p>
-                <p className="text-xs font-semibold text-slate-700 mt-1">
-                  {activeSession?.preSessionBriefing?.pendingTopicsSummary
-                    ? `⚠️ ${activeSession.preSessionBriefing.pendingTopicsSummary}`
-                    : "Sin bloqueos pendientes reportados"}
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Compromisos pactados
-                </p>
-                <p className="text-xs font-bold text-slate-800 mt-1">
-                  {activeGoals.length} objetivos registrados en el acuerdo
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
-            <Link
-              href="/app/tareas"
-              className="text-xs font-semibold text-blue-600 hover:underline"
-            >
-              Ver hoja de ruta y tareas pendientes →
-            </Link>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

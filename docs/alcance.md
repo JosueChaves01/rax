@@ -19,6 +19,16 @@ El avance se mide solo con las 4 etapas de `features/projects/stages.ts`, deriva
 
 Acuerdo de mentoría, objetivos y evaluación del ciclo enriquecen el ciclo pero no lo frenan.
 
+## Cómo trabaja el mentor
+
+El mentor toma tres decisiones con su nombre: el acuerdo de la primera revisión (con el problema a investigar primero), la aprobación de la hipótesis y la decisión de la segunda revisión. Todo lo demás lo prepara RAX:
+
+1. El emprendedor pide la revisión desde la etapa, con fecha opcional. El briefing con IA se prepara solo en ese momento.
+2. Se reúnen en la llamada de la sesión (o fuera, y se escriben notas). Al colgar, la síntesis se arma sola desde la transcripción.
+3. El mentor revisa un único borrador de cierre (acuerdo y prioridad, o decisión) y lo confirma. Los compromisos del emprendedor se vuelven tareas.
+
+«Agendar» es solo para sesiones de seguimiento. Cada sesión se trabaja dentro de su proyecto; el menú Sesiones es la agenda. El mentor llega asignado por la administración, así que no hay etapa de compatibilidad.
+
 ## Entrada por rol
 
 - **Emprendedor** → `/app`: sus proyectos con las 4 etapas, a quién le toca y el siguiente paso.
@@ -38,4 +48,4 @@ El menú vive en `shared/ui/nav-items.tsx`; la guía del agente (`lib/ai/platfor
 
 ## Fuera de alcance por ahora
 
-Pagos; elección de mentor por el emprendedor; videollamadas, correo y tiempo real; analítica avanzada fuera de los reportes de administración; varios ciclos encadenados por proyecto.
+Pagos; elección de mentor por el emprendedor; avisos por correo; analítica avanzada fuera de los reportes de administración; varios ciclos encadenados por proyecto. (Las videollamadas 1 a 1 con transcripción sí entran, dentro de cada sesión de mentoría.)

@@ -43,6 +43,7 @@ import {
   completeFirstReview,
   completeSecondReview,
   completeSession,
+  closeSession,
   generatePostSessionSynthesis,
   generatePreSessionBriefing,
   requestReview,
@@ -82,6 +83,7 @@ import {
   createMentorshipGoal,
   decideCompatibility,
   initiateMentorshipRelation,
+  ensureMentorshipRelation,
   saveMentorshipAgreement,
   suggestGoalsAndAgreement,
   transitionMentorshipStage,
@@ -332,9 +334,9 @@ export const addCommentAction = async (projectId: string, targetType: Comment["t
 
 /* ── Mentoría ── */
 
-export const requestReviewAction = async (projectId: string, kind: MentorSessionKind) =>
+export const requestReviewAction = async (projectId: string, kind: MentorSessionKind, scheduledAt?: string) =>
   run(projectId, async (d) => {
-    await requestReview(d, V.parse(V.Ids, projectId), V.parse(V.SessionKind, kind));
+    await requestReview(d, V.parse(V.Ids, projectId), V.parse(V.SessionKind, kind), { scheduledAt: V.parse(V.OptionalDate, scheduledAt) });
   });
 export const startSessionAction = async (projectId: string, sessionId: string) =>
   run(projectId, async (d) => {
@@ -388,6 +390,12 @@ export const adoptPostSessionCommitmentsAction = async (
 export const completeSessionAction = async (projectId: string, sessionId: string, summary?: string) =>
   run(projectId, async (d) => {
     return completeSession(d, V.parse(V.Ids, sessionId), summary);
+  });
+
+/** Cierre único: acuerdo y prioridad, o decisión, más compromisos como tareas. */
+export const closeSessionAction = async (projectId: string, sessionId: string, input: unknown) =>
+  run(projectId, async (d) => {
+    await closeSession(d, V.parse(V.Ids, sessionId), V.parse(V.CloseSession, input));
   });
 
 /* ── Llamadas con transcripción dentro de una sesión de mentoría ── */
@@ -1044,6 +1052,10 @@ export const revokeMentorAction = async (assignmentId: string) =>
   });
 
 /* ── Relación, Acuerdos y Objetivos de Mentoría ── */
+
+/** La relación con el mentor asignado, creada si falta (sin etapa de compatibilidad). */
+export const ensureMentorshipRelationAction = async (projectId: string) =>
+  run(projectId, (d) => ensureMentorshipRelation(d, V.parse(V.Ids, projectId)));
 
 export const initiateMentorshipRelationAction = async (
   projectId: string,
