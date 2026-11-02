@@ -558,6 +558,23 @@ export interface SessionNote {
   isPrivate?: boolean;
   relatedItemId?: Id;
   createdAt: ISODate;
+  /** Última edición de la nota por su autor. */
+  updatedAt?: ISODate;
+}
+
+/**
+ * Respuesta a una nota de sesión (p. ej. el emprendedor contesta una pregunta del mentor).
+ * Puede escribirla cualquiera que vea el proyecto y la nota; solo su autor la edita.
+ */
+export interface SessionNoteReply {
+  id: Id;
+  noteId: Id;
+  sessionId: Id;
+  projectId: Id;
+  authorId: Id;
+  body: string;
+  createdAt: ISODate;
+  updatedAt?: ISODate;
 }
 
 /* ───────────── Proceso de Mentoría y Acuerdos ───────────── */
