@@ -27,6 +27,8 @@ import type {
   PostSessionSynthesisResult,
   PreSessionBriefingContext,
   PreSessionBriefingResult,
+  SessionNotesContext,
+  SessionNotesResult,
 } from "./provider";
 import type {
   AiProposal,
@@ -34,6 +36,7 @@ import type {
   GoalsSuggestion,
   PostSessionSynthesisSuggestion,
   PreSessionBriefingSuggestion,
+  SessionNotesDraft,
   SuggestedExperiment,
   SuggestedHypothesis,
   SuggestedNote,
@@ -508,6 +511,39 @@ export class SimulatedProvider implements AiProvider {
       synthesis,
       provider: "simulated",
     };
+  }
+
+  async suggestSessionNotes(ctx: SessionNotesContext): Promise<SessionNotesResult> {
+    // Sin modelo: de la transcripción se rescatan compromisos, acuerdos y preguntas literales;
+    // sin transcripción, notas de preparación a partir del diagnóstico. Nunca inventa lo que se dijo.
+    const already = new Set(ctx.existingNotes.map((n) => n.body.trim().toLowerCase()));
+    const lines = (ctx.callTranscript ?? "")
+      .split("\n")
+      .filter((l) => /^\[\d/.test(l))
+      .map((l) => l.replace(/^\[[\d:]+\]\s*/, "").trim())
+      .filter((l) => l.length >= 12);
+    const COMMIT = /\b(voy a|vamos a|me comprometo|tengo que|tienes que|tenés que|para la pr[oó]xima)\b/i;
+    const AGREE = /\b(quedamos en|acordamos|de acuerdo en|nos enfocamos en|decidimos)\b/i;
+    const notes: SessionNotesDraft["notes"] = [];
+    const push = (kind: SessionNotesDraft["notes"][number]["kind"], body: string, relatedItemId: string | null = null) => {
+      const text = body.slice(0, 600);
+      if (already.has(text.toLowerCase()) || notes.some((n) => n.body === text)) return;
+      notes.push({ kind, body: text, relatedItemId });
+    };
+    for (const l of lines.filter((l) => AGREE.test(l)).slice(-3)) push("agreement", l);
+    for (const l of lines.filter((l) => COMMIT.test(l)).slice(-3)) push("commitment", l);
+    for (const l of lines.filter((l) => l.endsWith("?")).slice(-2)) push("question", l);
+
+    if (notes.length < 3) {
+      const problem = [...ctx.items].filter((i) => i.category === "problem").sort((a, b) => (a.priorityRank ?? 99) - (b.priorityRank ?? 99))[0];
+      const unknown = ctx.items.find((i) => i.infoType === "unknown" || i.category === "open_question");
+      const fragile = ctx.items.find((i) => i.infoType === "hypothesis" || i.uncertainty === "high");
+      if (problem) push("observation", `El problema a investigar primero sigue siendo «${problem.title}». Conviene confirmar quién lo sufre y cómo lo resuelve hoy.`, problem.id);
+      if (unknown) push("question", `Queda abierto: ${unknown.title}. ¿Qué evidencia mínima haría falta para responderlo?`, unknown.id);
+      if (fragile) push("observation", `«${fragile.title}» es un supuesto sin contrastar; no darlo por sentado al planificar.`, fragile.id);
+      push("suggestion", "Antes de construir, coordinar de 5 a 10 conversaciones de descubrimiento con personas del segmento, solo para escuchar cómo resuelven hoy el problema.");
+    }
+    return { draft: { notes: notes.slice(0, 8) }, provider: "simulated" };
   }
 }
 

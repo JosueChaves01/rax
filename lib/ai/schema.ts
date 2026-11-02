@@ -85,6 +85,22 @@ export const FirstReviewSuggestionSchema = z.object({
 });
 
 export type SuggestedNote = z.infer<typeof SuggestedNoteSchema>;
+
+/** Borrador de notas de una sesión (desde la transcripción de la llamada y el contexto del proyecto). */
+export const SessionNoteKindEnum = z.enum(["observation", "question", "suggestion", "agreement", "commitment", "blocker", "decision"]);
+export const SessionNotesDraftSchema = z.object({
+  notes: z
+    .array(
+      z.object({
+        kind: SessionNoteKindEnum.catch("observation"),
+        body: z.string().min(5).max(2000),
+        relatedItemId: z.string().nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(12),
+});
+export type SessionNotesDraft = z.infer<typeof SessionNotesDraftSchema>;
 export type FirstReviewSuggestion = z.infer<typeof FirstReviewSuggestionSchema>;
 
 /* ───────────── Hipótesis y Experimentos (Etapa 3) ───────────── */

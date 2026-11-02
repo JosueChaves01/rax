@@ -282,6 +282,7 @@ describe("Escenario G · proveedor de IA no disponible", () => {
       },
       generatePreSessionBriefing: async () => { throw new AiUnavailableError("provider_error", "err"); },
       generatePostSessionSynthesis: async () => { throw new AiUnavailableError("provider_error", "err"); },
+      suggestSessionNotes: async () => { throw new AiUnavailableError("provider_error", "err"); },
       suggestExperiment: async () => {
         throw new AiUnavailableError("provider_error", "El proveedor de IA devolvió un error.");
       },

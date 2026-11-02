@@ -39,6 +39,7 @@ import { Button, Card, Field, Notice, Tag, formatDate, inputClass } from "@/shar
 import { useAction } from "@/shared/ui/use-action";
 import { SessionCallPanel } from "@/shared/ui/session-call";
 import { SynthesisEditor } from "./synthesis-editor";
+import { AiNotesDraft } from "./ai-notes-draft";
 
 type People = Record<string, { id: string; name: string; role: string }>;
 
@@ -797,6 +798,9 @@ function MentorTools({
 
   return (
     <div className="space-y-5 border-t border-slate-200/80 pt-5">
+      {/* Borrador de notas con IA desde la reunión y el contexto del proyecto */}
+      <AiNotesDraft projectId={projectId} sessionId={s.id} items={items} />
+
       {/* Formulario de toma de notas en vivo con privacidad dual */}
       <form
         className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-xs"

@@ -7,6 +7,7 @@ import {
   HypothesesSuggestionSchema,
   PostSessionSynthesisSchema,
   PreSessionBriefingSchema,
+  SessionNotesDraftSchema,
   SuggestedExperimentSchema,
 } from "./schema";
 import {
@@ -28,6 +29,8 @@ import {
   type PostSessionSynthesisResult,
   type PreSessionBriefingContext,
   type PreSessionBriefingResult,
+  type SessionNotesContext,
+  type SessionNotesResult,
 } from "./provider";
 import {
   EXPERIMENT_SUGGESTION_SYSTEM_PROMPT,
@@ -45,6 +48,8 @@ import {
   renderHypothesisSuggestionContext,
   renderPostSessionSynthesisContext,
   renderPreSessionBriefingContext,
+  renderSessionNotesContext,
+  SESSION_NOTES_SYSTEM_PROMPT,
   SYSTEM_PROMPT,
 } from "./prompt";
 import { hypothesisIssues } from "@/features/hypotheses/rules";
@@ -136,6 +141,53 @@ export class OpenRouterProvider implements AiProvider {
     }
     const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
     throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  async suggestSessionNotes(ctx: SessionNotesContext): Promise<SessionNotesResult> {
+    const base: ChatMessage[] = [
+      { role: "system", content: SESSION_NOTES_SYSTEM_PROMPT },
+      { role: "user", content: renderSessionNotesContext(ctx) },
+    ];
+    let last: ModelFailure | null = null;
+    for (const model of this.models) {
+      try {
+        return await this.suggestSessionNotesWith(model, base);
+      } catch (e) {
+        if (!(e instanceof ModelFailure)) throw e;
+        last = e;
+        if (!e.retryOther) break;
+      }
+    }
+    const tried = this.models.length > 1 ? ` (probamos ${this.models.length} modelos)` : "";
+    throw new AiUnavailableError(last?.reason ?? "provider_error", (last?.userMessage ?? "El proveedor de IA devolvió un error.") + tried);
+  }
+
+  private async suggestSessionNotesWith(model: string, base: ChatMessage[]): Promise<SessionNotesResult> {
+    const messages = [...base];
+    const opts = { mergeSystem: false, jsonMode: true };
+    let lastProblem = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const data = await this.callAdapting(model, messages, opts);
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const result = SessionNotesDraftSchema.safeParse(safeJson(raw));
+      if (result.success) {
+        return {
+          draft: result.data,
+          provider: "openrouter",
+          usage: { model: data.model ?? model, inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0 },
+        };
+      }
+      lastProblem = result.error.issues
+        .slice(0, 5)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      messages.push(
+        { role: "assistant", content: raw.slice(0, 4000) },
+        { role: "user", content: `Tu respuesta no cumple el esquema (${lastProblem}). Respondé solo con el JSON corregido.` },
+      );
+    }
+    console.error(`[openrouter] ${model}: salida inválida tras ${MAX_ATTEMPTS} intentos: ${lastProblem}`);
+    throw new ModelFailure("invalid_output", `El modelo devolvió una respuesta inválida: ${lastProblem}`, true);
   }
 
   async suggestHypotheses(ctx: HypothesisSuggestionContext): Promise<HypothesesSuggestionResult> {
