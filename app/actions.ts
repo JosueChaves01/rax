@@ -52,7 +52,7 @@ import {
   updatePostSessionSynthesis,
   suggestFirstReview,
 } from "@/lib/services/mentoring";
-import { endCall, getCallTranscript, getSessionCallState, startCall } from "@/lib/services/session-calls";
+import { endCall, getCallTranscript, getSessionCallState, startCall, synthesizeEndedCall } from "@/lib/services/session-calls";
 import {
   addEvidence,
   approveHypothesis,
@@ -406,9 +406,17 @@ export const startCallAction = async (sessionId: string) =>
 
 export const endCallAction = async (projectId: string, callId: string) =>
   run(projectId, async (d) => {
-    const res = await endCall(d, V.parse(V.Ids, callId));
+    // Colgar es inmediato: la síntesis se pide aparte (synthesizeCallAction) y la pantalla la espera.
+    const res = await endCall(d, V.parse(V.Ids, callId), { synthesize: false });
     revalidatePath(`/app/p/${projectId}/mentoria`);
     return res;
+  });
+
+export const synthesizeCallAction = async (projectId: string, callId: string) =>
+  run(projectId, async (d) => {
+    const synthesis = await synthesizeEndedCall(d, V.parse(V.Ids, callId));
+    revalidatePath(`/app/p/${projectId}/mentoria`);
+    return synthesis;
   });
 
 export const getMentorSessionWorkspaceAction = async (projectId: string, sessionId: string) =>

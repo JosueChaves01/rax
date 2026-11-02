@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { SessionCall } from "@/types/domain";
 import { browserSupabase } from "@/lib/supabase/browser";
-import { endCallAction, getCallTranscriptAction, startCallAction } from "@/app/actions";
+import { endCallAction, getCallTranscriptAction, startCallAction, synthesizeCallAction } from "@/app/actions";
 import type { EndCallResult, IceServer } from "@/lib/services/session-calls";
 
 /**
@@ -180,7 +180,7 @@ export function useSessionCall(opts: {
         const res = await fetch(`/api/llamadas/${current.id}/audio`, { method: "POST", body: form });
         const json = (await res.json().catch(() => ({}))) as { segment?: LiveSegment | null; error?: string; code?: string };
         if (!res.ok) {
-          if (json.code === "transcription_unavailable") {
+          if (json.code === "transcription_unavailable" || json.code === "rate_limited") {
             transcribingRef.current = false;
             setTranscribing(false);
           }
@@ -380,6 +380,20 @@ export function useSessionCall(opts: {
       const res = await endCallAction(projectId, current.id);
       if (res.ok && res.data) setResult(res.data);
       else if (!res.ok) setError(res.error);
+      setPhase("ended");
+      // Colgar ya terminó; la síntesis llega aparte y la pantalla muestra que se está generando.
+      if (res.ok && res.data?.synthesisPending) {
+        const syn = await synthesizeCallAction(projectId, current.id).catch(() => null);
+        setResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                synthesisPending: false,
+                ...(syn?.ok && syn.data ? { synthesis: syn.data } : { synthesisError: syn && !syn.ok ? syn.error : "No se pudo generar la síntesis." }),
+              }
+            : prev,
+        );
+      }
     } catch (err) {
       console.error("[llamada] No se pudo cerrar la llamada:", err);
       setError("No se pudo confirmar el cierre de la llamada. Recarga la página: lo transcrito hasta ahora quedó guardado.");

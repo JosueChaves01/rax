@@ -147,6 +147,11 @@ function Result({ projectId, sessionId, result }: { projectId: string; sessionId
           {syn.nextSteps && <p><span className="font-semibold">Próximos pasos:</span> {syn.nextSteps}</p>}
           <p className="text-[11px] text-slate-500">Puedes corregirla o agregar puntos con «Editar o agregar» en la síntesis de la sesión.</p>
         </div>
+      ) : result.synthesisPending ? (
+        <p className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600" aria-live="polite">
+          <span className="h-2 w-2 animate-ping rounded-full bg-emerald-600" />
+          El agente está preparando la síntesis de la llamada…
+        </p>
       ) : (
         result.synthesisError && <Notice tone="warn">No se pudo generar la síntesis ahora: {result.synthesisError}. Puedes generarla luego con «Síntesis pos-sesión».</Notice>
       )}
