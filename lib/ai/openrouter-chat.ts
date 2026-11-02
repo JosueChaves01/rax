@@ -1,13 +1,13 @@
 import "server-only";
 import { DEFAULT_OPENROUTER_MODEL } from "./openrouter";
+import { isLocalModel, localTimeoutMs, resolveEndpoint, withLocalModel } from "./endpoints";
 
 /**
- * Cliente mínimo de chat completions de OpenRouter para el agente conversacional: prueba el modelo
- * principal y los de respaldo en orden, y se adapta a modelos que no aceptan herramientas o
+ * Cliente mínimo de chat completions para el agente conversacional (modelo local y OpenRouter): prueba
+ * el modelo principal y los de respaldo en orden, y se adapta a modelos que no aceptan herramientas o
  * instrucciones de sistema. Nunca registra la clave ni el contenido de la conversación.
  */
 
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 /** Máximo que se espera a un modelo antes de pasar al siguiente: la respuesta completa, o el primer trozo con streaming. */
 const PER_MODEL_TIMEOUT_MS = { complete: 30_000, firstChunk: 20_000 } as const;
 /** Presupuesto por defecto de una llamada completa, con todos los respaldos. */
@@ -20,7 +20,7 @@ const MIN_ATTEMPT_MS = 3_000;
  * durante un rato, así el siguiente turno no pierde tiempo esperándolo. Nunca se excluye del todo.
  */
 const cooldownUntil = new Map<string, number>();
-const COOLDOWN_MS = { rate_limited: 180_000, slow: 60_000 } as const;
+const COOLDOWN_MS = { rate_limited: 180_000, slow: 60_000, local: 300_000 } as const;
 
 export function resetModelHealth(): void {
   cooldownUntil.clear();
@@ -73,15 +73,16 @@ export interface ChatTrace {
   firstTokenMs?: number;
 }
 
-/** Modelos a probar, en orden: el del agente (o el general) y luego los de respaldo. */
+/** Modelos a probar, en orden: el local (si hay), el del agente (o el general) y luego los de respaldo. */
 export function agentModels(): string[] {
   const primary = process.env.CLAUDE_PROJECTS_MODEL || process.env.CLAUDE_MODEL || process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
   const fallbacks = (process.env.OPENROUTER_FALLBACK_MODELS ?? "").split(",");
-  return [...new Set([primary, ...fallbacks].map((m) => m.trim()).filter(Boolean))];
+  return withLocalModel([primary, ...fallbacks].map((m) => m.trim()).filter(Boolean));
 }
 
 interface CallOptions {
-  apiKey: string;
+  /** Clave de OpenRouter; por defecto, OPENROUTER_API_KEY. El modelo local no la usa. */
+  apiKey?: string;
   messages: ChatMessage[];
   tools?: Array<{ type: "function"; function: unknown }>;
   toolChoice?: "auto" | "none";
@@ -123,9 +124,11 @@ export async function chatWithFallback(
       }
       trace.attempts++;
       const attemptStart = Date.now();
-      const attempt = await callOnce(model, opts, { useTools, merge, json }, Math.min(opts.timeoutMs ?? (opts.onDelta ? PER_MODEL_TIMEOUT_MS.firstChunk : PER_MODEL_TIMEOUT_MS.complete), remaining), deadline);
+      const perModel = isLocalModel(model) ? localTimeoutMs() : (opts.timeoutMs ?? (opts.onDelta ? PER_MODEL_TIMEOUT_MS.firstChunk : PER_MODEL_TIMEOUT_MS.complete));
+      const attempt = await callOnce(model, opts, { useTools, merge, json }, Math.min(perModel, remaining), deadline);
       if (attempt.ok) {
         cooldownUntil.delete(model);
+        console.info(`[agent-llm] respondió ${model}${trace.failedModels.length ? ` (fallaron: ${trace.failedModels.join(", ")})` : ""}`);
         // Desde que empezó la llamada, contando lo que se perdió en modelos que fallaron.
         if (attempt.firstTokenMs !== undefined) trace.firstTokenMs = attemptStart - startedAt + attempt.firstTokenMs;
         return { ok: true, completion: attempt.data, trace };
@@ -143,8 +146,14 @@ export async function chatWithFallback(
         json = false;
         continue;
       }
-      failure = classify(model, status, detail);
       trace.failedModels.push(model);
+      // El modelo local caído (PC apagada, túnel o Access mal configurado) nunca corta el respaldo.
+      if (isLocalModel(model)) {
+        cooldownUntil.set(model, Date.now() + COOLDOWN_MS.local);
+        failure = { code: status === 408 ? "timeout" : "provider_error", message: "El modelo local no respondió." };
+        break;
+      }
+      failure = classify(model, status, detail);
       if (status === 429) cooldownUntil.set(model, Date.now() + COOLDOWN_MS.rate_limited);
       else if (status === 0 || status === 408 || status >= 500) cooldownUntil.set(model, Date.now() + COOLDOWN_MS.slow);
       break;
@@ -168,7 +177,10 @@ async function callOnce(
   timeoutMs: number,
   deadline: number,
 ): Promise<Attempt> {
-  const messages = mode.merge ? mergeSystem(opts.messages) : opts.messages;
+  const endpoint = resolveEndpoint(model, opts.apiKey);
+  const merged = mode.merge ? mergeSystem(opts.messages) : opts.messages;
+  // Los servidores locales no conocen `cache_control`: el contenido va como texto plano.
+  const messages = endpoint.isLocal ? merged.map((m) => ({ ...m, content: Array.isArray(m.content) ? m.content.map((p) => p.text).join("\n") : m.content })) : merged;
   const stream = Boolean(opts.onDelta);
   const started = Date.now();
   // Hasta la primera respuesta se espera `timeoutMs`; ya transmitiendo, como mucho hasta el plazo del turno.
@@ -180,26 +192,24 @@ async function callOnce(
   };
   let res: Response;
   try {
-    res = await fetch(ENDPOINT, {
+    res = await fetch(endpoint.url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${opts.apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-        "X-Title": "RAX",
-      },
+      headers: endpoint.headers,
       body: JSON.stringify({
-        model,
+        model: endpoint.model,
         messages,
         // Caché de prompt automática (Anthropic y compatibles): el prefijo estable va primero.
-        cache_control: { type: "ephemeral" },
+        ...(endpoint.isLocal ? {} : { cache_control: { type: "ephemeral" } }),
         ...(mode.useTools && opts.tools?.length ? { tools: opts.tools, ...(opts.toolChoice ? { tool_choice: opts.toolChoice } : {}) } : {}),
-        ...(mode.json ? { response_format: { type: "json_object" } } : {}),
-        ...(stream ? { stream: true, usage: { include: true } } : {}),
+        // Los servidores locales (LM Studio, Bionic) solo aceptan `json_schema`: ahí basta con el prompt.
+        ...(mode.json && !endpoint.isLocal ? { response_format: { type: "json_object" } } : {}),
+        ...(stream ? { stream: true, ...(endpoint.isLocal ? {} : { usage: { include: true } }) } : {}),
         max_tokens: opts.maxTokens ?? 2500,
         temperature: opts.temperature ?? 0.3,
       }),
       signal: controller.signal,
+      // Sin las credenciales de Access, Cloudflare redirige al login: eso es un fallo, no una respuesta.
+      ...(endpoint.isLocal ? { redirect: "error" as const } : {}),
     });
   } catch (e) {
     clearTimeout(timer);
@@ -212,7 +222,10 @@ async function callOnce(
   if (isStream) {
     extendTo(deadline - Date.now());
     try {
-      return await readStream(model, res, opts, started);
+      const attempt = await readStream(model, res, opts, started);
+      // El modelo local conserva su prefijo: las vueltas con herramientas deben volver a él.
+      if (attempt.ok && endpoint.isLocal) attempt.data.model = model;
+      return attempt;
     } finally {
       clearTimeout(timer);
     }
@@ -241,6 +254,8 @@ async function callOnce(
   } finally {
     clearTimeout(timer);
   }
+  // LM Studio y compatibles devuelven el error como texto: `{"error":"..."}`.
+  if (typeof (data.error as unknown) === "string") data.error = { message: data.error as unknown as string };
   const status = data.error ? data.error.code || res.status : res.status;
   if (res.ok && !data.error) {
     const msg = data.choices?.[0]?.message;
@@ -249,7 +264,7 @@ async function callOnce(
     if (stream && content) opts.onDelta?.(content);
     return {
       ok: true,
-      data: { model: data.model ?? model, content, toolCalls: msg?.tool_calls ?? [], usage: data.usage },
+      data: { model: endpoint.isLocal ? model : (data.model ?? model), content, toolCalls: msg?.tool_calls ?? [], usage: data.usage },
       firstTokenMs: Date.now() - started,
     };
   }
@@ -316,6 +331,7 @@ async function readStream(model: string, res: Response, opts: CallOptions, start
         } catch {
           continue;
         }
+        if (typeof (chunk.error as unknown) === "string") chunk.error = { message: chunk.error as unknown as string };
         if (chunk.error) {
           const status = chunk.error.code || 502;
           return fail(status, failureDetail(model, status, chunk.error));

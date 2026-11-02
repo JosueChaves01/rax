@@ -12,6 +12,7 @@ import { renderPlatformGuide, PLATFORM_PAGES, PROJECT_PAGES } from "./platform-g
 import { renderProjectState, type ProjectStateSnapshot } from "./project-state";
 import { foldDeterministic, MEMORY_SYSTEM_PROMPT, parseMemoryOutput, renderMemoryInput, renderThreadMemory, withSummary } from "./thread-memory";
 import { chatWithFallback, type ChatCompletion, type ChatMessage, type ChatToolCall, type ChatUsage } from "./openrouter-chat";
+import { hasLlmConfigured } from "./endpoints";
 import { readSessionThread, renderSessionState, updateSessionNotes, type SessionAgentContext } from "@/lib/services/agent-sessions";
 import { addAgentDocumentToProject, createAgentDocument, listDocumentTargetProjects, threadDocuments } from "@/lib/services/agent-documents";
 import { addNoteReply, createSessionNote, isNoteKind, listProjectNotes, renderNotesForAgent, updateNoteReply, updateSessionNote } from "@/lib/services/session-notes";
@@ -580,7 +581,7 @@ async function generateDocumentTool(input: ClaudeTurnInput, args: Record<string,
   const addToProject = args.add_to_project === true;
 
   const written = await writeDocumentWithAi({ title, topic, instructions, context: documentContext(input), deadline: input.deadline });
-  if (!written && process.env.OPENROUTER_API_KEY) {
+  if (!written && hasLlmConfigured()) {
     return { summary: `No pude redactar «${title}»: la IA no respondió. Prueba de nuevo en un momento.`, proposals: [], data: { ok: false } };
   }
   const content = written?.content ?? simulatedDocumentContent({ title, topic, instructions });
@@ -664,12 +665,11 @@ function cacheStatusOf(model: string, usage?: ChatUsage): { status: CacheStatus;
 /**
  * Un turno del agente: arma el contexto completo, llama al modelo (con respaldo entre modelos),
  * ejecuta las herramientas que pida y, si las usó, le devuelve los resultados para que escriba la
- * respuesta final. Sin OPENROUTER_API_KEY responde la simulación (declarada como tal); con clave,
+ * respuesta final. Sin IA configurada (OpenRouter o modelo local) responde la simulación (declarada como tal); con ella,
  * si ningún modelo responde, devuelve el motivo y no inventa una respuesta.
  */
 export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<ClaudeTurnResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return simulatedTurnWithSession(input);
+  if (!hasLlmConfigured()) return simulatedTurnWithSession(input);
 
   const turn: ClaudeTurnInput = { ...input, deadline: input.deadline ?? Date.now() + TURN_BUDGET_MS };
   const deadline = turn.deadline!;
@@ -702,7 +702,6 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
   for (let round = 0; ; round++) {
     const lastRound = round >= MAX_TOOL_ROUNDS || tools.length === 0;
     const res = await chatWithFallback({
-      apiKey,
       messages: conversation,
       tools: tools.length ? tools : undefined,
       ...(round > 0 ? { toolChoice: lastRound ? ("none" as const) : ("auto" as const) } : {}),
@@ -865,10 +864,8 @@ async function runToolCalls(input: ClaudeTurnInput, calls: ChatToolCall[], emit?
  */
 export async function foldThreadMemory(memory: AgentThreadMemory, folded: AgentMessage[], now: string): Promise<AgentThreadMemory> {
   if (folded.length === 0) return memory;
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (apiKey) {
+  if (hasLlmConfigured()) {
     const res = await chatWithFallback({
-      apiKey,
       messages: [
         { role: "system", content: MEMORY_SYSTEM_PROMPT },
         { role: "user", content: renderMemoryInput(memory, folded) },
@@ -976,7 +973,7 @@ async function simulatedTurnWithSession(input: ClaudeTurnInput): Promise<ClaudeT
 function generateSimulatedClaudeTurn(input: ClaudeTurnInput): ClaudeTurnResult {
   if (input.sessionContext?.field) {
     return {
-      reply: "La IA no está configurada (falta OPENROUTER_API_KEY), así que no puedo redactar un borrador para este campo.",
+      reply: "La IA no está configurada (falta OPENROUTER_API_KEY o LOCAL_LLM_BASE_URL), así que no puedo redactar un borrador para este campo.",
       artifacts: [],
       citations: [],
       proposals: [],

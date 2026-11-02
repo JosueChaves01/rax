@@ -1,5 +1,6 @@
 import "server-only";
 import type { AgreementFrequency, InitiativeNature } from "@/types/domain";
+import { hasLlmConfigured, localTimeoutMs, resolveEndpoint, withLocalModel } from "./endpoints";
 
 export interface MentorshipExplorationAiResult {
   // Paso 1: Perfil de la iniciativa
@@ -258,28 +259,35 @@ function formatInitiativeTitle(prompt: string): string {
   return capitalized.length <= 40 ? capitalized : capitalized.slice(0, 37).trim() + "…";
 }
 
-/** Intenta invocar OpenRouter si la API key está disponible y responde rápido. */
+/** Intenta el modelo local y luego OpenRouter, si están configurados y responden rápido. */
 async function fetchFromOpenRouter(
   prompt: string,
   preferredMentorName?: string,
 ): Promise<MentorshipExplorationAiResult | null> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey || apiKey.trim().length === 0) return null;
+  if (!hasLlmConfigured()) return null;
+  for (const model of withLocalModel([process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-super-vl:free"])) {
+    const result = await fetchExploration(model, prompt, preferredMentorName);
+    if (result) return result;
+  }
+  return null;
+}
 
-  const model = process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-super-vl:free";
+async function fetchExploration(
+  model: string,
+  prompt: string,
+  preferredMentorName?: string,
+): Promise<MentorshipExplorationAiResult | null> {
+  const endpoint = resolveEndpoint(model);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3500);
+  const timer = setTimeout(() => controller.abort(), endpoint.isLocal ? localTimeoutMs() : 3500);
 
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await fetch(endpoint.url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey.trim()}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://rax-red.vercel.app",
-      },
+      headers: endpoint.isLocal ? endpoint.headers : { ...endpoint.headers, "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://rax-red.vercel.app" },
+      ...(endpoint.isLocal ? { redirect: "error" as const } : {}),
       body: JSON.stringify({
-        model,
+        model: endpoint.model,
         messages: [
           {
             role: "system",

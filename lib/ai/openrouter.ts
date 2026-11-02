@@ -53,8 +53,8 @@ import {
   SYSTEM_PROMPT,
 } from "./prompt";
 import { hypothesisIssues } from "@/features/hypotheses/rules";
+import { isLocalModel, resolveEndpoint, withLocalModel } from "./endpoints";
 
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 /** Modelo gratuito por defecto; se cambia con OPENROUTER_MODEL sin tocar código. */
 export const DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 const TIMEOUT_MS = 45_000;
@@ -101,8 +101,9 @@ export class OpenRouterProvider implements AiProvider {
     fallbacks: string[] = [],
     private readonly appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   ) {
-    this.models = [...new Set([model, ...fallbacks].map((m) => m.trim()).filter(Boolean))];
-    this.label = `OpenRouter · ${this.models[0]}`;
+    // El modelo local (LOCAL_LLM_*) va primero; OpenRouter queda de respaldo.
+    this.models = withLocalModel([model, ...fallbacks].map((m) => m.trim()).filter(Boolean), Boolean(apiKey));
+    this.label = isLocalModel(this.models[0] ?? "") ? `Local · ${this.models[0].slice("local:".length)}` : `OpenRouter · ${this.models[0]}`;
   }
 
   async interpret(ctx: InterviewContext): Promise<AiResult> {
@@ -600,23 +601,22 @@ export class OpenRouterProvider implements AiProvider {
     messages: ChatMessage[],
     jsonMode: boolean,
   ): Promise<{ ok: true; data: ChatResponse } | { ok: false; status: number; detail: string }> {
+    const endpoint = resolveEndpoint(model, this.apiKey);
     let res: Response;
     try {
-      res = await fetch(ENDPOINT, {
+      res = await fetch(endpoint.url, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": this.appUrl,
-          "X-Title": "RAX",
-        },
+        headers: endpoint.isLocal ? endpoint.headers : { ...endpoint.headers, "HTTP-Referer": this.appUrl },
         body: JSON.stringify({
-          model,
+          model: endpoint.model,
           messages,
-          ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+          // Los servidores locales (LM Studio, Bionic) solo aceptan `json_schema`: ahí basta con el prompt.
+          ...(jsonMode && !endpoint.isLocal ? { response_format: { type: "json_object" } } : {}),
           max_tokens: 4000,
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
+        // Sin las credenciales de Access, Cloudflare redirige al login: eso es un fallo, no una respuesta.
+        ...(endpoint.isLocal ? { redirect: "error" as const } : {}),
       });
     } catch (e) {
       console.error(`[openrouter] ${model}: sin conexión: ${e instanceof Error ? e.message : String(e)}`);
@@ -624,6 +624,8 @@ export class OpenRouterProvider implements AiProvider {
     }
     const data = (await res.json().catch(() => ({}))) as ChatResponse;
     // OpenRouter puede responder 200 con un objeto `error` (falla del proveedor de origen).
+    // LM Studio y compatibles devuelven el error como texto: `{"error":"..."}`.
+    if (typeof (data.error as unknown) === "string") data.error = { message: data.error as unknown as string };
     const status = data.error ? data.error.code || res.status : res.status;
     if (res.ok && !data.error) return { ok: true, data };
     const raw = data.error?.metadata?.raw;
@@ -639,6 +641,8 @@ export class OpenRouterProvider implements AiProvider {
 
 /** Traduce el error del proveedor a un motivo y un mensaje claro para la persona. */
 function classify(model: string, status: number, detail: string): ModelFailure {
+  // El modelo local caído nunca impide probar OpenRouter.
+  if (isLocalModel(model)) return new ModelFailure("provider_error", "El modelo local no respondió.", true);
   if (status === 0) return new ModelFailure("provider_error", "No pudimos conectar con el proveedor de IA.", true);
   if (status === 401) return new ModelFailure("not_configured", "La clave de OpenRouter no es válida.", false);
   if (status === 402) return new ModelFailure("rate_limited", "La cuenta de OpenRouter no tiene saldo para este modelo.", true);

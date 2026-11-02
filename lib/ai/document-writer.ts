@@ -1,5 +1,6 @@
 import "server-only";
 import { chatWithFallback } from "./openrouter-chat";
+import { hasLlmConfigured } from "./endpoints";
 
 export const DOCUMENT_WRITER_PROMPT = `Eres el redactor de documentos del Agente de RAX. Escribes un documento completo, listo para descargar como PDF o Word, sobre el tema pedido.
 
@@ -31,10 +32,8 @@ export function cleanDocumentContent(raw: string): string {
 
 /** Redacta el documento con el modelo. Devuelve null si no hay IA o ningún modelo responde. */
 export async function writeDocumentWithAi(req: DocumentWriteRequest): Promise<{ content: string; model: string } | null> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return null;
+  if (!hasLlmConfigured()) return null;
   const res = await chatWithFallback({
-    apiKey,
     messages: [
       { role: "system", content: DOCUMENT_WRITER_PROMPT },
       {
