@@ -8,7 +8,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-face", 
 
 export const metadata: Metadata = {
   title: "RAX · Diagnóstico y validación de emprendimientos",
-  description: "Ordená lo que sabés de tu negocio, trabajá con un mentor y convertí tus dudas en experimentos.",
+  description: "Ordena lo que sabes de tu negocio, trabaja con un mentor y convierte tus dudas en experimentos pequeños y medibles.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
