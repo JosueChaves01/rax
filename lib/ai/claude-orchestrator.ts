@@ -13,6 +13,7 @@ import { foldDeterministic, MEMORY_SYSTEM_PROMPT, parseMemoryOutput, renderMemor
 import { chatWithFallback, type ChatCompletion, type ChatMessage, type ChatToolCall, type ChatUsage } from "./openrouter-chat";
 import { readSessionThread, renderSessionState, updateSessionNotes, type SessionAgentContext } from "@/lib/services/agent-sessions";
 import { createAgentDocument } from "@/lib/services/agent-documents";
+import { addNoteReply, createSessionNote, isNoteKind, listProjectNotes, renderNotesForAgent, updateNoteReply, updateSessionNote } from "@/lib/services/session-notes";
 import { isDocumentFormat, DOCUMENT_FORMAT_LABEL, type DocumentFormat } from "@/lib/documents/types";
 import { simulatedDocumentContent, writeDocumentWithAi } from "./document-writer";
 
@@ -96,6 +97,9 @@ const TOOL_STATUS: Record<string, string> = {
   generate_document: "Redactando el documento…",
   update_session_notes: "Actualizando las notas de la sesión…",
   read_session_thread: "Leyendo otro hilo de la sesión…",
+  read_mentor_notes: "Leyendo las notas de mentoría…",
+  save_mentor_note: "Guardando la nota de mentoría…",
+  save_note_reply: "Guardando la respuesta a la nota…",
   draft_field_value: "Preparando el borrador…",
   propose_step_action: "Preparando una propuesta…",
 };
@@ -261,6 +265,9 @@ Usa herramientas cuando la persona quiera estructurar algo en el proyecto; para 
 - evaluate_mentorship_cycle (RAX-14) y query_project_metrics (RAX-15): evaluar el ciclo y consultar métricas.
 - update_session_notes: guardar en la sesión su objetivo, un resumen, decisiones de la persona, preguntas abiertas y próximos pasos. Úsala cuando la persona tome una decisión, defina qué quiere lograr en la sesión, pida «anota/recuerda esto» o al cerrar un tema. Se guarda directo (no es una tarjeta) y la ven todos los hilos de la sesión.
 - read_session_thread: leer los mensajes recientes de otro hilo de esta sesión (usa su id de <session_state>) cuando la persona se refiera a algo que se habló allí.
+- read_mentor_notes: leer las notas de las sesiones de mentoría del proyecto (observaciones, preguntas, acuerdos, compromisos…) con sus respuestas y sus ids. Úsala antes de responder o editar una nota, o cuando la persona pregunte qué se anotó o qué le preguntó/respondió su mentor.
+- save_note_reply: responder una nota de mentoría (o corregir una respuesta propia con reply_id). La puede usar el emprendedor/estudiante o el mentor. Escribe la respuesta con las palabras y decisiones de la persona; no inventes datos.${role === "mentor" || role === "admin" ? "\n- save_mentor_note: crear una nota en una sesión de mentoría abierta (solo el mentor de esa sesión) o corregir una nota propia (con note_id). Las privadas no las ve el emprendedor." : ""}
+  Estas dos se guardan directo (no son tarjetas): úsalas solo cuando la persona pida guardar, crear, responder o corregir una nota, o confirme el texto. Después di qué guardaste y dónde se ve (pestaña Notas de la sesión).
 - generate_document: crear un documento descargable (PDF o Word) sobre un tema: plan, informe, guía de estudio, resumen de decisiones, propuesta, acta de sesión, etc. Úsala cuando la persona pida un PDF, un Word, un documento o un archivo para descargar. Pon add_to_project en true cuando lo pida o cuando sea material de referencia del proyecto (plan, informe, guía, resumen); en false si es algo puntual o una prueba. El documento se redacta aparte con el contexto del proyecto: no lo copies en tu respuesta, solo di qué contiene y si quedó en el proyecto.
 - propose_step_action: dar cualquier paso del recorrido (confirmar resumen, pedir revisiones, priorizar, decidir hipótesis, iniciar experimentos, registrar resultados y evidencia, decisión del mentor, acuerdo, sesiones). Usa los ids entre corchetes de <project_state>.${field ? "\n- draft_field_value: redactar el borrador del campo de formulario indicado en <current_screen>. Úsala siempre en este turno." : ""}
 Solo propone lo que esta persona puede hacer (ver «Acciones que esta persona puede hacer» en <project_state>). Después de usar una herramienta, explica en una o dos frases qué propusiste y que puede aplicarlo desde las tarjetas.
@@ -337,6 +344,62 @@ const READ_SESSION_THREAD_TOOL: WorkflowToolDefinition = {
   },
 };
 
+const READ_MENTOR_NOTES_TOOL: WorkflowToolDefinition = {
+  name: "read_mentor_notes",
+  description:
+    "Lee las notas de las sesiones de mentoría del proyecto con sus respuestas e ids. Sin session_id, trae las más recientes de todas las sesiones. No incluye notas privadas de otras personas.",
+  parameters: {
+    type: "object",
+    properties: {
+      session_id: { type: "string", description: "Id de una sesión de mentoría (opcional)" },
+      limit: { type: "number", description: "Cuántas notas traer como máximo (por defecto 20)" },
+    },
+  },
+};
+
+const SAVE_MENTOR_NOTE_TOOL: WorkflowToolDefinition = {
+  name: "save_mentor_note",
+  description:
+    "Crea una nota en una sesión de mentoría abierta (solo el mentor de la sesión) o, con note_id, corrige una nota que escribió esta persona. Se guarda directo.",
+  parameters: {
+    type: "object",
+    properties: {
+      note_id: { type: "string", description: "Id de la nota a editar (solo para editar)" },
+      session_id: { type: "string", description: "Id de la sesión de mentoría donde crear la nota (para crear)" },
+      body: { type: "string", description: "Texto de la nota (máximo 2000 caracteres)" },
+      kind: {
+        type: "string",
+        enum: ["observation", "question", "suggestion", "agreement", "commitment", "blocker", "decision"],
+        description: "Tipo de nota. Por defecto observation.",
+      },
+      is_private: { type: "boolean", description: "true para que solo la vea quien la escribe" },
+    },
+    required: ["body"],
+  },
+};
+
+const SAVE_NOTE_REPLY_TOOL: WorkflowToolDefinition = {
+  name: "save_note_reply",
+  description:
+    "Responde una nota de mentoría (note_id) o, con reply_id, corrige una respuesta que escribió esta persona. La pueden usar el emprendedor/estudiante y el mentor. Se guarda directo.",
+  parameters: {
+    type: "object",
+    properties: {
+      note_id: { type: "string", description: "Id de la nota que se responde (para responder)" },
+      reply_id: { type: "string", description: "Id de la respuesta a corregir (solo para editar)" },
+      body: { type: "string", description: "Texto de la respuesta (máximo 2000 caracteres)" },
+    },
+    required: ["body"],
+  },
+};
+
+/** Herramientas de notas de mentoría según el rol: todos leen y responden; el mentor además crea notas. */
+function noteToolsFor(role: Role): WorkflowToolDefinition[] {
+  return role === "mentor" || role === "admin"
+    ? [READ_MENTOR_NOTES_TOOL, SAVE_MENTOR_NOTE_TOOL, SAVE_NOTE_REPLY_TOOL]
+    : [READ_MENTOR_NOTES_TOOL, SAVE_NOTE_REPLY_TOOL];
+}
+
 const GENERATE_DOCUMENT_TOOL: WorkflowToolDefinition = {
   name: "generate_document",
   description:
@@ -356,7 +419,9 @@ const GENERATE_DOCUMENT_TOOL: WorkflowToolDefinition = {
 
 function toolsFor(input: ClaudeTurnInput): WorkflowToolDefinition[] {
   if (!input.deps) return [];
-  const base = input.sessionContext?.field ? [DRAFT_FIELD_TOOL, ...RAX_WORKFLOW_TOOLS] : [GENERATE_DOCUMENT_TOOL, ...RAX_WORKFLOW_TOOLS];
+  const base = input.sessionContext?.field
+    ? [DRAFT_FIELD_TOOL, ...RAX_WORKFLOW_TOOLS]
+    : [GENERATE_DOCUMENT_TOOL, ...noteToolsFor(input.role), ...RAX_WORKFLOW_TOOLS];
   if (!input.session || !input.thread?.id) return base;
   return [SESSION_NOTES_TOOL, ...(input.session.siblings.length ? [READ_SESSION_THREAD_TOOL] : []), ...base];
 }
@@ -370,6 +435,7 @@ async function runTool(
   args: Record<string, unknown>,
 ): Promise<{ summary: string; proposals: AiProposalItem[]; data?: unknown; sessionUpdated?: boolean; artifacts?: AgentArtifact[] }> {
   if (name === "generate_document" && input.deps) return generateDocumentTool(input, args);
+  if ((name === "read_mentor_notes" || name === "save_mentor_note" || name === "save_note_reply") && input.deps) return mentorNotesTool(input, name, args);
   if (name === "update_session_notes" && input.session && input.deps) {
     const updated = await updateSessionNotes(input.deps, input.session.id, {
       goal: typeof args.goal === "string" ? args.goal : undefined,
@@ -398,6 +464,50 @@ async function runTool(
   }
   const result = await executeWorkflowTool(input.deps!, input.project.id, name, args);
   return { summary: result.summary, proposals: result.proposals, data: result.data };
+}
+
+const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+
+/** Leer, crear, editar y responder notas de mentoría. Los permisos los aplica el servicio con la cuenta de quien conversa. */
+async function mentorNotesTool(
+  input: ClaudeTurnInput,
+  name: "read_mentor_notes" | "save_mentor_note" | "save_note_reply",
+  args: Record<string, unknown>,
+): Promise<{ summary: string; proposals: AiProposalItem[]; data?: unknown }> {
+  const d = input.deps!;
+  const projectId = input.project.id;
+  if (name === "read_mentor_notes") {
+    const limit = typeof args.limit === "number" && Number.isFinite(args.limit) ? Math.min(Math.round(args.limit), 40) : 20;
+    const view = await listProjectNotes(d, projectId, { sessionId: str(args.session_id), limit });
+    return {
+      summary: `Leí ${view.notes.length} nota${view.notes.length === 1 ? "" : "s"} de mentoría.`,
+      proposals: [],
+      data: { sessions: view.sessions, notes: renderNotesForAgent(view) },
+    };
+  }
+  const body = str(args.body);
+  if (!body) return { summary: "Falta el texto para guardar.", proposals: [], data: { error: "body vacío" } };
+  if (name === "save_note_reply") {
+    const replyId = str(args.reply_id);
+    if (replyId) {
+      const r = await updateNoteReply(d, replyId, body);
+      return { summary: "Respuesta a la nota corregida.", proposals: [], data: { reply_id: r.id, note_id: r.noteId } };
+    }
+    const noteId = str(args.note_id);
+    if (!noteId) return { summary: "Falta el id de la nota a responder (usa read_mentor_notes).", proposals: [], data: { error: "note_id vacío" } };
+    const r = await addNoteReply(d, noteId, body);
+    return { summary: "Respuesta guardada en la nota de mentoría.", proposals: [], data: { reply_id: r.id, note_id: r.noteId, session_id: r.sessionId } };
+  }
+  const kind = isNoteKind(args.kind) ? args.kind : undefined;
+  const noteId = str(args.note_id);
+  if (noteId) {
+    const n = await updateSessionNote(d, noteId, { body, kind, isPrivate: typeof args.is_private === "boolean" ? args.is_private : undefined });
+    return { summary: "Nota de mentoría corregida.", proposals: [], data: { note_id: n.id, session_id: n.sessionId } };
+  }
+  const sessionId = str(args.session_id);
+  if (!sessionId) return { summary: "Falta el id de la sesión de mentoría donde crear la nota.", proposals: [], data: { error: "session_id vacío" } };
+  const n = await createSessionNote(d, projectId, { sessionId, kind, body, isPrivate: args.is_private === true });
+  return { summary: `Nota de mentoría guardada${n.isPrivate ? " (privada)" : ""}.`, proposals: [], data: { note_id: n.id, session_id: n.sessionId } };
 }
 
 /** Contexto para redactar un documento: el proyecto, su estado, sus documentos y lo último que se habló. */
@@ -542,10 +652,10 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
         proposals.push(...r.result.proposals);
         if (r.result.artifacts) toolArtifacts.push(...r.result.artifacts);
         if (r.result.sessionUpdated) sessionUpdated = true;
-        // Leer otro hilo es parte del razonamiento: no se anuncia como resultado.
-        if (r.name !== "read_session_thread") toolNotes.push(r.result.summary);
+        // Leer otro hilo o las notas es parte del razonamiento: no se anuncia como resultado.
+        if (r.name !== "read_session_thread" && r.name !== "read_mentor_notes") toolNotes.push(r.result.summary);
       }
-      toolMessages.push({ role: "tool", tool_call_id: r.id, name: r.name, content: JSON.stringify(r.payload).slice(0, 6000) });
+      toolMessages.push({ role: "tool", tool_call_id: r.id, name: r.name, content: JSON.stringify(r.payload).slice(0, r.name === "read_mentor_notes" ? 14_000 : 6000) });
     }
     conversation = [
       ...conversation,

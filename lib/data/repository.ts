@@ -22,6 +22,7 @@ import type {
   Project,
   ProjectMember,
   SessionNote,
+  SessionNoteReply,
   SessionCall,
   SessionCallSegment,
   RoadmapMilestone,
@@ -87,6 +88,7 @@ export interface Repository {
   comments: Table<Comment>;
   mentorSessions: Table<MentorSession>;
   sessionNotes: Table<SessionNote>;
+  sessionNoteReplies: Table<SessionNoteReply>;
   mentorshipRelations: Table<MentorshipRelation>;
   mentorshipAgreements: Table<MentorshipAgreement>;
   mentorshipGoals: Table<MentorshipGoal>;

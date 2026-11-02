@@ -21,6 +21,7 @@ import type {
   Profile,
   Project,
   SessionNote,
+  SessionNoteReply,
   SessionCall,
   SessionCallSegment,
   RoadmapMilestone,
@@ -381,6 +382,21 @@ const note: Spec<SessionNote> = {
     isPrivate: ["is_private", { to: (v) => v === true, from: (v) => v === true }],
     relatedItemId: ["related_item_id", nul],
     createdAt: ["created_at", tsReq],
+    updatedAt: ["updated_at", ts],
+  },
+};
+
+const noteReply: Spec<SessionNoteReply> = {
+  table: "session_note_replies",
+  fields: {
+    id: ["id", same],
+    noteId: ["note_id", same],
+    sessionId: ["session_id", same],
+    projectId: ["project_id", same],
+    authorId: ["author_id", same],
+    body: ["body", same],
+    createdAt: ["created_at", tsReq],
+    updatedAt: ["updated_at", ts],
   },
 };
 
@@ -791,6 +807,7 @@ export function createPgRepository(db: Db): Repository {
     comments: new PgTable(db, comment),
     mentorSessions: new PgTable(db, session),
     sessionNotes: new PgTable(db, note),
+    sessionNoteReplies: new PgTable(db, noteReply),
     mentorshipRelations: new PgTable(db, mentorshipRelationSpec),
     mentorshipAgreements: new PgTable(db, mentorshipAgreementSpec),
     mentorshipGoals: new PgTable(db, mentorshipGoalSpec),

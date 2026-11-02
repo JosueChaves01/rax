@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { cx, formatDate } from "@/shared/ui/primitives";
-import type { Evidence, MentorSession, ProjectKnowledgeDocument, SessionNote, SessionNoteKind, Task, TaskStatus } from "@/types/domain";
+import type { Evidence, MentorSession, ProjectKnowledgeDocument, SessionNote, SessionNoteKind, SessionNoteReply, Task, TaskStatus } from "@/types/domain";
 import {
   addNoteAction,
+  replyToNoteAction,
+  updateNoteReplyAction,
+  updateSessionNoteAction,
   addProjectDocumentAction,
   createTaskAction,
   getMentorSessionWorkspaceAction,
@@ -15,11 +18,11 @@ import {
 /** Datos de las pestañas de una sesión de mentoría (ver getMentorSessionWorkspace). */
 export interface SessionWorkspace {
   session: MentorSession;
-  notes: Array<SessionNote & { authorName: string }>;
+  notes: Array<SessionNote & { authorName: string; replies?: Array<SessionNoteReply & { authorName: string }> }>;
   tasks: Array<Task & { assigneeName: string }>;
   documents: Array<Omit<ProjectKnowledgeDocument, "content"> & { preview: string }>;
   evidence: Evidence[];
-  permissions: { canNote: boolean; canManageTasks: boolean; canAddDocuments: boolean };
+  permissions: { canNote: boolean; canManageTasks: boolean; canAddDocuments: boolean; canReply?: boolean; actorId?: string };
 }
 
 const NOTE_KINDS: Array<[SessionNoteKind, string]> = [
@@ -104,6 +107,165 @@ function Panel({ title, subtitle, actions, children }: { title: string; subtitle
 
 /* ───────────── Notas ───────────── */
 
+type ActionRes = { ok: true } | { ok: false; error: string };
+
+/** Texto de una nota o respuesta; su autor puede corregirlo en el lugar. */
+function EditableText({
+  text,
+  canEdit,
+  onSave,
+  onSaved,
+  className,
+}: {
+  text: string;
+  canEdit: boolean;
+  onSave: (body: string) => Promise<ActionRes>;
+  onSaved: () => Promise<void>;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(text);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  if (!editing)
+    return (
+      <div className={cx("group flex items-start gap-2", className)}>
+        <p className="flex-1 leading-relaxed whitespace-pre-line">{text}</p>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(text);
+              setEditing(true);
+            }}
+            className="shrink-0 text-[11px] font-semibold text-slate-500 hover:text-blue-700"
+          >
+            Editar
+          </button>
+        )}
+      </div>
+    );
+  const save = () =>
+    start(async () => {
+      setError(null);
+      const res = await onSave(draft.trim());
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setEditing(false);
+      await onSaved();
+    });
+  return (
+    <div className={cx("space-y-1.5", className)}>
+      <textarea value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={2000} rows={2} className={cx(fieldClass, "w-full resize-y")} />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || !draft.trim() || draft.trim() === text}
+          className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-semibold hover:bg-blue-700 disabled:opacity-50"
+        >
+          {pending ? "Guardando…" : "Guardar"}
+        </button>
+        <button type="button" onClick={() => setEditing(false)} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800">
+          Cancelar
+        </button>
+        {error && <span className="text-[11px] text-red-700">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** Respuestas de una nota y el campo para responderla. */
+function NoteReplies({
+  projectId,
+  noteId,
+  replies,
+  actorId,
+  canReply,
+  onChanged,
+}: {
+  projectId: string;
+  noteId: string;
+  replies: Array<SessionNoteReply & { authorName: string }>;
+  actorId?: string;
+  canReply: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [body, setBody] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const submit = () =>
+    start(async () => {
+      setError(null);
+      const res = await replyToNoteAction(projectId, noteId, body.trim());
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setBody("");
+      setOpen(false);
+      await onChanged();
+    });
+  if (!replies.length && !canReply) return null;
+  return (
+    <div className="mt-2 space-y-1.5">
+      {replies.map((r) => (
+        <div key={r.id} className="ml-3 pl-3 border-l-2 border-slate-200">
+          <div className="text-[11px] text-slate-500">
+            {r.authorName} · {formatDate(r.createdAt)}
+            {r.updatedAt ? " · editada" : ""}
+          </div>
+          <EditableText
+            text={r.body}
+            canEdit={!!actorId && r.authorId === actorId}
+            onSave={(text) => updateNoteReplyAction(projectId, r.id, text)}
+            onSaved={onChanged}
+            className="text-xs text-slate-700"
+          />
+        </div>
+      ))}
+      {canReply &&
+        (open ? (
+          <div className="ml-3 space-y-1.5">
+            <label className="sr-only" htmlFor={`reply-${noteId}`}>
+              Respuesta
+            </label>
+            <textarea
+              id={`reply-${noteId}`}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              maxLength={2000}
+              rows={2}
+              placeholder="Escribe tu respuesta…"
+              className={cx(fieldClass, "w-full resize-y")}
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={submit}
+                disabled={pending || !body.trim()}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {pending ? "Enviando…" : "Responder"}
+              </button>
+              <button type="button" onClick={() => setOpen(false)} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800">
+                Cancelar
+              </button>
+              {error && <span className="text-[11px] text-red-700">{error}</span>}
+            </div>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setOpen(true)} className="ml-3 text-[11px] font-semibold text-blue-700 hover:text-blue-900">
+            Responder
+          </button>
+        ))}
+    </div>
+  );
+}
+
 export function NotesTab({ ws, onChanged }: { ws: SessionWorkspace; onChanged: () => Promise<void> }) {
   const [kind, setKind] = useState<SessionNoteKind>("observation");
   const [body, setBody] = useState("");
@@ -141,9 +303,24 @@ export function NotesTab({ ws, onChanged }: { ws: SessionWorkspace; onChanged: (
                 <span className={cx("px-2 py-0.5 rounded-full font-semibold", NOTE_TONE[n.kind])}>{NOTE_LABEL[n.kind] ?? n.kind}</span>
                 <span>{n.authorName}</span>
                 <span>· {formatDate(n.createdAt)}</span>
+                {n.updatedAt && <span>· editada</span>}
                 {n.isPrivate && <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">Privada</span>}
               </div>
-              <p className="mt-1.5 text-xs text-slate-800 leading-relaxed whitespace-pre-line">{n.body}</p>
+              <EditableText
+                text={n.body}
+                canEdit={!!permissions.actorId && n.authorId === permissions.actorId}
+                onSave={(body) => updateSessionNoteAction(session.projectId, n.id, body)}
+                onSaved={onChanged}
+                className="mt-1.5 text-xs text-slate-800"
+              />
+              <NoteReplies
+                projectId={session.projectId}
+                noteId={n.id}
+                replies={n.replies ?? []}
+                actorId={permissions.actorId}
+                canReply={permissions.canReply === true}
+                onChanged={onChanged}
+              />
             </li>
           ))}
         </ul>
@@ -194,7 +371,7 @@ export function NotesTab({ ws, onChanged }: { ws: SessionWorkspace; onChanged: (
         <p className="mt-4 text-[11px] text-slate-500">
           {session.status === "completed"
             ? "La sesión ya terminó: sus notas quedan como registro."
-            : "Las notas las registra el mentor de la sesión. Tú puedes llevar tus preguntas al chat del asistente."}
+            : "Las notas las registra el mentor de la sesión. Puedes responderlas aquí o pedirle al asistente que lo haga por ti."}
         </p>
       )}
     </Panel>

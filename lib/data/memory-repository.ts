@@ -82,6 +82,7 @@ export function createMemoryRepository(): Repository {
     comments: new MemoryTable(),
     mentorSessions: new MemoryTable(),
     sessionNotes: new MemoryTable(),
+    sessionNoteReplies: new MemoryTable(),
     mentorshipRelations: new MemoryTable(),
     mentorshipAgreements: new MemoryTable(),
     mentorshipGoals: new MemoryTable(),

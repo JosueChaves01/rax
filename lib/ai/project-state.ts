@@ -156,7 +156,7 @@ export function buildProjectState(w: Workspace, viewerRole: Role, today: string)
       recentNotes: [...(w.notes ?? [])]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, LIMITS.sessionNotes)
-        .map((n) => `[sesión ${n.sessionId}] ${NOTE_KIND_LABEL[n.kind] ?? n.kind}: ${clip(n.body, 200)} (${day(n.createdAt)})`),
+        .map((n) => `[nota ${n.id} · sesión ${n.sessionId}] ${NOTE_KIND_LABEL[n.kind] ?? n.kind}: ${clip(n.body, 200)} (${day(n.createdAt)})`),
       lastSynthesis: lastSynthesisLine(w.sessions),
     },
     agreement: agreement
@@ -228,7 +228,7 @@ ${list(s.diagnosis.pendingReview, "ninguno")}
 Sesiones próximas:
 ${list(s.sessions.upcoming, "ninguna")}
 Última sesión realizada: ${s.sessions.lastCompleted ?? "ninguna"}
-Notas recientes de las sesiones de mentoría:
+Notas recientes de las sesiones de mentoría (las respuestas y el resto se leen con read_mentor_notes):
 ${list(s.sessions.recentNotes ?? [], "ninguna")}
 Última síntesis pos-sesión (incluye lo hablado en la llamada si se transcribió; la transcripción completa está en el conocimiento del proyecto como «Transcripción de llamada…»):
   ${s.sessions.lastSynthesis ?? "ninguna"}
