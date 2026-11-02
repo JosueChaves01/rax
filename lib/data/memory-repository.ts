@@ -43,10 +43,28 @@ class MemoryTable<T extends { id: string }> implements Table<T> {
     this.rows.set(id, structuredClone(next));
     return structuredClone(next);
   }
+
+  async latest(where: Partial<T>, limit: number) {
+    const created = (r: T) => String((r as { createdAt?: string }).createdAt ?? "");
+    return (await this.list(where)).sort((a, b) => created(b).localeCompare(created(a))).slice(0, limit);
+  }
+
+  async count(where: Partial<T>) {
+    return (await this.list(where)).length;
+  }
 }
 
 export function createMemoryRepository(): Repository {
+  const usage = new Map<string, number>();
   return {
+    fn: {
+      async addAiUsage(actorId, kind, day, amount) {
+        const key = `${actorId}:${day}:${kind}`;
+        const total = (usage.get(key) ?? 0) + amount;
+        usage.set(key, total);
+        return total;
+      },
+    },
     agentSessions: new MemoryTable(),
     sessionCalls: new MemoryTable(),
     sessionCallSegments: new MemoryTable(),

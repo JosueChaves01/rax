@@ -52,7 +52,7 @@ import {
   updatePostSessionSynthesis,
   suggestFirstReview,
 } from "@/lib/services/mentoring";
-import { endCall, getCallTranscript, getSessionCallState, startCall } from "@/lib/services/session-calls";
+import { endCall, getCallTranscript, getSessionCallState, startCall, synthesizeEndedCall } from "@/lib/services/session-calls";
 import {
   addEvidence,
   approveHypothesis,
@@ -131,7 +131,7 @@ import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
 import { executeClaudeAgentTurn, type SessionContext } from "@/lib/ai/claude-orchestrator";
 import { AiProposalItemSchema, type AiProposalItem } from "@/lib/n8n/contracts";
 import { applyAgentProposal } from "@/lib/services/agent-actions";
-import { loadProjectState, runAgentTurn } from "@/lib/services/agent-turn";
+import { agentTurnPayload, loadProjectState, runAgentTurn } from "@/lib/services/agent-turn";
 import type { z } from "zod";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 import { generateMentorshipExplorationData, type MentorshipExplorationAiResult } from "@/lib/ai/exploration-ai";
@@ -145,13 +145,15 @@ export type ActionResult<T = undefined> = { ok: true; data?: T; notice?: string 
  * Envoltorio común: exige sesión, traduce errores de dominio a mensajes seguros
  * (sin detalles internos) y revalida el espacio de trabajo.
  */
-async function run<T>(projectId: string | null, fn: (d: ServiceDeps) => Promise<T>): Promise<ActionResult<T>> {
+async function run<T>(projectId: string | null, fn: (d: ServiceDeps) => Promise<T>, opts: { revalidate?: boolean } = {}): Promise<ActionResult<T>> {
   const d = await getDeps();
   if (!d) return { ok: false, error: "Tu sesión terminó. Volvé a entrar.", code: "unauthenticated" };
   try {
     const data = await fn(d);
-    if (projectId) revalidatePath(`/app/p/${projectId}`, "layout");
-    revalidatePath("/app", "layout");
+    if (opts.revalidate !== false) {
+      if (projectId) revalidatePath(`/app/p/${projectId}`, "layout");
+      revalidatePath("/app", "layout");
+    }
     return { ok: true, data };
   } catch (e) {
     if (isDomainError(e)) return { ok: false, error: e.message, code: e.code };
@@ -159,6 +161,13 @@ async function run<T>(projectId: string | null, fn: (d: ServiceDeps) => Promise<
     return { ok: false, error: "Algo salió mal. Tus datos guardados no se perdieron; probá de nuevo." };
   }
 }
+
+/**
+ * Acciones del chat del asistente: no cambian lo que muestran las demás pantallas (hilos, sesiones,
+ * mensajes), así que no invalidan toda la app. Revalidar el layout en cada mensaje obligaba a volver a
+ * renderizar /app en el servidor y a reenviarlo al navegador.
+ */
+const chat = <T,>(projectId: string, fn: (d: ServiceDeps) => Promise<T>) => run(projectId, fn, { revalidate: false });
 
 /* ── Cuenta (Supabase Auth) ── */
 
@@ -406,9 +415,17 @@ export const startCallAction = async (sessionId: string) =>
 
 export const endCallAction = async (projectId: string, callId: string) =>
   run(projectId, async (d) => {
-    const res = await endCall(d, V.parse(V.Ids, callId));
+    // Colgar es inmediato: la síntesis se pide aparte (synthesizeCallAction) y la pantalla la espera.
+    const res = await endCall(d, V.parse(V.Ids, callId), { synthesize: false });
     revalidatePath(`/app/p/${projectId}/mentoria`);
     return res;
+  });
+
+export const synthesizeCallAction = async (projectId: string, callId: string) =>
+  run(projectId, async (d) => {
+    const synthesis = await synthesizeEndedCall(d, V.parse(V.Ids, callId));
+    revalidatePath(`/app/p/${projectId}/mentoria`);
+    return synthesis;
   });
 
 export const getMentorSessionWorkspaceAction = async (projectId: string, sessionId: string) =>
@@ -1147,7 +1164,7 @@ export async function sendMainAgentMessageAction(input: unknown) {
   const parsed = MainAgentChatInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "El mensaje o el contexto del formulario no son válidos." };
 
-  return run(parsed.data.projectId, async (d) => {
+  return chat(parsed.data.projectId, async (d) => {
     const { project } = await guard(d, parsed.data.projectId, "agent.chat");
     const turn = { ...parsed.data, role: d.actor.role };
     const selection = selectRaxCapability(turn);
@@ -1323,7 +1340,7 @@ async function nativeMainAgentTurn(
 
 /** Loads only the signed-in actor's agent thread for this authorized project. */
 export async function loadMainAgentThreadAction(projectId: string) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     await guard(d, projectId, "agent.chat");
     const thread = await getAgentThread(d, projectId);
     if (!thread) return { thread: null, messages: [] };
@@ -1334,19 +1351,19 @@ export async function loadMainAgentThreadAction(projectId: string) {
 /* ── Claude Projects: Hilos Múltiples, Conocimiento y Artefactos ── */
 
 export async function listProjectThreadsAction(projectId: string) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     return listProjectThreads(d, projectId);
   });
 }
 
 export async function createProjectThreadAction(projectId: string, title?: string, sessionId?: string) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     return createAgentThread(d, projectId, title, sessionId ? V.parse(V.Ids, sessionId) : undefined);
   });
 }
 
 export async function archiveProjectThreadAction(projectId: string, threadId: string) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     return archiveAgentThread(d, V.parse(V.Ids, threadId));
   });
 }
@@ -1354,12 +1371,12 @@ export async function archiveProjectThreadAction(projectId: string, threadId: st
 /* ── Sesiones del asistente: Proyecto → Sesión → Hilo ── */
 
 export async function listProjectSessionsAction(projectId: string) {
-  return run(projectId, async (d) => listProjectSessions(d, projectId));
+  return chat(projectId, async (d) => listProjectSessions(d, projectId));
 }
 
 /** Crea una sesión con su primer hilo, listo para conversar. */
 export async function createProjectSessionAction(projectId: string, input: { title?: string; goal?: string; threadTitle?: string }) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     const session = await createAgentSession(d, projectId, {
       title: typeof input.title === "string" ? input.title.slice(0, 200) : undefined,
       goal: typeof input.goal === "string" ? input.goal.slice(0, 2000) : undefined,
@@ -1374,7 +1391,7 @@ export async function updateProjectSessionAction(
   sessionId: string,
   patch: { title?: string; goal?: string; status?: "active" | "archived" },
 ) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     return updateAgentSession(d, V.parse(V.Ids, sessionId), {
       title: typeof patch.title === "string" ? patch.title : undefined,
       goal: typeof patch.goal === "string" ? patch.goal : undefined,
@@ -1384,13 +1401,13 @@ export async function updateProjectSessionAction(
 }
 
 export async function renameProjectThreadAction(projectId: string, threadId: string, title: string) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     return renameAgentThread(d, threadId, title);
   });
 }
 
 export async function loadThreadMessagesAction(projectId: string, threadId: string) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     const thread = await authorizedThread(d, threadId);
     const messages = await listAgentMessages(d, thread.id);
     return { thread, messages };
@@ -1404,13 +1421,13 @@ export async function updateProjectInstructionsAction(projectId: string, instruc
 }
 
 export async function listProjectDocumentsAction(projectId: string) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     return listProjectDocuments(d, projectId);
   });
 }
 
 export async function getProjectKnowledgeStatsAction(projectId: string) {
-  return run(projectId, async (d) => {
+  return chat(projectId, async (d) => {
     return getProjectKnowledgeStats(d, projectId);
   });
 }
@@ -1455,35 +1472,17 @@ export async function sendClaudeAgentMessageAction(input: {
   message: string;
   sessionContext?: SessionContext;
 }) {
-  return run(input.projectId, async (d) => {
+  return chat(input.projectId, async (d) => {
     const { project } = await guard(d, input.projectId, "agent.chat");
 
-    const { thread, userMessage, assistantMessage, result } = await runAgentTurn(d, {
+    const turn = await runAgentTurn(d, {
       projectId: project.id,
       threadId: input.threadId,
       message: input.message,
       // El campo de formulario solo lo define el servidor (sendMainAgentMessageAction), nunca el navegador.
       sessionContext: input.sessionContext ? { ...input.sessionContext, field: undefined } : undefined,
     });
-    if (!userMessage || !assistantMessage) throw new Error("agent_turn_not_persisted");
-
-    return {
-      threadId: thread.id,
-      userMessage,
-      assistantMessage,
-      reply: assistantMessage.content,
-      artifacts: result.artifacts,
-      citations: result.citations,
-      proposals: result.proposals,
-      mode: result.mode,
-      cachedPromptUsed: result.cachedPromptUsed ?? false,
-      cacheStatus: result.cacheStatus ?? "simulated",
-      cachedTokens: result.cachedTokens ?? 0,
-      unavailable: result.unavailable ?? null,
-      sessionId: thread.sessionId ?? null,
-      sessionUpdated: result.sessionUpdated === true,
-      followUps: assistantMessage.status === "failed" ? [] : (result.followUps ?? []),
-    };
+    return agentTurnPayload(turn);
   });
 }
 

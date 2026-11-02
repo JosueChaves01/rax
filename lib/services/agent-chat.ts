@@ -1,5 +1,5 @@
 import "server-only";
-import type { AgentArtifact, AgentMessage, AgentThread, KnowledgeCitation } from "@/types/domain";
+import type { AgentArtifact, AgentMessage, AgentThread, AgentTurnMetrics, KnowledgeCitation } from "@/types/domain";
 import { notFound, validation } from "@/lib/errors";
 import { guard, sysRepo, type ServiceDeps } from "./base";
 
@@ -95,8 +95,23 @@ export async function listAgentMessages(d: ServiceDeps, threadId: string): Promi
   return messages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-export async function appendAgentUserMessage(d: ServiceDeps, threadId: string, content: string): Promise<AgentMessage> {
-  const thread = await authorizedThread(d, threadId);
+/**
+ * Mensajes más recientes del hilo (de más viejo a más nuevo) y cuántos mensajes válidos tiene en
+ * total. Es lo que necesita un turno del agente: no trae el hilo entero aunque tenga cientos de mensajes.
+ * `thread` debe venir ya autorizado (authorizedThread).
+ */
+export async function recentAgentMessages(d: ServiceDeps, thread: AgentThread, limit: number): Promise<{ messages: AgentMessage[]; conversationalTotal: number }> {
+  const [latest, total, failed] = await Promise.all([
+    d.repo.agentMessages.latest({ threadId: thread.id }, limit),
+    d.repo.agentMessages.count({ threadId: thread.id }),
+    d.repo.agentMessages.count({ threadId: thread.id, status: "failed" }),
+  ]);
+  return { messages: latest.sort((a, b) => a.createdAt.localeCompare(b.createdAt)), conversationalTotal: Math.max(0, total - failed) };
+}
+
+/** `authorized`: hilo ya autorizado en este mismo pedido, para no volver a consultarlo. */
+export async function appendAgentUserMessage(d: ServiceDeps, threadId: string, content: string, authorized?: AgentThread): Promise<AgentMessage> {
+  const thread = authorized?.id === threadId ? authorized : await authorizedThread(d, threadId);
   const clean = content.trim();
   if (!clean || clean.length > MAX_AGENT_MESSAGE_LENGTH) {
     throw validation(`El mensaje debe tener entre 1 y ${MAX_AGENT_MESSAGE_LENGTH} caracteres.`);
@@ -135,9 +150,11 @@ export async function appendAgentAssistantMessage(
     artifacts?: AgentArtifact[];
     citations?: KnowledgeCitation[];
     error?: { code: string; message: string };
+    metrics?: AgentTurnMetrics;
   },
+  authorized?: AgentThread,
 ): Promise<AgentMessage> {
-  const thread = await authorizedThread(d, threadId);
+  const thread = authorized?.id === threadId ? authorized : await authorizedThread(d, threadId);
   const clean = input.content.trim().slice(0, MAX_AGENT_MESSAGE_LENGTH) || (input.error ? "No se pudo completar esta respuesta." : "");
   if (!clean) throw validation("La respuesta del agente está vacía.");
   if ((input.proposals?.length ?? 0) > MAX_PROPOSALS) throw validation("La respuesta supera el límite de propuestas.");
@@ -164,8 +181,18 @@ export async function appendAgentAssistantMessage(
     status: input.error ? "failed" : "complete",
     ...(input.error ? { errorCode: input.error.code.slice(0, 100), errorMessage: input.error.message.slice(0, 1000) } : {}),
     createdAt: d.now(),
+    ...(input.metrics ? { metrics: input.metrics } : {}),
   };
-  const saved = await sys.agentMessages.insert(row);
+  let saved: AgentMessage;
+  try {
+    saved = await sys.agentMessages.insert(row);
+  } catch (e) {
+    // Sin la migración de métricas la columna no existe: la respuesta se guarda igual, sin ellas.
+    if (!row.metrics || !/metrics/i.test(e instanceof Error ? e.message : String(e))) throw e;
+    const { metrics: _omit, ...withoutMetrics } = row;
+    void _omit;
+    saved = await sys.agentMessages.insert(withoutMetrics);
+  }
   await sys.agentThreads.update(thread.id, {
     status: input.error ? "error" : "active",
     lastErrorCode: input.error?.code.slice(0, 100),

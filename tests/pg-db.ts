@@ -67,6 +67,21 @@ export function pgDb(pool: pg.Pool, uid: string | null): Db {
       const w = where(match, params.length, extra);
       return run(`update public."${table}" set ${set}${w} returning *`, [...params, ...extra]);
     },
+    async selectLatest(table, match, orderColumn, limit) {
+      const params: unknown[] = [];
+      const w = where(match, 0, params);
+      return run(`select * from public."${table}"${w} order by "${orderColumn}" desc limit ${Math.max(0, Math.floor(limit))}`, params);
+    },
+    async count(table, match) {
+      const params: unknown[] = [];
+      const rows = await run(`select count(*)::int as n from public."${table}"${where(match, 0, params)}`, params);
+      return Number(rows[0]?.n ?? 0);
+    },
+    async rpc(fn, args) {
+      const names = Object.keys(args);
+      const rows = await run(`select * from public."${fn}"(${names.map((n, i) => `${n} => $${i + 1}`).join(", ")})`, Object.values(args));
+      return rows;
+    },
   };
 }
 

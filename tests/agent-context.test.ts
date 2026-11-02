@@ -164,8 +164,63 @@ describe("herramientas en dos pasos", () => {
     expect(turn.result.reply).toBe("Te propongo una tarea para empezar: encuestar a 10 ciclistas.");
     expect(bodies).toHaveLength(2);
     expect(bodies[1].messages.some((m) => m.role === "tool")).toBe(true);
-    expect(bodies[1].tool_choice).toBe("none");
+    // Puede encadenar otra herramienta si la necesita; la última vuelta ya no ofrece herramientas.
+    expect(bodies[1].tool_choice).toBe("auto");
     expect(turn.assistantMessage?.proposals).toHaveLength(1);
+    expect(turn.assistantMessage?.metrics).toMatchObject({ model: "m", tools: ["propose_tasks"], modelCalls: 2 });
+  });
+
+  it("encadena varias vueltas de herramientas y la última redacta sin herramientas", async () => {
+    const w = await world();
+    const ent = w.as("ent1");
+    const project = await createProject(ent, { name: "Taller de bicis", description: "Reparación a domicilio", nature: "designing_solution" });
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("OPENROUTER_FALLBACK_MODELS", "");
+    const bodies: Array<{ tool_choice?: string; tools?: unknown[] }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url, options?: RequestInit) => {
+        const body = JSON.parse(options?.body as string);
+        bodies.push(body);
+        // Pide herramientas mientras se las ofrezcan; sin herramientas, responde.
+        const message = body.tool_choice === "none"
+          ? { content: "Listo, te dejé tres tareas." }
+          : { content: "", tool_calls: [{ id: `c${bodies.length}`, type: "function", function: { name: "propose_tasks", arguments: JSON.stringify({ tasks: [{ title: `Tarea ${bodies.length}` }] }) } }] };
+        return new Response(JSON.stringify({ model: "m", choices: [{ message }] }), { status: 200 });
+      }),
+    );
+    const turn = await runAgentTurn(ent, { projectId: project.id, message: "Armame un plan" });
+    expect(bodies.map((b) => b.tool_choice ?? "-")).toEqual(["-", "auto", "auto", "none"]);
+    expect(turn.result.proposals.map((p) => p.title)).toEqual(["Tarea 1", "Tarea 2", "Tarea 3"]);
+    expect(turn.result.reply).toBe("Listo, te dejé tres tareas.");
+  });
+
+  it("ejecuta en paralelo herramientas distintas pedidas en la misma vuelta", async () => {
+    const w = await world();
+    const ent = w.as("ent1");
+    const project = await createProject(ent, { name: "Taller de bicis", description: "Reparación a domicilio", nature: "designing_solution" });
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("OPENROUTER_FALLBACK_MODELS", "");
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        const message = calls === 1
+          ? {
+              content: "",
+              tool_calls: [
+                { id: "a", type: "function", function: { name: "propose_tasks", arguments: JSON.stringify({ tasks: [{ title: "Encuestar" }] }) } },
+                { id: "b", type: "function", function: { name: "propose_tasks", arguments: JSON.stringify({ tasks: [{ title: "Llamar" }] }) } },
+              ],
+            }
+          : { content: "Hecho." };
+        return new Response(JSON.stringify({ model: "m", choices: [{ message }] }), { status: 200 });
+      }),
+    );
+    const turn = await runAgentTurn(ent, { projectId: project.id, message: "Armame un plan" });
+    // El orden de las propuestas respeta el orden en que el modelo las pidió.
+    expect(turn.result.proposals.map((p) => p.title)).toEqual(["Encuestar", "Llamar"]);
   });
 
   it("si la IA no responde, el turno queda como fallo visible y sin propuestas inventadas", async () => {

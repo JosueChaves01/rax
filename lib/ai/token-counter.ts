@@ -5,8 +5,15 @@
  * y a ~3 caracteres en español debido a tildes y caracteres especiales.
  */
 
-/** Umbral por defecto: 80.000 tokens (~300 KB de texto) para mantener margen con el modelo de 200k tokens */
-export const DEFAULT_IN_CONTEXT_TOKEN_LIMIT = 80_000;
+/**
+ * Umbral por defecto para mandar los documentos completos: 12.000 tokens (~40 KB de texto). Los modelos
+ * gratis tienen ventanas chicas y se vuelven lentos con prompts grandes; por encima, se buscan los
+ * fragmentos relevantes. Se ajusta con RAX_KNOWLEDGE_IN_CONTEXT_TOKENS (p. ej. con un modelo pagado).
+ */
+export const DEFAULT_IN_CONTEXT_TOKEN_LIMIT = (() => {
+  const n = Number(process.env.RAX_KNOWLEDGE_IN_CONTEXT_TOKENS);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 12_000;
+})();
 
 export function estimateTokens(text: string): number {
   if (!text) return 0;
