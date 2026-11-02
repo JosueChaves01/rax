@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import type { Workspace } from "@/lib/services/projects";
 import type {
   AutonomyRating,
@@ -13,7 +12,6 @@ import {
   CYCLE_DECISION_LABEL,
   GOAL_KIND_LABEL,
   GOAL_STATUS_LABEL,
-  MENTORSHIP_STAGE_LABEL,
 } from "@/features/labels";
 import { recordCycleEvaluationAction } from "@/app/actions";
 import {
@@ -21,7 +19,6 @@ import {
   Card,
   Empty,
   Field,
-  Heading,
   Notice,
   Tag,
   formatDate,
@@ -75,11 +72,9 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
 
   if (!mentorshipRelation) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
-        <Empty title="Sin relación de mentoría formal">
-          Este proyecto no tiene una relación de mentoría activa sobre la cual evaluar un ciclo.
-        </Empty>
-      </main>
+      <Empty title="Todavía no hay ciclo para cerrar">
+        El cierre del ciclo se hace con un mentor asignado, después de la segunda revisión.
+      </Empty>
     );
   }
 
@@ -125,36 +120,23 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
       if (res && !res.ok) {
         setErrorNotice(res.error);
       } else {
-        setStatusNotice("Evaluación de ciclo registrada exitosamente con snapshot histórico inmutable.");
+        setStatusNotice("Listo: el cierre del ciclo quedó registrado.");
       }
     });
   };
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
-      {/* Cabecera */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="eyebrow">Etapa de evaluación · {workspace.project.name}</p>
-          <Heading level={1} highlight="cierre y renovación." className="mt-2">
-            Evaluación de ciclo,
-          </Heading>
-          <p className="mt-1 text-sm text-muted">
-            Comparativa sistemática entre la línea base inicial y los resultados observados para evidenciar el valor del acompañamiento.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href={`/app/p/${projectId}/orientar`}>
-            <Button variant="ghost" size="sm">
-              ← Sesiones
-            </Button>
-          </Link>
-          <Link href={`/app/p/${projectId}/acuerdos`}>
-            <Button variant="secondary" size="sm">
-              Acuerdos y metas
-            </Button>
-          </Link>
-        </div>
+    <div>
+      <div>
+        <p className="eyebrow">Etapa 4 · Decidir</p>
+        <h2 className="display mt-2 text-4xl">
+          Cierre <span className="text-highlight">del ciclo.</span>
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm text-slate-600">
+          {canEvaluate
+            ? "Compará cada objetivo con su línea base, valorá la autonomía y decidí si el acompañamiento se renueva con un nuevo ciclo o se cierra."
+            : "Al final del ciclo tu mentor compara cada objetivo con su línea base y decide con vos si se renueva o se cierra. Acá queda el historial."}
+        </p>
       </div>
 
       {statusNotice && (
@@ -167,17 +149,6 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
           <Notice tone="error">{errorNotice}</Notice>
         </div>
       )}
-
-      {/* Estado actual de la relación */}
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center gap-3">
-          <span className="font-semibold text-xs text-muted uppercase">Etapa actual del proceso:</span>
-          <Tag color="var(--color-cyan)">{MENTORSHIP_STAGE_LABEL[mentorshipRelation.stage]}</Tag>
-        </div>
-        <span className="font-mono text-xs text-faint">
-          Ciclos evaluados: {cycleEvaluations?.length ?? 0}
-        </span>
-      </div>
 
       {/* Formulario de Evaluación Formal del Ciclo */}
       {canEvaluate && mentorshipRelation.stage !== "closed" && (
@@ -415,7 +386,7 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
 
       {/* Historial Inmutable de Ciclos Evaluados */}
       <section aria-label="Historial de evaluaciones" className="mt-14">
-        <h2 className="display text-2xl">Historial inmutable de ciclos</h2>
+        <h2 className="display text-2xl">Ciclos anteriores</h2>
         <p className="text-sm text-muted">
           Registro permanente de evaluaciones anteriores. Ningún dato ni decisión acordada se elimina.
         </p>
@@ -516,6 +487,6 @@ export function CycleEvaluationView({ projectId, workspace }: Props) {
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }

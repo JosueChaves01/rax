@@ -1,15 +1,17 @@
 import { loadWorkspace } from "../data";
+import { CycleTrack } from "../cycle-track";
 import { CycleEvaluationView } from "./cycle-evaluation-view";
 
-export const metadata = { title: "Evaluación de Ciclo · RAX" };
+export const metadata = { title: "Cierre del ciclo · RAX" };
 
-export default async function CycleEvaluationPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function CycleEvaluationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { w } = await loadWorkspace(id);
 
-  return <CycleEvaluationView projectId={id} workspace={w} />;
+  return (
+    <div className="space-y-6">
+      <CycleTrack w={w} active="evaluacion" />
+      <CycleEvaluationView projectId={id} workspace={w} />
+    </div>
+  );
 }

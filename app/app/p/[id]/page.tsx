@@ -13,6 +13,7 @@ const CTA: Record<string, string> = {
   orientar: "Ir a la primera revisión",
   validacion: "Ir a hipótesis y experimentos",
   decidir: "Ir a la segunda revisión",
+  evaluacion: "Ir al cierre del ciclo",
 };
 
 /** Inicio del proyecto: en qué etapa está, qué sigue y a quién le toca. */

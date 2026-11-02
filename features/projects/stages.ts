@@ -94,17 +94,24 @@ export const SECTIONS: Section[] = [
     id: "orientar",
     label: "Orientar",
     pages: [
-      { slug: "orientar", label: "Sesiones de mentoría" },
+      { slug: "orientar", label: "Revisión con el mentor" },
       { slug: "acuerdos", label: "Acuerdo y objetivos" },
-      { slug: "evaluacion", label: "Evaluación de ciclo" },
     ],
   },
   { id: "probar", label: "Probar", pages: [{ slug: "validacion", label: "Hipótesis y experimentos" }] },
-  { id: "decidir", label: "Decidir", pages: [{ slug: "decidir", label: "Segunda revisión" }] },
+  {
+    id: "decidir",
+    label: "Decidir",
+    pages: [
+      { slug: "decidir", label: "Segunda revisión" },
+      { slug: "evaluacion", label: "Cierre del ciclo" },
+    ],
+  },
   {
     id: "archivo",
     label: "Archivo",
     pages: [
+      { slug: "documentos", label: "Documentos" },
       { slug: "historial", label: "Evidencia e historial" },
       { slug: "tareas", label: "Hoja de ruta y tareas" },
     ],

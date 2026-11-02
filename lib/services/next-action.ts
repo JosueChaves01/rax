@@ -24,5 +24,11 @@ export function nextAction(w: Workspace): { text: string; tab: string; turn: Tur
     const mentor = w.mentors.map((m) => w.people[m]?.name).find(Boolean) ?? "Tu mentor";
     return { turn, tab: next.tab, text: `${mentor} tiene tu pedido. Mientras tanto, podés seguir sumando información o evidencia.` };
   }
+  // Con la decisión tomada, al ciclo le falta su cierre: lo hace el mentor en «Cierre del ciclo».
+  if (w.phase === "decided" && w.mentors.length > 0 && w.cycleEvaluations.length === 0) {
+    return viewer === "mentor"
+      ? { turn: "mentor", tab: "evaluacion", text: "Decisión registrada. Cerrá el ciclo: compará los objetivos con su línea base y decidí si se renueva." }
+      : { turn: "mentor", tab: "evaluacion", text: "Tu mentor ya decidió. Falta el cierre del ciclo: ahí evalúan los objetivos y si se renueva el acompañamiento." };
+  }
   return { turn, ...next };
 }
