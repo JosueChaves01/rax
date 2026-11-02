@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useTransition } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { cx } from "@/shared/ui/primitives";
 import { FormattedText } from "./formatted-text";
 
@@ -126,7 +126,6 @@ export function ChatInput({
   const [sendOnEnter, setSendOnEnter] = useState(true);
   const [showTemplates, setShowTemplates] = useState(false);
   const [isExpandedModal, setIsExpandedModal] = useState(false);
-  const [, startTransition] = useTransition();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const modalTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -252,13 +251,13 @@ export function ChatInput({
       setIsExpandedModal(false);
     }
 
-    startTransition(async () => {
-      setText("");
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "56px";
-      }
-      await onSend(trimmed);
-    });
+    // Sin transición: dentro de una transición asíncrona React no muestra ningún cambio (input vacío,
+    // mensaje de la persona, botón deshabilitado) hasta que termina toda la respuesta del agente.
+    setText("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "56px";
+    }
+    await onSend(trimmed);
   };
 
   // Conteo de palabras y caracteres
