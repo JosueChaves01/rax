@@ -2,14 +2,13 @@
 
 import { Component, useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { SessionCall } from "@/types/domain";
 import { adoptPostSessionCommitmentsAction, getCallTranscriptAction, getSessionCallStateAction } from "@/app/actions";
 import { Button, Notice, cx, formatDate } from "@/shared/ui/primitives";
 import { useSessionCall, type LiveSegment } from "@/shared/ui/use-session-call";
 import type { IceServer } from "@/lib/services/session-calls";
 
-interface CallState {
+export interface CallState {
   sessionId: string;
   projectId: string;
   me: { id: string; name: string };
@@ -21,12 +20,12 @@ interface CallState {
   pastCalls: SessionCall[];
 }
 
-const clock = (ms: number) => {
+export const clock = (ms: number) => {
   const t = Math.max(0, Math.round(ms / 1000));
   return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 };
 
-function Video({ stream, muted, label, off }: { stream: MediaStream | null; muted?: boolean; label: string; off?: boolean }) {
+export function Video({ stream, muted, label, off }: { stream: MediaStream | null; muted?: boolean; label: string; off?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (ref.current && ref.current.srcObject !== stream) ref.current.srcObject = stream;
@@ -47,7 +46,7 @@ function Video({ stream, muted, label, off }: { stream: MediaStream | null; mute
   );
 }
 
-function TranscriptList({ segments, meId, empty, tall }: { segments: LiveSegment[]; meId?: string; empty: string; tall?: boolean }) {
+export function TranscriptList({ segments, meId, empty, tall }: { segments: LiveSegment[]; meId?: string; empty: string; tall?: boolean }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => end.current?.scrollIntoView({ block: "nearest" }), [segments.length]);
   if (!segments.length) return <p className="text-xs text-slate-500">{empty}</p>;
@@ -64,7 +63,7 @@ function TranscriptList({ segments, meId, empty, tall }: { segments: LiveSegment
   );
 }
 
-function PastCall({ call, projectId }: { call: SessionCall; projectId: string }) {
+export function PastCall({ call, projectId }: { call: SessionCall; projectId: string }) {
   const [open, setOpen] = useState(false);
   const [segments, setSegments] = useState<LiveSegment[] | null>(null);
   const toggle = async () => {
@@ -108,7 +107,7 @@ function PastCall({ call, projectId }: { call: SessionCall; projectId: string })
   );
 }
 
-function Result({ projectId, sessionId, result }: { projectId: string; sessionId: string; result: NonNullable<ReturnType<typeof useSessionCall>["result"]> }) {
+export function Result({ projectId, sessionId, result }: { projectId: string; sessionId: string; result: NonNullable<ReturnType<typeof useSessionCall>["result"]> }) {
   const [adopted, setAdopted] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -183,109 +182,8 @@ function Result({ projectId, sessionId, result }: { projectId: string; sessionId
   );
 }
 
-function InCall({ state, onDone, onActive }: { state: CallState; onDone: () => void; onActive: (active: boolean) => void }) {
-  const c = useSessionCall({
-    sessionId: state.sessionId,
-    projectId: state.projectId,
-    me: state.me,
-    iceServers: state.iceServers,
-    transcriptionAvailable: state.transcriptionAvailable,
-  });
-  const live = c.phase === "in_call" || c.phase === "joining" || c.phase === "ending";
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    if (!c.call || c.phase !== "in_call") return;
-    const t = window.setInterval(() => setElapsed(Date.now() - Date.parse(c.call!.startedAt)), 1000);
-    return () => window.clearInterval(t);
-  }, [c.call, c.phase]);
-
-  useEffect(() => {
-    onActive(c.phase !== "idle");
-    if (c.phase === "ended") onDone();
-  }, [c.phase, onDone, onActive]);
-
-  const status =
-    c.phase === "joining" ? "Conectando…"
-    : c.phase === "ending" ? "Cerrando y guardando la transcripción…"
-    : !c.peer ? "Esperando a la otra persona…"
-    : c.connection === "connected" ? `En llamada con ${c.peer.name} · ${clock(elapsed)}`
-    : c.connection === "failed" ? "No se pudo conectar el audio y video (puede requerir un servidor TURN)."
-    : `Conectando con ${c.peer.name}…`;
-
-  return (
-    <div className="space-y-3">
-      {c.error && (
-        <div role="alert" className="flex items-start justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
-          <span>{c.error}</span>
-          <button type="button" className="cursor-pointer font-bold" onClick={c.dismissError} aria-label="Cerrar aviso">×</button>
-        </div>
-      )}
-
-      {c.phase === "idle" && (
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="primary" onClick={c.join}>
-            {state.activeCall ? "📞 Unirme a la llamada" : "📞 Iniciar llamada"}
-          </Button>
-          <p className="max-w-xl text-[11px] leading-relaxed text-slate-500">
-            {state.transcriptionAvailable
-              ? "Al unirte aceptas que tu voz se transcriba. La transcripción queda guardada en el proyecto y el agente la usa para proponer los siguientes pasos."
-              : "La llamada funciona, pero la transcripción está apagada: falta configurar GROQ_API_KEY en el servidor."}
-          </p>
-        </div>
-      )}
-
-      {live && (
-        <>
-          <p className="text-xs font-semibold text-slate-700">{status}</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Video stream={c.remoteStream} label={c.peer?.name ?? "Otra persona"} />
-            <Video stream={c.localStream} muted label={`${state.me.name} (tú)`} off={!c.camOn} />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={c.toggleMic} disabled={c.phase !== "in_call"}>
-              {c.micOn ? "🎙️ Silenciar" : "🔇 Activar micrófono"}
-            </Button>
-            {c.hasVideo && (
-              <Button size="sm" onClick={c.toggleCam} disabled={c.phase !== "in_call"}>
-                {c.camOn ? "📷 Apagar cámara" : "📷 Encender cámara"}
-              </Button>
-            )}
-            <Button size="sm" variant="danger" onClick={c.hangUp} disabled={c.phase !== "in_call"}>
-              {c.phase === "ending" ? "Guardando…" : "Colgar y guardar"}
-            </Button>
-            <span className={cx("text-[11px]", c.transcribing ? "text-emerald-700" : "text-slate-500")}>
-              {c.transcribing ? "● Transcribiendo" : "Transcripción apagada"}
-            </span>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Transcripción en vivo</p>
-            <TranscriptList
-              segments={c.segments}
-              meId={state.me.id}
-              empty={c.transcribing ? "Lo que digan aparecerá aquí cada 15 segundos aproximadamente." : "Sin transcripción en esta llamada."}
-              tall
-            />
-          </div>
-        </>
-      )}
-
-      {c.phase === "ended" && (
-        <div className="space-y-3">
-          {c.result ? (
-            <Result projectId={state.projectId} sessionId={state.sessionId} result={c.result} />
-          ) : (
-            <Notice tone="info">La llamada terminó. La transcripción y la síntesis se guardan en esta sesión en unos segundos.</Notice>
-          )}
-          <Button size="sm" onClick={c.reset}>Volver</Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** Si algo de la llamada falla en el navegador, se avisa aquí y el resto de la página sigue funcionando. */
-class CallErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+export class CallErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
     return { error };
@@ -306,12 +204,8 @@ class CallErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
 /** Pantalla de la llamada (con el contexto del proyecto al lado) para una sesión. */
 export const callRoomHref = (sessionId: string) => `/app/llamada/${sessionId}`;
 
-/**
- * Llamada con transcripción de una sesión de mentoría.
- * - `inline` (dentro de la sesión): muestra el estado y lleva a la pantalla de la llamada.
- * - `room` (pantalla de la llamada): aquí se hace la llamada.
- */
-export function SessionCallPanel(props: { sessionId: string; className?: string; mode?: "inline" | "room" }) {
+/** Llamada de una sesión dentro de la página de la sesión: muestra el estado y lleva a la pantalla de la llamada. */
+export function SessionCallPanel(props: { sessionId: string; className?: string }) {
   return (
     <CallErrorBoundary>
       <SessionCallPanelInner {...props} />
@@ -319,11 +213,9 @@ export function SessionCallPanel(props: { sessionId: string; className?: string;
   );
 }
 
-function SessionCallPanelInner({ sessionId, className, mode = "inline" }: { sessionId: string; className?: string; mode?: "inline" | "room" }) {
-  const router = useRouter();
+function SessionCallPanelInner({ sessionId, className }: { sessionId: string; className?: string }) {
   const [state, setState] = useState<CallState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [inCall, setInCall] = useState(false);
 
   const load = useCallback(async () => {
     const res = await getSessionCallStateAction(sessionId);
@@ -335,24 +227,12 @@ function SessionCallPanelInner({ sessionId, className, mode = "inline" }: { sess
 
   useEffect(() => {
     load();
-  }, [load]);
-
-  // Mientras nadie está en la llamada, se revisa cada 15 s si la otra persona ya la abrió.
-  useEffect(() => {
-    if (inCall) return;
+    // Se revisa cada 15 s si la otra persona ya abrió la llamada.
     const t = window.setInterval(load, 15_000);
     return () => window.clearInterval(t);
-  }, [inCall, load]);
+  }, [load]);
 
-  const onDone = useCallback(() => {
-    window.setTimeout(() => {
-      load();
-      router.refresh();
-    }, 2500);
-  }, [load, router]);
-
-  if (error) return null;
-  if (!state) return null;
+  if (error || !state) return null;
   if (!state.ready) {
     return (
       <div className={className}>
@@ -360,7 +240,7 @@ function SessionCallPanelInner({ sessionId, className, mode = "inline" }: { sess
       </div>
     );
   }
-  if (!state.canCall && !state.pastCalls.length && !inCall) return null;
+  if (!state.canCall && !state.pastCalls.length) return null;
 
   return (
     <section className={cx("space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs sm:p-5", className)}>
@@ -371,27 +251,23 @@ function SessionCallPanelInner({ sessionId, className, mode = "inline" }: { sess
             Videollamada entre el mentor y el emprendedor. Al colgar, lo conversado queda como contexto del proyecto y de esta sesión.
           </p>
         </div>
-        {state.activeCall && !inCall && (
+        {state.activeCall && (
           <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">● Llamada en curso</span>
         )}
       </div>
 
-      {state.canCall && mode === "room" && <InCall state={state} onDone={onDone} onActive={setInCall} />}
-
-      {mode === "inline" && (
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href={callRoomHref(sessionId)}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-blue-700/50 bg-blue-600 px-5 text-xs font-semibold uppercase tracking-[0.08em] text-white shadow-xs transition-colors hover:bg-blue-700"
-          >
-            {state.activeCall ? "📞 Unirme a la llamada" : state.canCall ? "📞 Abrir la llamada" : "Ver la pantalla de la llamada"}
-          </Link>
-          <p className="max-w-xl text-[11px] leading-relaxed text-slate-500">
-            La llamada se abre en su propia pantalla, con todo el contexto del proyecto a la vista: etapa, diagnóstico, hipótesis, acuerdos, tareas,
-            briefing, notas y documentos.
-          </p>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          href={callRoomHref(sessionId)}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-blue-700/50 bg-blue-600 px-5 text-xs font-semibold uppercase tracking-[0.08em] text-white shadow-xs transition-colors hover:bg-blue-700"
+        >
+          {state.activeCall ? "📞 Unirme a la llamada" : state.canCall ? "📞 Abrir la llamada" : "Ver la pantalla de la llamada"}
+        </Link>
+        <p className="max-w-xl text-[11px] leading-relaxed text-slate-500">
+          La llamada se abre a pantalla completa, con el contexto del proyecto a mano en ventanas: etapa, agenda, diagnóstico, hipótesis, acuerdos,
+          tareas, notas y documentos.
+        </p>
+      </div>
 
       {state.pastCalls.length > 0 && (
         <div className="space-y-2">

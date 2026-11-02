@@ -17,23 +17,17 @@ import { STAGES, stageOf } from "@/features/projects/stages";
 import { nextAction } from "@/lib/services/next-action";
 import { Meter, Tag, cx, formatDate } from "@/shared/ui/primitives";
 
-/** Sección plegable del panel; abierta por defecto para que todo quede a la vista. */
-function Section({ title, count, children, open = true }: { title: string; count?: number; children: ReactNode; open?: boolean }) {
-  return (
-    <details open={open} className="group rounded-2xl border border-slate-200/80 bg-white shadow-2xs">
-      <summary className="flex cursor-pointer select-none list-none items-center justify-between gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
-        <span className="text-sm font-bold text-slate-900">
-          {title}
-          {count !== undefined && <span className="ml-1.5 font-mono text-xs font-semibold text-slate-400">{count}</span>}
-        </span>
-        <span aria-hidden className="text-xs text-slate-400 transition-transform group-open:rotate-180">
-          ▾
-        </span>
-      </summary>
-      <div className="space-y-3 border-t border-slate-100 px-4 pb-4 pt-3 text-xs leading-relaxed text-slate-700">{children}</div>
-    </details>
-  );
+/** Una sección del contexto: se abre como ventana desde la barra inferior de la llamada. */
+export interface ContextSection {
+  id: string;
+  title: string;
+  /** Nombre corto para la barra inferior. */
+  short: string;
+  count?: number;
+  node: ReactNode;
 }
+
+const Body = ({ children }: { children: ReactNode }) => <div className="space-y-3 text-xs leading-relaxed text-slate-700">{children}</div>;
 
 function Label({ children }: { children: ReactNode }) {
   return <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-slate-500">{children}</p>;
@@ -61,10 +55,10 @@ const TASK_COLOR: Record<Task["status"], string> = {
 const DOC_SOURCE: Record<ProjectKnowledgeDocument["source"], string> = { upload: "Subido", chat_extracted: "Del chat", note: "Nota o transcripción" };
 
 /**
- * Todo el contexto vigente del proyecto, ordenado para conversar: dónde está, qué se va a tratar,
+ * Todo el contexto vigente del proyecto, en secciones, ordenado para conversar: dónde está, qué se va a tratar,
  * qué se sabe, qué se está probando, qué se acordó, qué está pendiente y qué se ha escrito.
  */
-export function ContextPanel({
+export function buildContextSections({
   w,
   session,
   documents,
@@ -74,7 +68,7 @@ export function ContextPanel({
   session: MentorSession;
   documents: ProjectKnowledgeDocument[];
   replies: SessionNoteReply[];
-}) {
+}): ContextSection[] {
   const name = (id: string) => (id === "ai" ? "Agente" : (w.people[id]?.name ?? "Equipo del proyecto"));
   const stage = stageOf(w.phase);
   const next = nextAction(w);
@@ -115,19 +109,24 @@ export function ContextPanel({
   const pre = session.preSessionBriefing;
   const det = session.briefing;
 
-  return (
-    <div className="space-y-3">
-      {/* Dónde está el proyecto */}
-      <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+
+  const sections: ContextSection[] = [];
+
+  sections.push({
+    id: "proyecto",
+    title: "Dónde está el proyecto",
+    short: "Proyecto",
+    node: (
+      <Body>
         <div className="flex flex-wrap items-center gap-2">
           <Tag color="var(--color-cyan)">{SESSION_KIND_LABEL[session.kind]}</Tag>
           <span className="text-[0.6875rem] text-slate-500">{NATURE_LABEL[w.project.nature]}</span>
         </div>
-        <div className="mt-3">
+        <div>
           <Meter value={stage.n} total={STAGES.length} label={`Etapa · ${stage.label}`} />
           <p className="mt-2 text-sm font-semibold text-slate-800">{PHASE_LABEL[w.phase]}</p>
         </div>
-        <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-xs">
+        <dl className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
           <div>
             <dt className="text-slate-500">Diagnóstico</dt>
             <dd className="mt-0.5 font-semibold text-slate-900">{DIAGNOSIS_STATUS_LABEL[w.diagnosis.status]}</dd>
@@ -141,14 +140,21 @@ export function ContextPanel({
             <dd className="mt-0.5 font-mono font-semibold text-slate-900">{tasks.length}</dd>
           </div>
         </dl>
-        <div className="mt-3 rounded-xl border border-blue-200/80 bg-blue-50/50 px-3 py-2">
+        <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 px-3 py-2">
           <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-blue-700">Siguiente paso del proyecto</p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-800">{next.text}</p>
+          <p className="mt-1 text-slate-800">{next.text}</p>
         </div>
-      </div>
+      </Body>
+    ),
+  });
 
-      {/* Qué se va a tratar */}
-      <Section title="Para esta sesión">
+  sections.push({
+    id: "sesion",
+    title: "Para esta sesión",
+    short: "Agenda",
+    count: pre?.suggestedAgenda.length || undefined,
+    node: (
+      <Body>
         {pre ? (
           <>
             {pre.suggestedAgenda.length > 0 && (
@@ -204,10 +210,17 @@ export function ContextPanel({
         ) : (
           <Empty>Esta sesión todavía no tiene briefing.</Empty>
         )}
-      </Section>
+      </Body>
+    ),
+  });
 
-      {/* Qué se sabe */}
-      <Section title="Diagnóstico" count={current.length}>
+  sections.push({
+    id: "diagnostico",
+    title: "Diagnóstico",
+    short: "Diagnóstico",
+    count: prioritized.length || undefined,
+    node: (
+      <Body>
         {w.diagnosis.summary && (
           <div className="space-y-1">
             <Label>Resumen{w.diagnosis.summaryConfirmedAt ? " (confirmado)" : " (sin confirmar)"}</Label>
@@ -241,13 +254,20 @@ export function ContextPanel({
         {questions.length > 0 && (
           <div className="space-y-1">
             <Label>Preguntas abiertas ({questions.length})</Label>
-            <Bullets items={questions.slice(0, 6).map((q) => q.title)} />
+            <Bullets items={questions.slice(0, 8).map((q) => q.title)} />
           </div>
         )}
-      </Section>
+      </Body>
+    ),
+  });
 
-      {/* Qué se está probando */}
-      <Section title="Hipótesis y experimentos" count={hypotheses.length}>
+  sections.push({
+    id: "hipotesis",
+    title: "Hipótesis y experimentos",
+    short: "Hipótesis",
+    count: hypotheses.length || undefined,
+    node: (
+      <Body>
         {hypotheses.length ? (
           <ul className="space-y-2.5">
             {hypotheses.map((h) => (
@@ -267,10 +287,18 @@ export function ContextPanel({
         ) : (
           <Empty>Aún no hay hipótesis.</Empty>
         )}
-      </Section>
+      </Body>
+    ),
+  });
 
-      {/* Qué se acordó */}
-      <Section title="Acuerdos" count={decisions.length + goals.length + (agreement ? 1 : 0)}>
+  const agreementsCount = decisions.length + goals.length + (agreement ? 1 : 0);
+  sections.push({
+    id: "acuerdos",
+    title: "Acuerdos",
+    short: "Acuerdos",
+    count: agreementsCount || undefined,
+    node: (
+      <Body>
         {decisions.length > 0 && (
           <div className="space-y-1">
             <Label>Decisiones acordadas</Label>
@@ -307,11 +335,18 @@ export function ContextPanel({
             )}
           </div>
         )}
-        {!decisions.length && !goals.length && !agreement && <Empty>Todavía no hay acuerdos registrados.</Empty>}
-      </Section>
+        {!agreementsCount && <Empty>Todavía no hay acuerdos registrados.</Empty>}
+      </Body>
+    ),
+  });
 
-      {/* Qué está pendiente */}
-      <Section title="Compromisos y tareas" count={tasks.length + mentorCommitments.length + pendingEntrepreneurCommitments.length}>
+  sections.push({
+    id: "tareas",
+    title: "Compromisos y tareas",
+    short: "Tareas",
+    count: tasks.length + mentorCommitments.length + pendingEntrepreneurCommitments.length || undefined,
+    node: (
+      <Body>
         {tasks.length > 0 ? (
           <ul className="space-y-2">
             {tasks.map((t) => (
@@ -321,10 +356,7 @@ export function ContextPanel({
                   <span className="block text-slate-500">
                     {name(t.assigneeId)}
                     {t.dueDate && (
-                      <span className={cx(t.dueDate.slice(0, 10) < today && "font-semibold text-rose-600")}>
-                        {" "}
-                        · vence {t.dueDate.slice(0, 10)}
-                      </span>
+                      <span className={cx(t.dueDate.slice(0, 10) < today && "font-semibold text-rose-600")}> · vence {t.dueDate.slice(0, 10)}</span>
                     )}
                     {t.status === "blocked" && t.blockedReason ? ` · ${t.blockedReason}` : ""}
                   </span>
@@ -348,34 +380,45 @@ export function ContextPanel({
             <Bullets items={mentorCommitments.map((c) => (c.dueDate ? `${c.title} (para ${c.dueDate})` : c.title))} />
           </div>
         )}
-      </Section>
+      </Body>
+    ),
+  });
 
-      {/* De dónde venimos */}
-      {(prevSyn || thisSyn) && (
-        <Section title={thisSyn ? "Síntesis de esta sesión" : "Última sesión"}>
-          {(() => {
-            const syn = thisSyn ?? prevSyn!;
-            return (
-              <>
-                {!thisSyn && previous && (
-                  <p className="text-slate-500">
-                    {SESSION_KIND_LABEL[previous.kind]} · {formatDate(previous.completedAt ?? previous.createdAt)}
-                  </p>
-                )}
-                <p className="whitespace-pre-wrap">{syn.summary}</p>
-                {syn.nextSteps && (
-                  <p>
-                    <span className="font-semibold">Próximos pasos:</span> {syn.nextSteps}
-                  </p>
-                )}
-              </>
-            );
-          })()}
-        </Section>
-      )}
+  const syn = thisSyn ?? prevSyn;
+  sections.push({
+    id: "sintesis",
+    title: thisSyn ? "Síntesis de esta sesión" : "Última sesión",
+    short: thisSyn ? "Síntesis" : "Última sesión",
+    node: (
+      <Body>
+        {syn ? (
+          <>
+            {!thisSyn && previous && (
+              <p className="text-slate-500">
+                {SESSION_KIND_LABEL[previous.kind]} · {formatDate(previous.completedAt ?? previous.createdAt)}
+              </p>
+            )}
+            <p className="whitespace-pre-wrap">{syn.summary}</p>
+            {syn.nextSteps && (
+              <p>
+                <span className="font-semibold">Próximos pasos:</span> {syn.nextSteps}
+              </p>
+            )}
+          </>
+        ) : (
+          <Empty>Todavía no hay una sesión anterior con síntesis.</Empty>
+        )}
+      </Body>
+    ),
+  });
 
-      {/* Qué se ha escrito en esta sesión */}
-      <Section title="Notas de la sesión" count={notes.length}>
+  sections.push({
+    id: "notas",
+    title: "Notas de la sesión",
+    short: "Notas",
+    count: notes.length || undefined,
+    node: (
+      <Body>
         {notes.length ? (
           <ul className="space-y-2.5">
             {notes.map((n) => (
@@ -396,13 +439,20 @@ export function ContextPanel({
         ) : (
           <Empty>Aún no hay notas en esta sesión.</Empty>
         )}
-      </Section>
+      </Body>
+    ),
+  });
 
-      {/* Documentos del proyecto */}
-      <Section title="Documentos" count={documents.length} open={documents.length > 0}>
+  sections.push({
+    id: "documentos",
+    title: "Documentos del proyecto",
+    short: "Documentos",
+    count: documents.length || undefined,
+    node: (
+      <Body>
         {documents.length ? (
           <ul className="space-y-1.5">
-            {documents.slice(0, 10).map((doc) => (
+            {documents.slice(0, 20).map((doc) => (
               <li key={doc.id} className="flex items-start justify-between gap-2">
                 <span className="min-w-0">
                   <span className="block truncate font-medium text-slate-900">{doc.title || doc.filename}</span>
@@ -418,12 +468,14 @@ export function ContextPanel({
                 </a>
               </li>
             ))}
-            {documents.length > 10 && <li className="text-slate-400">y {documents.length - 10} más en el proyecto.</li>}
+            {documents.length > 20 && <li className="text-slate-400">y {documents.length - 20} más en el proyecto.</li>}
           </ul>
         ) : (
           <Empty>El proyecto no tiene documentos todavía.</Empty>
         )}
-      </Section>
-    </div>
-  );
+      </Body>
+    ),
+  });
+
+  return sections;
 }
