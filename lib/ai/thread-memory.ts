@@ -39,9 +39,19 @@ export function conversationalMessages(messages: AgentMessage[]): AgentMessage[]
   return [...messages].filter((m) => m.status !== "failed").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-/** Mensajes que van completos al modelo: los no resumidos, los más recientes primero hasta el tope. */
-export function recentHistory(messages: AgentMessage[], memory: AgentThreadMemory): Array<{ author: "user" | "assistant"; content: string }> {
-  const pending = conversationalMessages(messages).slice(memory.coveredMessageCount);
+/**
+ * Mensajes que van completos al modelo: los no resumidos, los más recientes primero hasta el tope.
+ * Con `conversationalTotal`, `messages` puede ser solo la cola del hilo (los más recientes): los no
+ * resumidos se cuentan desde el final en vez de por posición.
+ */
+export function recentHistory(
+  messages: AgentMessage[],
+  memory: AgentThreadMemory,
+  conversationalTotal?: number,
+): Array<{ author: "user" | "assistant"; content: string }> {
+  const valid = conversationalMessages(messages);
+  const pendingCount = conversationalTotal === undefined ? valid.length - memory.coveredMessageCount : conversationalTotal - memory.coveredMessageCount;
+  const pending = pendingCount > 0 ? valid.slice(-pendingCount) : [];
   const out: Array<{ author: "user" | "assistant"; content: string }> = [];
   let chars = 0;
   for (const m of pending.slice(-THREAD_WINDOW.foldAbove).reverse()) {

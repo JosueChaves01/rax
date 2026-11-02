@@ -1,5 +1,5 @@
 import "server-only";
-import type { AgentArtifact, AgentMessage, AgentThreadMemory, KnowledgeCitation, Project, Role } from "@/types/domain";
+import type { AgentArtifact, AgentMessage, AgentThreadMemory, AgentTurnMetrics, KnowledgeCitation, Project, Role } from "@/types/domain";
 import type { KnowledgeContextResult } from "./knowledge-retrieval";
 import { extractArtifacts } from "./artifact-parser";
 import { extractFollowUps, FOLLOW_UP_INSTRUCTIONS } from "./follow-ups";
@@ -10,7 +10,7 @@ import type { AiProposalItem } from "@/lib/n8n/contracts";
 import { renderPlatformGuide, PLATFORM_PAGES, PROJECT_PAGES } from "./platform-guide";
 import { renderProjectState, type ProjectStateSnapshot } from "./project-state";
 import { foldDeterministic, MEMORY_SYSTEM_PROMPT, parseMemoryOutput, renderMemoryInput, renderThreadMemory, withSummary } from "./thread-memory";
-import { chatWithFallback, type ChatMessage, type ChatUsage } from "./openrouter-chat";
+import { chatWithFallback, type ChatCompletion, type ChatMessage, type ChatToolCall, type ChatUsage } from "./openrouter-chat";
 import { readSessionThread, renderSessionState, updateSessionNotes, type SessionAgentContext } from "@/lib/services/agent-sessions";
 import { createAgentDocument } from "@/lib/services/agent-documents";
 import { isDocumentFormat, DOCUMENT_FORMAT_LABEL, type DocumentFormat } from "@/lib/documents/types";
@@ -68,7 +68,37 @@ export interface ClaudeTurnInput {
   thread?: ThreadContext;
   /** Sesión a la que pertenece el hilo: objetivo, notas y los otros hilos de la sesión. */
   session?: SessionAgentContext;
+  /** Progreso del turno (estado y texto parcial) para mostrarlo mientras se genera. */
+  onEvent?: AgentTurnEventHandler;
+  /** Plazo del turno (epoch ms); lo fija executeClaudeAgentTurn. */
+  deadline?: number;
 }
+
+/** Lo que pasa durante un turno, en orden, para la pantalla que lo muestra en vivo. */
+export type AgentTurnEvent =
+  | { type: "user_message"; message: AgentMessage }
+  | { type: "status"; stage: "context" | "thinking" | "tool" | "writing"; label: string }
+  | { type: "delta"; text: string }
+  /** El texto parcial mostrado ya no vale (el modelo falló a mitad o va a usar herramientas). */
+  | { type: "reset" };
+
+export type AgentTurnEventHandler = (event: AgentTurnEvent) => void;
+
+/** Plazo de un turno completo (todas las llamadas al modelo y las herramientas). Cabe en una función de 60 s. */
+export const TURN_BUDGET_MS = 50_000;
+/** Vueltas con herramientas por turno; la última siempre redacta la respuesta sin herramientas. */
+export const MAX_TOOL_ROUNDS = 3;
+/** Si queda menos que esto después de usar herramientas, no se pide otra vuelta al modelo. */
+const MIN_FINAL_ROUND_MS = 6_000;
+
+/** Cómo se anuncia cada herramienta mientras corre. */
+const TOOL_STATUS: Record<string, string> = {
+  generate_document: "Redactando el documento…",
+  update_session_notes: "Actualizando las notas de la sesión…",
+  read_session_thread: "Leyendo otro hilo de la sesión…",
+  draft_field_value: "Preparando el borrador…",
+  propose_step_action: "Preparando una propuesta…",
+};
 
 export type CacheStatus = "hit" | "write" | "unsupported" | "simulated" | "miss" | "unavailable";
 
@@ -88,6 +118,8 @@ export interface ClaudeTurnResult {
   sessionUpdated?: boolean;
   /** Respuestas cortas que la persona podría enviar a continuación (no se guardan en el hilo). */
   followUps?: string[];
+  /** Cómo se generó (sin la latencia total ni el modo de conocimiento, que los mide quien llama). */
+  metrics?: Omit<AgentTurnMetrics, "latencyMs">;
 }
 
 const MAX_HISTORY_TO_MODEL = 20;
@@ -395,7 +427,7 @@ async function generateDocumentTool(input: ClaudeTurnInput, args: Record<string,
   const format: DocumentFormat = isDocumentFormat(args.format) ? args.format : "pdf";
   const addToProject = args.add_to_project === true;
 
-  const written = await writeDocumentWithAi({ title, topic, instructions, context: documentContext(input) });
+  const written = await writeDocumentWithAi({ title, topic, instructions, context: documentContext(input), deadline: input.deadline });
   if (!written && process.env.OPENROUTER_API_KEY) {
     return { summary: `No pude redactar «${title}»: la IA no respondió. Prueba de nuevo en un momento.`, proposals: [], data: { ok: false } };
   }
@@ -429,90 +461,126 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return simulatedTurnWithSession(input);
 
+  const turn: ClaudeTurnInput = { ...input, deadline: input.deadline ?? Date.now() + TURN_BUDGET_MS };
+  const deadline = turn.deadline!;
+  const emit = input.onEvent;
+  const streaming = emit ? { onDelta: (text: string) => emit({ type: "delta", text }), onReset: () => emit({ type: "reset" }) } : {};
+
   const systemPrompt = buildSystemPrompt(input.project, input.knowledge, input.role, input.sessionContext, {
     projectState: input.projectState,
     thread: input.thread,
     session: input.session,
   });
   const tools = toolsFor(input).map((tool) => ({ type: "function" as const, function: tool }));
-  const messages: ChatMessage[] = [
+  let conversation: ChatMessage[] = [
     { role: "system", content: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }] },
     ...input.history.slice(-MAX_HISTORY_TO_MODEL).map((m) => ({ role: m.author === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content })),
     { role: "user", content: input.userMessage },
   ];
 
-  const first = await chatWithFallback({ apiKey, messages, tools, maxTokens: 3000 });
-  if (!first.ok) {
-    return {
-      reply: first.failure.message,
-      artifacts: [],
-      citations: [],
-      proposals: [],
-      mode: input.knowledge.mode,
-      cachedPromptUsed: false,
-      cacheStatus: "unavailable",
-      cachedTokens: 0,
-      unavailable: { code: `ai_${first.failure.code}`, message: first.failure.message },
-    };
-  }
-
-  let completion = first.completion;
+  const metrics: Omit<AgentTurnMetrics, "latencyMs"> = { tools: [], modelCalls: 0, ...(emit ? { streamed: true } : {}) };
+  const failedModels: string[] = [];
   const proposals: AiProposalItem[] = [];
   const toolArtifacts: AgentArtifact[] = [];
   const toolNotes: string[] = [];
   let sessionUpdated = false;
+  let firstUsage: ChatUsage | undefined;
+  let completion: ChatCompletion | undefined;
+  let finalAfterTools = false;
 
-  if (completion.toolCalls.length > 0 && tools.length > 0) {
-    const toolMessages: ChatMessage[] = [];
-    for (const [i, call] of completion.toolCalls.entries()) {
-      const id = call.id ?? `call_${i}`;
-      let payload: unknown;
-      try {
-        const args = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>;
-        const result = await runTool(input, call.function.name, args);
-        proposals.push(...result.proposals);
-        if (result.artifacts) toolArtifacts.push(...result.artifacts);
-        if (result.sessionUpdated) sessionUpdated = true;
-        // Leer otro hilo es parte del razonamiento: no se anuncia como resultado.
-        if (call.function.name !== "read_session_thread") toolNotes.push(result.summary);
-        payload = { ok: true, summary: result.summary, proposals: result.proposals.map((p) => ({ type: p.type, title: p.title })), data: result.data };
-      } catch (e) {
-        console.warn("[agent] Error ejecutando herramienta:", call.function.name, e instanceof Error ? e.message : e);
-        payload = { ok: false, error: "No se pudo ejecutar esta herramienta con los permisos de la persona." };
-      }
-      toolMessages.push({ role: "tool", tool_call_id: id, name: call.function.name, content: JSON.stringify(payload).slice(0, 6000) });
-    }
-    // Segunda vuelta: el modelo ve qué produjeron las herramientas y redacta la respuesta final.
-    const second = await chatWithFallback({
+  emit?.({ type: "status", stage: "thinking", label: "Pensando…" });
+  for (let round = 0; ; round++) {
+    const lastRound = round >= MAX_TOOL_ROUNDS || tools.length === 0;
+    const res = await chatWithFallback({
       apiKey,
-      messages: [
-        ...messages,
-        { role: "assistant", content: completion.content || null, tool_calls: completion.toolCalls.map((c, i) => ({ id: c.id ?? `call_${i}`, type: "function", function: c.function })) },
-        ...toolMessages,
-      ],
-      tools,
-      toolChoice: "none",
-      maxTokens: 2000,
-      models: [completion.model],
+      messages: conversation,
+      tools: tools.length ? tools : undefined,
+      ...(round > 0 ? { toolChoice: lastRound ? ("none" as const) : ("auto" as const) } : {}),
+      maxTokens: round === 0 ? 3000 : 2000,
+      deadline,
+      // Las vueltas con resultados de herramientas siguen con el mismo modelo (ids de las llamadas).
+      ...(completion ? { models: [completion.model] } : {}),
+      ...streaming,
     });
-    if (second.ok && second.completion.content.trim()) {
-      completion = { ...second.completion, toolCalls: [], usage: completion.usage };
-      // Los documentos siempre dejan su nota: es lo que confirma qué se generó y dónde quedó.
-      const docNotes = toolArtifacts.length ? toolNotes.filter((n) => n.startsWith("Documento «")) : [];
-      toolNotes.length = 0;
-      toolNotes.push(...docNotes);
+    metrics.modelCalls += res.trace.attempts;
+    failedModels.push(...res.trace.failedModels);
+    if (round === 0 && res.trace.firstTokenMs !== undefined) metrics.firstTokenMs = res.trace.firstTokenMs;
+    if (!res.ok) {
+      if (!completion) {
+        return {
+          reply: res.failure.message,
+          artifacts: [],
+          citations: [],
+          proposals: [],
+          mode: input.knowledge.mode,
+          cachedPromptUsed: false,
+          cacheStatus: "unavailable",
+          cachedTokens: 0,
+          unavailable: { code: `ai_${res.failure.code}`, message: res.failure.message },
+          metrics: { ...metrics, ...(failedModels.length ? { failedModels } : {}) },
+        };
+      }
+      // Ya hubo herramientas: se responde con lo que produjeron (notas abajo) aunque falle la redacción.
+      completion = { ...completion, content: "", toolCalls: [] };
+      break;
     }
+    completion = res.completion;
+    firstUsage ??= completion.usage;
+    addUsage(metrics, completion.usage);
+    if (round > 0) finalAfterTools = true;
+
+    const calls = lastRound ? [] : completion.toolCalls;
+    if (calls.length === 0) break;
+    // Lo que el modelo escribió antes de pedir herramientas no es la respuesta final.
+    if (completion.content && emit) emit({ type: "reset" });
+
+    const results = await runToolCalls(turn, calls, emit);
+    const toolMessages: ChatMessage[] = [];
+    for (const r of results) {
+      metrics.tools.push(r.name);
+      if (r.ok) {
+        proposals.push(...r.result.proposals);
+        if (r.result.artifacts) toolArtifacts.push(...r.result.artifacts);
+        if (r.result.sessionUpdated) sessionUpdated = true;
+        // Leer otro hilo es parte del razonamiento: no se anuncia como resultado.
+        if (r.name !== "read_session_thread") toolNotes.push(r.result.summary);
+      }
+      toolMessages.push({ role: "tool", tool_call_id: r.id, name: r.name, content: JSON.stringify(r.payload).slice(0, 6000) });
+    }
+    conversation = [
+      ...conversation,
+      { role: "assistant", content: completion.content || null, tool_calls: calls.map((c, i) => ({ id: c.id ?? `call_${i}`, type: "function", function: c.function })) },
+      ...toolMessages,
+    ];
+    if (deadline - Date.now() < MIN_FINAL_ROUND_MS) {
+      // Sin tiempo para otra vuelta: la respuesta son las notas de lo que hicieron las herramientas.
+      completion = { ...completion, content: "", toolCalls: [] };
+      break;
+    }
+    emit?.({ type: "status", stage: "writing", label: "Redactando la respuesta…" });
   }
 
-  const { cleanText: withoutFollowUps, followUps } = extractFollowUps(completion.content);
+  const final = completion!;
+  if (finalAfterTools && final.content.trim()) {
+    // El modelo ya contó lo que hicieron las herramientas; los documentos siempre dejan su nota.
+    const docNotes = toolArtifacts.length ? toolNotes.filter((n) => n.startsWith("Documento «")) : [];
+    toolNotes.length = 0;
+    toolNotes.push(...docNotes);
+  }
+
+  const { cleanText: withoutFollowUps, followUps } = extractFollowUps(final.content);
   const { cleanText, artifacts } = extractArtifacts(withoutFollowUps);
   const notes = toolNotes.length ? `\n\n${toolNotes.map((n) => `📌 **${n}**`).join("\n")}` : "";
   const fallbackText = toolArtifacts.length
     ? "Aquí está el documento."
     : proposals.length
       ? "Preparé estas propuestas a partir de lo que conversamos."
-      : "No pude generar una respuesta útil esta vez. ¿Puedes reformular la pregunta?";
-  const cache = cacheStatusOf(completion.model, completion.usage);
+      : toolNotes.length
+        ? "Listo."
+        : "No pude generar una respuesta útil esta vez. ¿Puedes reformular la pregunta?";
+  const cache = cacheStatusOf(final.model, firstUsage);
+  metrics.model = final.model;
+  if (failedModels.length) metrics.failedModels = failedModels;
 
   return {
     reply: `${cleanText.trim() || fallbackText}${notes}`,
@@ -523,10 +591,61 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
     cachedPromptUsed: cache.status === "hit",
     cacheStatus: cache.status,
     cachedTokens: cache.cached,
-    model: completion.model,
+    model: final.model,
     followUps,
+    metrics,
     ...(sessionUpdated ? { sessionUpdated } : {}),
   };
+}
+
+function addUsage(metrics: Omit<AgentTurnMetrics, "latencyMs">, usage?: ChatUsage) {
+  if (!usage) return;
+  if (usage.prompt_tokens) metrics.promptTokens = (metrics.promptTokens ?? 0) + usage.prompt_tokens;
+  if (usage.completion_tokens) metrics.completionTokens = (metrics.completionTokens ?? 0) + usage.completion_tokens;
+}
+
+type ToolRun = { id: string; name: string; payload: unknown } & (
+  | { ok: true; result: Awaited<ReturnType<typeof runTool>> }
+  | { ok: false }
+);
+
+/**
+ * Ejecuta las herramientas pedidas en una vuelta. Las distintas corren en paralelo; las repetidas
+ * (p. ej. dos actualizaciones de notas) van en orden para no pisarse. El resultado sale en el orden pedido.
+ */
+async function runToolCalls(input: ClaudeTurnInput, calls: ChatToolCall[], emit?: AgentTurnEventHandler): Promise<ToolRun[]> {
+  const byName = new Map<string, number[]>();
+  calls.forEach((c, i) => byName.set(c.function.name, [...(byName.get(c.function.name) ?? []), i]));
+  const out: ToolRun[] = new Array(calls.length);
+  const announced = new Set<string>();
+  await Promise.all(
+    [...byName.values()].map(async (indexes) => {
+      for (const i of indexes) {
+        const call = calls[i];
+        const id = call.id ?? `call_${i}`;
+        const name = call.function.name;
+        if (emit && !announced.has(name)) {
+          announced.add(name);
+          emit({ type: "status", stage: "tool", label: TOOL_STATUS[name] ?? "Consultando el proyecto…" });
+        }
+        try {
+          const args = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>;
+          const result = await runTool(input, name, args);
+          out[i] = {
+            id,
+            name,
+            ok: true,
+            result,
+            payload: { ok: true, summary: result.summary, proposals: result.proposals.map((p) => ({ type: p.type, title: p.title })), data: result.data },
+          };
+        } catch (e) {
+          console.warn("[agent] Error ejecutando herramienta:", name, e instanceof Error ? e.message : e);
+          out[i] = { id, name, ok: false, payload: { ok: false, error: "No se pudo ejecutar esta herramienta con los permisos de la persona." } };
+        }
+      }
+    }),
+  );
+  return out;
 }
 
 /**
