@@ -29,6 +29,7 @@ import { can } from "@/lib/authz";
 import { touch } from "./projects";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
 import { sessionTranscriptForAi } from "./session-transcript";
+import { isFiller, plainText } from "@/lib/ai/plain-text";
 
 /**
  * El emprendedor solicita una revisión. La primera requiere el resumen confirmado;
@@ -410,25 +411,36 @@ export async function generatePreSessionBriefing(
     ? allNotes.filter((n) => n.sessionId === lastSession.id && !n.isPrivate).map((n) => ({ kind: n.kind, body: n.body }))
     : [];
 
+  const prevSyn = previousSessions.find((sess) => sess.postSessionSynthesis)?.postSessionSynthesis;
+  const previousSessionPending = prevSyn
+    ? [
+        ...prevSyn.entrepreneurCommitments.map((c) => `Compromiso del emprendedor: ${plainText(c.title, 160)}`),
+        ...prevSyn.mentorCommitments.map((c) => `Compromiso del mentor: ${plainText(c.title, 160)}`),
+        ...(prevSyn.nextSteps ? [`Próximos pasos acordados: ${plainText(prevSyn.nextSteps, 240)}`] : []),
+      ].slice(0, 8)
+    : [];
+
+  // Solo lo que planteó la persona (no las respuestas del asistente), en texto plano y sin muletillas.
   let recentMessages: Array<{ author: string; content: string }> | undefined;
   if (project.shareConversationWithMentor) {
     const [legacyMsgs, threads] = await Promise.all([
       d.repo.messages.list({ projectId: s.projectId }).catch(() => []),
       d.repo.agentThreads.list({ projectId: s.projectId }).catch(() => []),
     ]);
-    const agentMsgsList: Array<{ author: string; content: string }> = [];
-    if (threads.length > 0) {
-      const sortedThreads = threads.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-      const activeThread = sortedThreads[0];
-      const msgs = await d.repo.agentMessages.list({ threadId: activeThread.id }).catch(() => []);
-      for (const m of msgs.slice(-10)) {
-        agentMsgsList.push({ author: m.author, content: m.content });
-      }
+    const fromPerson: Array<{ at: string; content: string }> = legacyMsgs
+      .filter((m) => m.author === "entrepreneur")
+      .map((m) => ({ at: m.createdAt, content: m.content }));
+    const recentThreads = [...threads].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 3);
+    for (const t of recentThreads) {
+      const msgs = await d.repo.agentMessages.list({ threadId: t.id }).catch(() => []);
+      for (const m of msgs) if (m.author === "user") fromPerson.push({ at: m.createdAt, content: m.content });
     }
-    const combined = [...legacyMsgs.map((m) => ({ author: m.author, content: m.content })), ...agentMsgsList];
-    if (combined.length > 0) {
-      recentMessages = combined.slice(-15);
-    }
+    const topics = fromPerson
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .map((m) => plainText(m.content, 220))
+      .filter((t) => t && !isFiller(t));
+    const unique = [...new Set(topics)].slice(-5);
+    if (unique.length > 0) recentMessages = unique.map((content) => ({ author: "emprendedor", content }));
   }
 
   const ctx: PreSessionBriefingContext = {
@@ -453,6 +465,7 @@ export async function generatePreSessionBriefing(
     diagnosisEvidence: diagnosisEvidence.length > 0 ? diagnosisEvidence : undefined,
     diagnosisUnknowns: diagnosisUnknowns.length > 0 ? diagnosisUnknowns : undefined,
     previousSessionNotes,
+    previousSessionPending: previousSessionPending.length ? previousSessionPending : undefined,
     recentMessages,
   };
 

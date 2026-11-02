@@ -168,3 +168,32 @@ describe("Briefing del mentor y síntesis editable", () => {
     expect(edited.entrepreneurCommitments.map((c) => c.title)).toContain("Armar precio de suscripción");
   });
 });
+
+describe("Briefing: temas pendientes legibles (Capa 3)", () => {
+  it("toma compromisos de la síntesis anterior y solo lo que planteó la persona, sin markdown", async () => {
+    const { ent, mentor, session, p } = await setup();
+    const { generatePreSessionBriefing } = await import("@/lib/services/mentoring");
+    const { setConversationSharing } = await import("@/lib/services/projects");
+    const { createAgentThread, appendAgentUserMessage, appendAgentAssistantMessage } = await import("@/lib/services/agent-chat");
+
+    // Sesión anterior con llamada: deja compromisos en la síntesis.
+    const call = await startCall(mentor, session.id);
+    await transcribeCallAudio(ent, call.id, audio(), 0, fakeTranscriber(["Voy a entrevistar a diez oficinas antes del viernes."]));
+    await endCall(mentor, call.id);
+
+    await setConversationSharing(ent, p.id, true);
+    const thread = await createAgentThread(ent, p.id);
+    await appendAgentUserMessage(ent, thread.id, "¿Cómo defino el **precio** de la *suscripción* semanal para oficinas?");
+    await appendAgentAssistantMessage(ent, thread.id, { content: "**Briefing listo.** Te dejo los *temas* de la sesión..." });
+    await appendAgentUserMessage(ent, thread.id, "Si porfavor");
+
+    const next = await scheduleSession(ent, p.id, { kind: "follow_up", scheduledAt: "2026-11-19T15:00:00.000Z" });
+    const b = await generatePreSessionBriefing(mentor, next.id);
+    const pending = b.pendingTopicsSummary;
+    expect(pending).toMatch(/Compromiso del emprendedor: .*Voy a entrevistar a diez oficinas/);
+    expect(pending).toContain("¿Cómo defino el precio de la suscripción semanal para oficinas?");
+    expect(pending).not.toMatch(/\*/);
+    expect(pending).not.toContain("Briefing listo");
+    expect(pending).not.toContain("Si porfavor");
+  });
+});

@@ -307,7 +307,7 @@ Estructura y reglas por capa:
 2. recentProgressSummary:
    - Si la sesión corresponde a la Etapa 2 · Orientar (Primera revisión): sintetizar qué descubrió y estructuró la persona en la Etapa 1 · Entender (problemas detectados, grado de incertidumbre, hipótesis clave y evidencias iniciales provistas en diagnosisProblems/diagnosisHypotheses).
    - Si ya hay ejecución previa: qué avanzó la persona acompañada (tareas completadas, experimentos en curso) y qué bloqueos o demoras se registraron (con sus causas diagnósticas explicativas).
-3. pendingTopicsSummary: Qué temas quedaron abiertos en la sesión previa, en el chat reciente (recentMessages) o en las incógnitas pendientes del diagnóstico vivo (diagnosisUnknowns) que requieran atención inmediata hoy.
+3. pendingTopicsSummary: Qué temas quedaron abiertos en la sesión previa (previousSessionNotes y previousSessionPending), lo que la persona planteó en el chat (recentMessages) y las incógnitas del diagnóstico (diagnosisUnknowns) que requieran atención hoy. Escríbelo como resumen propio en texto plano, con viñetas «•» y sin markdown (nada de ** ni *); no copies mensajes literales ni cortes frases a la mitad.
 4. suggestedAgenda: Entre 3 y 5 puntos de agenda secuenciales y realistas para el tiempo disponible (con tiempos estimados en minutos), orientados a destrabar el foco crítico.
 5. suggestedQuestions: Entre 3 y 5 preguntas socráticas o reflexivas que ayuden al mentor/tutor a guiar al emprendedor/estudiante sobre prioridades, dudas conceptuales, bloqueos y decisiones críticas.
 
