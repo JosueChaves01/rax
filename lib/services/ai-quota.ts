@@ -13,6 +13,8 @@ const DEFAULTS: Record<AiUsageKind, { env: string; fallback: number }> = {
   agent_message: { env: "RAX_AI_DAILY_MESSAGES", fallback: 150 },
   /** Fragmentos de audio (~15 s) transcritos por persona y día: 720 ≈ 3 horas de llamada. */
   audio_chunk: { env: "RAX_AUDIO_DAILY_CHUNKS", fallback: 720 },
+  /** Búsquedas y páginas leídas en internet por el agente, por persona y día (el plan gratis de Tavily trae 1000 al mes). */
+  web_search: { env: "RAX_WEB_SEARCH_DAILY", fallback: 30 },
 };
 
 export function aiDailyLimit(kind: AiUsageKind): number {
@@ -24,6 +26,7 @@ export function aiDailyLimit(kind: AiUsageKind): number {
 const MESSAGE: Record<AiUsageKind, string> = {
   agent_message: "Llegaste al límite diario de mensajes al asistente. Se renueva mañana; lo que ya conversaste quedó guardado.",
   audio_chunk: "Llegaste al límite diario de transcripción de llamadas. La llamada sigue, pero lo que se diga desde ahora no se transcribe hasta mañana.",
+  web_search: "Llegaste al límite diario de búsquedas en internet del asistente. Se renueva mañana; puede seguir respondiendo con lo que ya sabe del proyecto.",
 };
 
 /**

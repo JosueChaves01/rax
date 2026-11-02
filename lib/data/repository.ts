@@ -65,7 +65,7 @@ export interface RepositoryFunctions {
   addAiUsage?(actorId: string, kind: AiUsageKind, day: string, amount: number): Promise<number>;
 }
 
-export type AiUsageKind = "agent_message" | "audio_chunk";
+export type AiUsageKind = "agent_message" | "audio_chunk" | "web_search";
 
 /** Tablas con clave compuesta se exponen con un id sintético. */
 export type ProjectMemberRow = ProjectMember & { id: string };

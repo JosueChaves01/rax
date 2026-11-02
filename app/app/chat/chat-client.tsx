@@ -18,6 +18,7 @@ import {
   updateProjectSessionAction,
 } from "@/app/actions";
 import { ChatInput } from "./chat-input";
+import { ACCEPTED_UPLOADS, attachmentNote, uploadForText } from "@/lib/documents/uploads";
 import { ProjectInstructionsModal } from "./project-instructions-modal";
 import { ProjectKnowledgePanel } from "./project-knowledge-panel";
 import { ArtifactViewer } from "./artifact-viewer";
@@ -696,6 +697,17 @@ export default function ChatClient({
 
           <ChatInput
             onSend={(text) => sendMessageToAgent(text)}
+            onAttach={
+              projectId
+                ? async (file) => {
+                    const res = await uploadForText(file, projectId);
+                    if (!res.ok) return { error: res.error };
+                    void loadKnowledgeStats(projectId);
+                    return { note: attachmentNote(res.extracted, res.document?.title ?? res.extracted.title) };
+                  }
+                : undefined
+            }
+            attachAccept={ACCEPTED_UPLOADS}
             isLoading={isLoading}
             disabled={!route.threadId || loadingMessages}
             placeholder="Escribe tu consulta o pide un artefacto…"

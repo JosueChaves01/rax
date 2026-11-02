@@ -17,6 +17,9 @@ import { addAgentDocumentToProject, createAgentDocument, listDocumentTargetProje
 import { addNoteReply, createSessionNote, isNoteKind, listProjectNotes, renderNotesForAgent, updateNoteReply, updateSessionNote } from "@/lib/services/session-notes";
 import { isDocumentFormat, DOCUMENT_FORMAT_LABEL, type DocumentFormat } from "@/lib/documents/types";
 import { simulatedDocumentContent, writeDocumentWithAi } from "./document-writer";
+import { RESEARCH_TOOL_NAMES, RESEARCH_TOOL_STATUS, researchTools, runResearchTool } from "./research-tools";
+import { webSearchProvider } from "./web-search";
+import { isDomainError } from "@/lib/errors";
 
 /**
  * Pistas de la pantalla desde la que se conversa. Vienen del navegador, así que solo orientan el tono
@@ -103,6 +106,16 @@ const TOOL_STATUS: Record<string, string> = {
   save_note_reply: "Guardando la respuesta a la nota…",
   draft_field_value: "Preparando el borrador…",
   propose_step_action: "Preparando una propuesta…",
+  ...RESEARCH_TOOL_STATUS,
+};
+
+/** Cuánto del resultado de cada herramienta ve el modelo (las de lectura necesitan más). */
+const TOOL_RESULT_CHARS: Record<string, number> = {
+  read_mentor_notes: 14_000,
+  read_project_document: 12_000,
+  read_web_page: 11_000,
+  web_search: 9_000,
+  analyze_table_data: 9_000,
 };
 
 export type CacheStatus = "hit" | "write" | "unsupported" | "simulated" | "miss" | "unavailable";
@@ -271,6 +284,9 @@ Usa herramientas cuando la persona quiera estructurar algo en el proyecto; para 
   Estas dos se guardan directo (no son tarjetas): úsalas solo cuando la persona pida guardar, crear, responder o corregir una nota, o confirme el texto. Después di qué guardaste y dónde se ve (pestaña Notas de la sesión).
 - add_document_to_project: agregar a los documentos de un proyecto un documento que ya generaste en este hilo, cuando la persona lo pida después («agrégalo al proyecto», «súbelo a Café Verde»). Pasa el nombre del proyecto que dijo; si dice «este proyecto» o «el proyecto» sin más, el proyecto actual. Si tiene varios proyectos y no queda claro cuál, llámala sin project: te devuelve la lista y le preguntas. Se guarda directo (no es una tarjeta); también puede usar el botón «Agregar a un proyecto» de la tarjeta del documento.
 - generate_document: crear un documento descargable (PDF o Word) sobre un tema: plan, informe, guía de estudio, resumen de decisiones, propuesta, acta de sesión, etc. Úsala cuando la persona pida un PDF, un Word, un documento o un archivo para descargar. Pon add_to_project en true cuando lo pida o cuando sea material de referencia del proyecto (plan, informe, guía, resumen); en false si es algo puntual o una prueba. El documento se redacta aparte con el contexto del proyecto: no lo copies en tu respuesta, solo di qué contiene y si quedó en el proyecto.
+- read_project_document: leer completo un documento del conocimiento del proyecto (archivos subidos, notas). Úsala cuando la persona hable de un archivo que subió («revisa el Excel de ventas», «qué dice el PDF») o cuando el fragmento de <project_knowledge> no alcance. Sin document te da la lista. Al resumir un archivo: qué es, los 3 a 5 hallazgos más útiles para la etapa actual y qué hacer con ellos.
+- analyze_table_data: números exactos de un Excel o CSV subido. Primero operation describe para ver columnas; luego aggregate con metric, aggregation, group_by y filters. Nunca sumes ni promedies de memoria: los números que des de un archivo salen de esta herramienta. Si un dato sirve como resultado o evidencia de un experimento, ofrece registrarlo con propose_step_action.${webSearchProvider() ? `
+- web_search y read_web_page: investigar en internet (competencia, precios, proveedores, tamaño de mercado, regulación, tendencias), sobre todo en Entender y Probar. Haz búsquedas concretas (lugar, año, producto) y, si los fragmentos no alcanzan, lee 1 o 2 páginas. En la respuesta separa lo que dicen las fuentes de tu interpretación, cita cada dato con su enlace como [título](url) y aclara si la fuente es vieja o poco confiable. No busques en internet lo que ya está en el proyecto, ni datos personales de nadie.` : ""}
 - propose_step_action: dar cualquier paso del recorrido (confirmar resumen, pedir revisiones, priorizar, decidir hipótesis, iniciar experimentos, registrar resultados y evidencia, decisión del mentor, acuerdo, sesiones). Usa los ids entre corchetes de <project_state>.
 - Agendar y confirmar revisiones con el mentor:
   · Emprendedor/estudiante: para la primera o la segunda revisión propone request_review con kind y scheduledAt. Antes revisa «Recorrido» y «Sesiones próximas»: si falta un requisito (resumen confirmado para la primera, al menos un resultado registrado para la segunda, mentor asignado) o ya hay una revisión de ese tipo abierta, no la propongas: explica qué falta y propone ese paso. Para un encuentro extra, schedule_session.
@@ -442,7 +458,7 @@ function toolsFor(input: ClaudeTurnInput): WorkflowToolDefinition[] {
   if (!input.deps) return [];
   const base = input.sessionContext?.field
     ? [DRAFT_FIELD_TOOL, ...RAX_WORKFLOW_TOOLS]
-    : [GENERATE_DOCUMENT_TOOL, ...(input.thread?.id ? [ADD_DOCUMENT_TO_PROJECT_TOOL] : []), ...noteToolsFor(input.role), ...RAX_WORKFLOW_TOOLS];
+    : [GENERATE_DOCUMENT_TOOL, ...(input.thread?.id ? [ADD_DOCUMENT_TO_PROJECT_TOOL] : []), ...researchTools(), ...noteToolsFor(input.role), ...RAX_WORKFLOW_TOOLS];
   if (!input.session || !input.thread?.id) return base;
   return [SESSION_NOTES_TOOL, ...(input.session.siblings.length ? [READ_SESSION_THREAD_TOOL] : []), ...base];
 }
@@ -456,6 +472,10 @@ async function runTool(
   args: Record<string, unknown>,
 ): Promise<{ summary: string; proposals: AiProposalItem[]; data?: unknown; sessionUpdated?: boolean; artifacts?: AgentArtifact[] }> {
   if (name === "generate_document" && input.deps) return generateDocumentTool(input, args);
+  if (RESEARCH_TOOL_NAMES.has(name) && input.deps) {
+    const r = await runResearchTool(input.deps, input.project.id, name, args, input.deadline);
+    return { summary: r.summary, proposals: [], data: r.data };
+  }
   if (name === "add_document_to_project" && input.deps && input.thread?.id) return addDocumentToProjectTool(input, args);
   if ((name === "read_mentor_notes" || name === "save_mentor_note" || name === "save_note_reply") && input.deps) return mentorNotesTool(input, name, args);
   if (name === "update_session_notes" && input.session && input.deps) {
@@ -733,9 +753,9 @@ export async function executeClaudeAgentTurn(input: ClaudeTurnInput): Promise<Cl
         if (r.result.artifacts) toolArtifacts.push(...r.result.artifacts);
         if (r.result.sessionUpdated) sessionUpdated = true;
         // Leer otro hilo o las notas es parte del razonamiento: no se anuncia como resultado.
-        if (r.name !== "read_session_thread" && r.name !== "read_mentor_notes") toolNotes.push(r.result.summary);
+        if (r.name !== "read_session_thread" && r.name !== "read_mentor_notes" && !RESEARCH_TOOL_NAMES.has(r.name)) toolNotes.push(r.result.summary);
       }
-      toolMessages.push({ role: "tool", tool_call_id: r.id, name: r.name, content: JSON.stringify(r.payload).slice(0, r.name === "read_mentor_notes" ? 14_000 : 6000) });
+      toolMessages.push({ role: "tool", tool_call_id: r.id, name: r.name, content: JSON.stringify(r.payload).slice(0, TOOL_RESULT_CHARS[r.name] ?? 6000) });
     }
     conversation = [
       ...conversation,
@@ -830,7 +850,8 @@ async function runToolCalls(input: ClaudeTurnInput, calls: ChatToolCall[], emit?
           };
         } catch (e) {
           console.warn("[agent] Error ejecutando herramienta:", name, e instanceof Error ? e.message : e);
-          out[i] = { id, name, ok: false, payload: { ok: false, error: "No se pudo ejecutar esta herramienta con los permisos de la persona." } };
+          const error = isDomainError(e) && e.code === "rate_limited" ? e.message : "No se pudo ejecutar esta herramienta con los permisos de la persona.";
+          out[i] = { id, name, ok: false, payload: { ok: false, error } };
         }
       }
     }),
