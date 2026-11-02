@@ -33,7 +33,7 @@ import type {
 } from "@/types/domain";
 import { conflict, notFound } from "@/lib/errors";
 import type { Db, Row } from "./db";
-import type { ProjectMemberRow, Repository, Table } from "./repository";
+import type { ProjectMemberRow, Repository, RepositoryFunctions, Table } from "./repository";
 
 /**
  * Repositorio sobre Postgres/Supabase. Traduce el modelo de dominio (camelCase, campos compuestos,
@@ -134,6 +134,21 @@ class PgTable<T extends { id: string }> implements Table<T> {
     // Nada actualizado: o la versión cambió (conflicto) o la fila no existe / no es visible.
     if (expectedVersion !== undefined && (await this.get(id))) throw conflict();
     throw notFound();
+  }
+
+  async latest(where: Partial<T>, limit: number) {
+    const created = this.spec.fields["createdAt" as keyof T & string];
+    if (!created) throw new Error(`${this.spec.table} no tiene createdAt`);
+    const match = matchOf(this.spec, where);
+    const rows = this.db.selectLatest
+      ? await this.db.selectLatest(this.spec.table, match, created[0], limit)
+      : (await this.db.select(this.spec.table, match)).sort((a, b) => String(b[created[0]]).localeCompare(String(a[created[0]]))).slice(0, limit);
+    return rows.filter((r) => !this.spec.hidden?.(r)).map((r) => fromRow(this.spec, r));
+  }
+
+  async count(where: Partial<T>) {
+    if (this.db.count && !this.spec.hidden) return this.db.count(this.spec.table, matchOf(this.spec, where));
+    return (await this.list(where)).length;
   }
 }
 
@@ -702,6 +717,7 @@ const agentMessageSpec: Spec<AgentMessage> = {
     authorId: ["author_id", same], content: ["content", same], proposals: ["proposals", arr],
     artifacts: ["artifacts", arr], citations: ["citations", arr], status: ["status", same],
     errorCode: ["error_code", nul], errorMessage: ["error_message", nul], createdAt: ["created_at", tsReq],
+    metrics: ["metrics", nul],
   },
 };
 
@@ -737,8 +753,27 @@ class HistoryTable extends PgTable<DiagnosisItemHistory> {
   }
 }
 
+/** Funciones SQL (RPC) del repositorio: solo existen si la base las expone. */
+function repositoryFunctions(db: Db): RepositoryFunctions {
+  const rpc = db.rpc?.bind(db);
+  if (!rpc) return {};
+  return {
+    async searchChunks(projectId, query, limit) {
+      const data = await rpc("search_project_chunks", { p_project_id: projectId, p_query: query, p_limit: limit });
+      const rows = Array.isArray(data) ? (data as Row[]) : [];
+      return rows.map((r) => ({ chunk: fromRow(projectDocumentChunkSpec, r), score: Number(r.score) || 0 }));
+    },
+    async addAiUsage(actorId, kind, day, amount) {
+      const data = await rpc("add_ai_usage", { p_actor_id: actorId, p_kind: kind, p_day: day, p_amount: amount });
+      const value = Array.isArray(data) ? Object.values((data[0] ?? {}) as Row)[0] : data;
+      return Number(value) || 0;
+    },
+  };
+}
+
 export function createPgRepository(db: Db): Repository {
   return {
+    fn: repositoryFunctions(db),
     agentSessions: new PgTable(db, agentSessionSpec),
     sessionCalls: new PgTable(db, sessionCallSpec),
     sessionCallSegments: new PgTable(db, sessionCallSegmentSpec),
