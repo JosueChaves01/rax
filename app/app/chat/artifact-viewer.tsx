@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { AgentArtifact } from "@/types/domain";
 import { DocumentDownloads, isDocumentArtifact, messageDocumentUrl } from "./document-card";
-import { FormattedText } from "./formatted-text";
+import { MarkdownView } from "@/shared/ui/markdown-view";
+import { documentPdfPreviewUrl } from "@/shared/ui/document-viewer";
 
 interface ArtifactViewerProps {
   artifact: AgentArtifact | null;
@@ -14,7 +15,7 @@ interface ArtifactViewerProps {
 }
 
 export function ArtifactViewer({ artifact, messageId, onClose, onSaveToKnowledge }: ArtifactViewerProps) {
-  const [tab, setTab] = useState<"preview" | "code">("preview");
+  const [tab, setTab] = useState<"preview" | "pdf" | "code">("preview");
   const [copied, setCopied] = useState(false);
 
   if (!artifact) return null;
@@ -134,6 +135,16 @@ export function ArtifactViewer({ artifact, messageId, onClose, onSaveToKnowledge
           >
             Vista Previa
           </button>
+          {isDocument && messageId && (
+            <button
+              onClick={() => setTab("pdf")}
+              className={`py-2 px-3 text-xs font-semibold border-b-2 transition ${
+                tab === "pdf" ? "border-orange-500 text-orange-600" : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Vista PDF
+            </button>
+          )}
           <button
             onClick={() => setTab("code")}
             className={`py-2 px-3 text-xs font-semibold border-b-2 transition ${
@@ -149,12 +160,18 @@ export function ArtifactViewer({ artifact, messageId, onClose, onSaveToKnowledge
 
       {/* Body Area */}
       <div className="flex-1 overflow-auto bg-slate-50/50">
-        {tab === "preview" && isVisual ? (
+        {tab === "pdf" && isDocument && messageId ? (
+          <iframe
+            title={`PDF de ${artifact.title}`}
+            src={documentPdfPreviewUrl({ mensaje: messageId, artefacto: artifact.id })}
+            className="w-full h-full min-h-[60vh] border-0 bg-white"
+          />
+        ) : tab !== "code" && isVisual ? (
           isDocument ? (
             <div className="p-6 bg-white m-4 rounded-xl border border-slate-200">
               <h1 className="text-base font-bold text-slate-900">{artifact.title}</h1>
               {artifact.subtitle && <p className="text-[0.6875rem] text-slate-500 mb-4">{artifact.subtitle}</p>}
-              <FormattedText content={artifact.content} isUser={false} />
+              <MarkdownView content={artifact.content} className="text-xs" />
             </div>
           ) : artifact.type === "image/svg+xml" ? (
             <div
@@ -167,8 +184,8 @@ export function ArtifactViewer({ artifact, messageId, onClose, onSaveToKnowledge
               <pre className="whitespace-pre-wrap leading-relaxed">{artifact.content}</pre>
             </div>
           ) : artifact.type === "application/vnd.ant.markdown" ? (
-            <div className="p-6 prose prose-slate prose-sm max-w-none bg-white m-4 rounded-xl border border-slate-200">
-              <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed">{artifact.content}</pre>
+            <div className="p-6 bg-white m-4 rounded-xl border border-slate-200">
+              <MarkdownView content={artifact.content} className="text-xs" />
             </div>
           ) : (
             // Sandboxed iframe para HTML / React

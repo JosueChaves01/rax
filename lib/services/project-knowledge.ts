@@ -184,6 +184,8 @@ export interface LibraryDocument {
   projectId: string;
   projectName: string;
   title: string;
+  filename: string;
+  fileType: ProjectKnowledgeDocument["fileType"];
   source: ProjectKnowledgeDocument["source"];
   updatedAt: string;
   authorName: string;
@@ -224,6 +226,8 @@ export async function listLibraryDocuments(d: ServiceDeps): Promise<LibraryDocum
       projectId: project.id,
       projectName: project.name,
       title: doc.title || doc.filename,
+      filename: doc.filename,
+      fileType: doc.fileType,
       source: doc.source,
       updatedAt: doc.updatedAt,
       authorName: names.get(doc.createdBy) ?? "Otra persona",

@@ -77,12 +77,18 @@ export async function documentFromMessage(d: ServiceDeps, messageId: string, art
   return { title: artifact.title, subtitle: artifact.subtitle, content: artifact.content };
 }
 
-/** Cualquier documento del conocimiento del proyecto, para bajarlo como PDF o Word. */
+/** Cualquier documento del conocimiento del proyecto, para verlo o bajarlo como PDF o Word. */
 export async function documentFromProject(d: ServiceDeps, projectId: string, documentId: string): Promise<DocumentSource> {
   const { project } = await guard(d, projectId, "project.read");
   const doc = await d.repo.projectDocuments.get(documentId);
   if (!doc || doc.projectId !== projectId || !isActiveDocument(doc)) throw notFound("Documento no encontrado.");
-  return { title: doc.title, subtitle: `${project.name} · ${longDate(doc.updatedAt)}`, content: doc.content };
+  return {
+    title: doc.title,
+    subtitle: `${project.name} · ${longDate(doc.updatedAt)}`,
+    content: doc.content,
+    fileType: doc.fileType,
+    filename: doc.filename,
+  };
 }
 
 /** Un recurso de la biblioteca metodológica (público o propio), para bajarlo como PDF o Word. */

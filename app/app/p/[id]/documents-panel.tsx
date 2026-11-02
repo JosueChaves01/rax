@@ -8,6 +8,7 @@ import { useAction } from "@/shared/ui/use-action";
 import type { ProjectDocRow } from "./data";
 import type { ProjectDocumentFileType } from "@/types/domain";
 import { ACCEPTED_UPLOADS, uploadForText } from "@/lib/documents/uploads";
+import { ViewDocumentButton, documentKindLabel } from "@/shared/ui/document-viewer";
 
 const SOURCE_LABEL: Record<ProjectDocRow["source"], string> = {
   upload: "Compartido",
@@ -120,16 +121,23 @@ function DocRow({ projectId, doc }: { projectId: string; doc: ProjectDocRow }) {
   return (
     <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-slate-900">{doc.title}</p>
+        <ViewDocumentButton
+          docRef={{ proyecto: projectId, documento: doc.id }}
+          title={doc.title}
+          className="block max-w-full cursor-pointer truncate text-left text-sm font-semibold text-slate-900 hover:text-blue-600"
+        >
+          {doc.title}
+        </ViewDocumentButton>
         <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
           {doc.fromMentor ? <Tag color="var(--color-cyan)">Del mentor</Tag> : <Tag>{SOURCE_LABEL[doc.source]}</Tag>}
           <span>
-            {doc.authorName} · {formatDate(doc.updatedAt)}
+            {documentKindLabel(doc.filename)} · {doc.authorName} · {formatDate(doc.updatedAt)}
           </span>
         </p>
         {error && <p className="mt-1 text-xs text-rose-700">{error}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs font-semibold">
+        <ViewDocumentButton docRef={{ proyecto: projectId, documento: doc.id }} title={doc.title} />
         <a href={download(projectId, doc.id, "pdf")} className="text-blue-600 hover:underline">
           PDF
         </a>
