@@ -24,6 +24,7 @@ export default function Home() {
             <span className="text-accent">R</span>AX
           </Link>
           <nav aria-label="Secciones" className="hidden gap-8 text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-muted md:flex">
+            <a href="#video" className="hover:text-ink">Video</a>
             <a href="#recorrido" className="hover:text-ink">Recorrido</a>
             <a href="#principios" className="hover:text-ink">Principios</a>
           </nav>
@@ -57,9 +58,33 @@ export default function Home() {
               <Link href="/entrar?modo=registro" className="inline-flex h-12 items-center rounded-full bg-accent px-7 text-sm font-semibold uppercase tracking-[0.08em] text-white shadow-[0_10px_40px_-10px_rgb(255_74_28/0.8)] hover:bg-accent-strong">
                 Crear mi cuenta
               </Link>
-              <a href="#recorrido" className="text-sm font-semibold uppercase tracking-[0.12em] text-muted hover:text-ink">
-                Ver el recorrido ↓
+              <a href="#video" className="text-sm font-semibold uppercase tracking-[0.12em] text-muted hover:text-ink">
+                Ver cómo funciona en 1 minuto ↓
               </a>
+            </div>
+          </div>
+        </section>
+
+        <section id="video" aria-labelledby="video-title" className="scroll-mt-16 border-t border-line">
+          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+            <p className="eyebrow">Video · 1 minuto</p>
+            <h2 id="video-title" className="display mt-4 text-[clamp(2.5rem,6vw,5rem)]">
+              Así se usa <span className="text-highlight">RAX.</span>
+            </h2>
+            <p className="mt-4 max-w-2xl text-lg text-muted">
+              Del proyecto a la decisión: etapas, asistente IA, sesiones con tu mentor, llamadas con transcripción y notas.
+            </p>
+            <div className="mt-10 overflow-hidden rounded-3xl border border-white/10 bg-black shadow-[0_40px_120px_-30px_rgb(37_99_235/0.45)]">
+              <video
+                className="block aspect-video w-full"
+                src="/promo/rax-promo.mp4"
+                poster="/promo/poster.jpg"
+                controls
+                playsInline
+                preload="none"
+              >
+                Tu navegador no puede reproducir este video. <a href="/promo/rax-promo.mp4">Descargalo aquí</a>.
+              </video>
             </div>
           </div>
         </section>
