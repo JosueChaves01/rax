@@ -177,3 +177,57 @@ export async function promoteDecisionToKnowledge(
   });
 }
 
+
+/** Un documento de cualquiera de los proyectos de quien mira, para la biblioteca general. */
+export interface LibraryDocument {
+  id: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  source: ProjectKnowledgeDocument["source"];
+  updatedAt: string;
+  authorName: string;
+  /** Lo compartió un mentor asignado al proyecto. */
+  fromMentor: boolean;
+}
+
+/**
+ * Documentos vigentes de todos los proyectos a los que la persona tiene acceso (los suyos, donde
+ * colabora o, si es mentor, los asignados), del más nuevo al más viejo.
+ */
+export async function listLibraryDocuments(d: ServiceDeps): Promise<LibraryDocument[]> {
+  const projects = await d.repo.projects.list();
+  const names = new Map<string, string>();
+  const rows = await Promise.all(
+    projects.map(async (p) => {
+      try {
+        await guard(d, p.id, "project.read");
+      } catch {
+        return [];
+      }
+      const [docs, assignments] = await Promise.all([
+        d.repo.projectDocuments.list({ projectId: p.id }),
+        d.repo.mentorAssignments.list({ projectId: p.id, status: "active" }),
+      ]);
+      const mentors = new Set(assignments.map((a) => a.mentorId));
+      return docs.filter(isActiveDocument).map((doc) => ({ doc, project: p, fromMentor: mentors.has(doc.createdBy) }));
+    }),
+  );
+  const flat = rows.flat();
+  for (const id of new Set(flat.map((r) => r.doc.createdBy))) {
+    if (id === d.actor.id) names.set(id, "Vos");
+    else names.set(id, (await d.repo.profiles.get(id).catch(() => undefined))?.name ?? "Otra persona");
+  }
+  return flat
+    .map(({ doc, project, fromMentor }) => ({
+      id: doc.id,
+      projectId: project.id,
+      projectName: project.name,
+      title: doc.title || doc.filename,
+      source: doc.source,
+      updatedAt: doc.updatedAt,
+      authorName: names.get(doc.createdBy) ?? "Otra persona",
+      fromMentor,
+    }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}

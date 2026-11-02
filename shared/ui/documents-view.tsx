@@ -1,95 +1,67 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { cx } from "@/shared/ui/primitives";
+import { Tag, cx, formatDate } from "@/shared/ui/primitives";
+import { RESOURCE_CATEGORY_LABEL } from "@/features/labels";
 import type { MentorResource, ResourceCategory } from "@/types/domain";
+import type { LibraryDocument } from "@/lib/services/project-knowledge";
 
-interface DocumentsViewProps {
-  initialResources: MentorResource[];
-}
+type Tab = "proyectos" | "biblioteca";
 
-type MainTab = "biblioteca" | "mis-documentos" | "generados-ia";
-type FilterKind = "Todos" | "Métodos" | "Plantillas" | "Guías" | "Ejercicios";
+const SOURCE_LABEL: Record<LibraryDocument["source"], string> = {
+  upload: "Compartido",
+  chat_extracted: "Del asistente",
+  note: "Transcripción",
+};
 
-export function DocumentsView({ initialResources }: DocumentsViewProps) {
-  const [mainTab, setMainTab] = useState<MainTab>("biblioteca");
-  const [filterKind, setFilterKind] = useState<FilterKind>("Todos");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDocId, setSelectedDocId] = useState<string>(
-    initialResources[0]?.id || ""
-  );
-  const [downloadNotice, setDownloadNotice] = useState(false);
+const searchIn = (q: string, ...texts: string[]) => texts.some((t) => t.toLowerCase().includes(q));
 
-  // Map category to Spanish pill
-  const categoryToKind = (cat: ResourceCategory): FilterKind => {
-    switch (cat) {
-      case "framework":
-        return "Métodos";
-      case "template":
-        return "Plantillas";
-      case "guide":
-        return "Guías";
-      case "questionnaire":
-      case "experiment_pattern":
-        return "Ejercicios";
-      default:
-        return "Guías";
-    }
-  };
-
-  const filteredDocs = initialResources.filter((doc) => {
-    const kind = categoryToKind(doc.category);
-    if (filterKind !== "Todos" && kind !== filterKind) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = doc.title.toLowerCase().includes(q);
-      const matchDesc = doc.description.toLowerCase().includes(q);
-      const matchTag = doc.tags.some((t) => t.toLowerCase().includes(q));
-      if (!matchTitle && !matchDesc && !matchTag) return false;
-    }
-    return true;
-  });
-
-  const selectedDoc =
-    initialResources.find((d) => d.id === selectedDocId) || filteredDocs[0] || initialResources[0];
-
-  const handleDownload = () => {
-    setDownloadNotice(true);
-    setTimeout(() => setDownloadNotice(false), 2500);
-  };
+/**
+ * Biblioteca de documentos: los documentos reales de tus proyectos (lo que compartió el mentor, lo que
+ * generó el asistente, las transcripciones) y la biblioteca metodológica. Todo se descarga en PDF o Word.
+ */
+export function DocumentsView({
+  documents,
+  resources,
+  initialTab,
+  initialResourceId,
+}: {
+  documents: LibraryDocument[];
+  resources: MentorResource[];
+  initialTab?: Tab;
+  initialResourceId?: string;
+}) {
+  const [tab, setTab] = useState<Tab>(initialTab ?? (documents.length ? "proyectos" : "biblioteca"));
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
 
   return (
     <div className="space-y-6">
-      {/* 1. Encabezado y Pestañas Principales (Panel 4 del Mock) */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200">
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Centro de documentos con IA
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Plantillas, guías metodológicas y artefactos generados colaborativamente con tu mentor.
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Documentos</h1>
+          <p className="mt-1 max-w-xl text-sm text-slate-500">
+            Los documentos de tus proyectos (lo que compartió tu mentor, lo que generó el asistente y las transcripciones) y la biblioteca de guías y
+            plantillas. Todo se descarga en PDF o Word.
           </p>
         </div>
-
-        {/* Pestañas: [Biblioteca] | [Mis documentos] | [Generados con IA] */}
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0">
+        <div role="tablist" className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
           {(
             [
-              ["biblioteca", "Biblioteca"],
-              ["mis-documentos", "Mis documentos"],
-              ["generados-ia", "Generados con IA"],
+              ["proyectos", `De mis proyectos (${documents.length})`],
+              ["biblioteca", `Biblioteca (${resources.length})`],
             ] as const
-          ).map(([tab, label]) => (
+          ).map(([k, label]) => (
             <button
-              key={tab}
+              key={k}
               type="button"
-              onClick={() => setMainTab(tab)}
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => setTab(k)}
               className={cx(
-                "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
-                mainTab === tab
-                  ? "bg-white text-slate-900 shadow-2xs"
-                  : "text-slate-500 hover:text-slate-900"
+                "cursor-pointer rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                tab === k ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900",
               )}
             >
               {label}
@@ -98,164 +70,190 @@ export function DocumentsView({ initialResources }: DocumentsViewProps) {
         </div>
       </div>
 
-      {downloadNotice && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 rounded-xl flex items-center gap-2">
-          <span>✓</span> Guía descargada en formato Markdown / PDF listo para imprimir.
-        </div>
-      )}
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={tab === "proyectos" ? "Buscar por título o proyecto…" : "Buscar guías, plantillas, métodos…"}
+        aria-label="Buscar documentos"
+        className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 sm:w-96"
+      />
 
-      {/* 2. Buscador y Filtros Secundarios */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-        <div className="relative w-full sm:w-80">
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar documentos, frameworks, guías…"
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <span className="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
-        </div>
-
-        {/* Píldoras de Filtro: [Todos] [Métodos] [Plantillas] [Guías] [Ejercicios] */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          {(
-            ["Todos", "Métodos", "Plantillas", "Guías", "Ejercicios"] as const
-          ).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setFilterKind(k)}
-              className={cx(
-                "px-3 py-1 text-xs font-medium rounded-full border transition-colors whitespace-nowrap cursor-pointer",
-                filterKind === k
-                  ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
-                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-              )}
-            >
-              {k}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 3. Distribución en 2 Columnas (Panel 4 del Mock) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Columna Izquierda: Lista de Documentos (7 cols) */}
-        <div className="lg:col-span-7 space-y-3">
-          {filteredDocs.map((doc) => {
-            const isSelected = selectedDoc?.id === doc.id;
-            const kindLabel = categoryToKind(doc.category);
-            return (
-              <div
-                key={doc.id}
-                onClick={() => setSelectedDocId(doc.id)}
-                className={cx(
-                  "p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-4",
-                  isSelected
-                    ? "bg-white border-blue-500 shadow-sm ring-1 ring-blue-500"
-                    : "bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs"
-                )}
-              >
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0 border border-blue-100">
-                    📄
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
-                        {kindLabel}
-                      </span>
-                      <span className="text-slate-400">•</span>
-                      <span className="text-[11px] text-slate-500 font-mono">
-                        {doc.tags[0] || "Metodología"}
-                      </span>
-                    </div>
-                    <h3 className="text-xs font-bold text-slate-900 truncate mt-0.5">
-                      {doc.title}
-                    </h3>
-                    <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
-                      {doc.description}
-                    </p>
-                  </div>
-                </div>
-
-                <Link
-                  href={`/app/documentos/${doc.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shrink-0 transition-colors shadow-2xs"
-                >
-                  Usar
-                </Link>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Columna Derecha: Vista Previa y Acción IA (5 cols) */}
-        <div className="lg:col-span-5">
-          {selectedDoc ? (
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6 sticky top-6">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-base border border-blue-100 mb-3">
-                  📋
-                </div>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 uppercase tracking-wider">
-                    {categoryToKind(selectedDoc.category)}
-                  </span>
-                  {selectedDoc.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <h2 className="text-base font-bold text-slate-900">
-                  {selectedDoc.title}
-                </h2>
-                <p className="text-xs text-slate-600 leading-relaxed mt-2">
-                  {selectedDoc.description}
-                </p>
-              </div>
-
-              {/* Contenido / Estructura */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Estructura metodológica
-                </p>
-                <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed max-h-48 overflow-y-auto">
-                  {selectedDoc.content}
-                </div>
-              </div>
-
-              {/* Botones de Acción (Panel 4 del Mock) */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <Link
-                  href={`/app/documentos/${selectedDoc.id}`}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
-                >
-                  <span>✨</span> Generar versión personalizada con IA
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer text-center"
-                >
-                  Descargar guía
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center text-slate-500 text-xs">
-              Selecciona un documento para ver detalles.
-            </div>
-          )}
-        </div>
-      </div>
+      {tab === "proyectos" ? <ProjectDocuments documents={documents} q={q} /> : <Library resources={resources} q={q} initialId={initialResourceId} />}
     </div>
   );
 }
 
+function ProjectDocuments({ documents, q }: { documents: LibraryDocument[]; q: string }) {
+  const projects = useMemo(() => [...new Map(documents.map((d) => [d.projectId, d.projectName])).entries()], [documents]);
+  const [project, setProject] = useState("all");
+  const [onlyMentor, setOnlyMentor] = useState(false);
+  const shown = documents.filter(
+    (d) => (project === "all" || d.projectId === project) && (!onlyMentor || d.fromMentor) && (!q || searchIn(q, d.title, d.projectName, d.authorName)),
+  );
+
+  if (!documents.length)
+    return (
+      <p className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-10 text-center text-sm text-slate-500">
+        Tus proyectos todavía no tienen documentos. Aparecen acá cuando tu mentor comparte uno, cuando guardás uno que generó el asistente o al terminar una
+        llamada con transcripción.
+      </p>
+    );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {projects.length > 1 && (
+          <select
+            aria-label="Proyecto"
+            value={project}
+            onChange={(e) => setProject(e.target.value)}
+            className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+          >
+            <option value="all">Todos los proyectos</option>
+            {projects.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+        )}
+        <button
+          type="button"
+          aria-pressed={onlyMentor}
+          onClick={() => setOnlyMentor((v) => !v)}
+          className={cx(
+            "cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+            onlyMentor ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 text-slate-600 hover:border-slate-400",
+          )}
+        >
+          Solo del mentor ({documents.filter((d) => d.fromMentor).length})
+        </button>
+      </div>
+
+      {shown.length ? (
+        <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200/80 bg-white px-5 shadow-xs">
+          {shown.map((doc) => (
+            <li key={doc.id} className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">{doc.title}</p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                  {doc.fromMentor ? <Tag color="var(--color-cyan)">Del mentor</Tag> : <Tag>{SOURCE_LABEL[doc.source]}</Tag>}
+                  <Link href={`/app/p/${doc.projectId}/documentos`} className="font-medium text-slate-700 hover:text-blue-600 hover:underline">
+                    {doc.projectName}
+                  </Link>
+                  <span>
+                    · {doc.authorName} · {formatDate(doc.updatedAt)}
+                  </span>
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3 text-xs font-semibold">
+                <a href={`/api/documentos?proyecto=${doc.projectId}&documento=${doc.id}&formato=pdf`} className="text-blue-600 hover:underline">
+                  PDF
+                </a>
+                <a href={`/api/documentos?proyecto=${doc.projectId}&documento=${doc.id}&formato=docx`} className="text-blue-600 hover:underline">
+                  Word
+                </a>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-slate-500">Ningún documento coincide con el filtro.</p>
+      )}
+    </div>
+  );
+}
+
+function Library({ resources, q, initialId }: { resources: MentorResource[]; q: string; initialId?: string }) {
+  const [category, setCategory] = useState<ResourceCategory | "all">("all");
+  const [selectedId, setSelectedId] = useState(initialId ?? resources[0]?.id ?? "");
+  const categories = [...new Set(resources.map((r) => r.category))];
+  const shown = resources.filter((r) => (category === "all" || r.category === category) && (!q || searchIn(q, r.title, r.description, ...r.tags)));
+  const selected = shown.find((r) => r.id === selectedId) ?? shown[0];
+
+  if (!resources.length) return <p className="text-sm text-slate-500">La biblioteca todavía no tiene recursos.</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-1.5">
+        {(["all", ...categories] as const).map((c) => (
+          <button
+            key={c}
+            type="button"
+            aria-pressed={category === c}
+            onClick={() => setCategory(c)}
+            className={cx(
+              "cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              category === c ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 text-slate-600 hover:border-slate-400",
+            )}
+          >
+            {c === "all" ? "Todos" : RESOURCE_CATEGORY_LABEL[c]}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <ul className="space-y-2">
+          {shown.map((r) => (
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => setSelectedId(r.id)}
+                aria-current={selected?.id === r.id ? "true" : undefined}
+                className={cx(
+                  "w-full cursor-pointer rounded-xl border bg-white p-4 text-left shadow-2xs transition-colors",
+                  selected?.id === r.id ? "border-blue-600 ring-2 ring-blue-100" : "border-slate-200/80 hover:border-slate-300",
+                )}
+              >
+                <p className="text-sm font-semibold text-slate-900">{r.title}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-slate-500">{r.description}</p>
+                <div className="mt-2">
+                  <Tag color="var(--color-cyan)">{RESOURCE_CATEGORY_LABEL[r.category]}</Tag>
+                </div>
+              </button>
+            </li>
+          ))}
+          {!shown.length && <li className="text-sm text-slate-500">Ningún recurso coincide con la búsqueda.</li>}
+        </ul>
+
+        {selected && (
+          <article className="h-fit space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-6 lg:sticky lg:top-20">
+            <div>
+              <Tag color="var(--color-cyan)">{RESOURCE_CATEGORY_LABEL[selected.category]}</Tag>
+              <h2 className="mt-2 text-lg font-bold text-slate-900">{selected.title}</h2>
+              <p className="mt-1 text-sm text-slate-600">{selected.description}</p>
+            </div>
+            <div className="max-h-96 overflow-y-auto whitespace-pre-line rounded-xl border border-slate-200/80 bg-slate-50 p-4 text-xs leading-relaxed text-slate-700">
+              {selected.content}
+            </div>
+            {selected.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selected.tags.map((t) => (
+                  <Tag key={t}>#{t}</Tag>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+              <a
+                href={`/api/documentos?recurso=${selected.id}&formato=pdf`}
+                className="inline-flex h-9 items-center rounded-full bg-blue-600 px-4 text-xs font-semibold uppercase tracking-[0.08em] text-white hover:bg-blue-700"
+              >
+                Descargar PDF
+              </a>
+              <a
+                href={`/api/documentos?recurso=${selected.id}&formato=docx`}
+                className="inline-flex h-9 items-center rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold uppercase tracking-[0.08em] text-slate-700 hover:bg-slate-50"
+              >
+                Word
+              </a>
+              <Link href="/app/chat" className="ml-auto text-xs font-semibold text-blue-600 hover:underline">
+                Adaptarlo a mi proyecto con el asistente →
+              </Link>
+            </div>
+          </article>
+        )}
+      </div>
+    </div>
+  );
+}

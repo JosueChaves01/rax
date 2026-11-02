@@ -85,6 +85,13 @@ export async function documentFromProject(d: ServiceDeps, projectId: string, doc
   return { title: doc.title, subtitle: `${project.name} · ${longDate(doc.updatedAt)}`, content: doc.content };
 }
 
+/** Un recurso de la biblioteca metodológica (público o propio), para bajarlo como PDF o Word. */
+export async function documentFromResource(d: ServiceDeps, resourceId: string): Promise<DocumentSource> {
+  const r = await d.repo.mentorResources.get(resourceId);
+  if (!r || (!r.isPublic && r.authorMentorId !== d.actor.id)) throw notFound("Recurso no encontrado.");
+  return { title: r.title, subtitle: `Biblioteca RAX · ${longDate(r.updatedAt)}`, content: `${r.description}\n\n${r.content}` };
+}
+
 /* ── Agregar un documento ya generado a un proyecto ── */
 
 /** Proyecto al que se puede agregar un documento del agente. */

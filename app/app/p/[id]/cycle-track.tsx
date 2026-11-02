@@ -77,7 +77,7 @@ export function CycleTrack({ w, active }: { w: Workspace; active: CycleStepId })
   ];
 
   return (
-    <nav aria-label="Ciclo de mentoría" className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs sm:p-5">
+    <nav aria-label="Ciclo de mentoría" className="@container rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="eyebrow text-slate-500">Ciclo de mentoría · #{cycleNumber}</p>
         {followUps.length > 0 && (
@@ -86,7 +86,7 @@ export function CycleTrack({ w, active }: { w: Workspace; active: CycleStepId })
           </p>
         )}
       </div>
-      <ol className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <ol className="mt-3 grid grid-cols-2 gap-2 @2xl:grid-cols-4">
         {steps.map((s, i) => (
           <li key={s.id} className="min-w-0">
             <Link

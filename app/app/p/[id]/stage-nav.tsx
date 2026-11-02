@@ -38,18 +38,19 @@ export function StageNav({ projectId, phase, badges }: { projectId: string; phas
 
   return (
     <nav aria-label="Etapas del proyecto" className="space-y-3">
-      <ol className="hidden gap-1.5 lg:grid lg:grid-cols-[auto_repeat(4,minmax(0,1fr))_auto]">
+      {/* Fila que nunca aprieta los textos: si no entra (columna angosta), se desplaza de lado. */}
+      <ol className="-mx-1 hidden gap-1.5 overflow-x-auto px-1 pb-1 lg:flex">
         {SECTIONS.map((s) => {
           const state = stateOf(s, phase);
           const stage = STAGES.find((x) => x.id === s.id);
           const active = s.id === section.id;
           return (
-            <li key={s.id}>
+            <li key={s.id} className={cx("shrink-0", stage && "flex-1")}>
               <Link
                 href={href(base, s.pages[0].slug)}
                 aria-current={active ? "page" : undefined}
                 className={cx(
-                  "flex h-full flex-col justify-center rounded-xl border px-3 py-2 transition-colors",
+                  "flex h-full flex-col justify-center whitespace-nowrap rounded-xl border px-2.5 py-2 transition-colors",
                   active
                     ? "border-blue-600 bg-blue-50/80 text-blue-900 shadow-2xs font-semibold"
                     : "border-slate-200/80 bg-white hover:bg-slate-50 text-slate-700 hover:border-slate-300 shadow-2xs",
@@ -60,7 +61,7 @@ export function StageNav({ projectId, phase, badges }: { projectId: string; phas
                   {stage ? `${stage.n} · ${STATE_LABEL[state!]}` : s.id === "inicio" ? "resumen" : "consulta"}
                   <Count n={sectionBadge(s)} />
                 </span>
-                <span className={cx("display mt-0.5 text-xl", state === "done" && !active ? "text-slate-400" : "")}>
+                <span className={cx("display mt-0.5 text-lg", state === "done" && !active ? "text-slate-400" : "")}>
                   {state === "done" && <span className="text-emerald-600">✓ </span>}
                   {s.label}
                 </span>
@@ -122,7 +123,7 @@ export function MobileStageBar({ projectId, phase, badges }: { projectId: string
               >
                 <span aria-hidden className={cx("h-1.5 w-1.5 rounded-full", state === "done" ? "bg-emerald-600" : "bg-current")} />
                 {s.label}
-                {!!n && <span className="absolute right-2 top-1.5 h-1.5 w-1.5 rounded-full bg-blue-600" aria-label={`${n} pendientes`} />}
+                {!!n && <span className="absolute left-1/2 top-1.5 ml-2 h-1.5 w-1.5 rounded-full bg-blue-600" aria-label={`${n} pendientes`} />}
               </Link>
             </li>
           );
