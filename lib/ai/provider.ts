@@ -1,5 +1,5 @@
 import type { DiagnosisItem, InterviewDimension, Message } from "@/types/domain";
-import type { AiTurn, ExperimentTasksSuggestion, FirstReviewSuggestion, GoalsSuggestion, HypothesesSuggestion, PostSessionSynthesisSuggestion, PreSessionBriefingSuggestion, SuggestedExperiment } from "./schema";
+import type { AiTurn, ExperimentTasksSuggestion, FirstReviewSuggestion, SessionNotesDraft, GoalsSuggestion, HypothesesSuggestion, PostSessionSynthesisSuggestion, PreSessionBriefingSuggestion, SuggestedExperiment } from "./schema";
 
 /**
  * Contexto seleccionado para una invocación. No se envía todo el historial:
@@ -68,6 +68,28 @@ export interface FirstReviewContext {
 
 export interface FirstReviewResult {
   suggestion: FirstReviewSuggestion;
+  provider: "simulated" | "openrouter";
+  usage?: AiUsage;
+}
+
+/** Contexto para redactar notas de una sesión: la reunión (transcripción) y el estado actual del proyecto. */
+export interface SessionNotesContext {
+  projectName: string;
+  projectSummary: string;
+  sessionKind: string;
+  /** Etapa del recorrido en la que está la sesión (ej. "Orientar"). */
+  stage: string;
+  items: Array<{ id: string; category: string; title: string; content: string; infoType: string; uncertainty: string; priorityRank?: number }>;
+  goals: string[];
+  briefingAgenda?: string[];
+  synthesis?: { summary: string; agreedDecisions: string[]; nextSteps?: string };
+  /** Notas compartidas ya guardadas (para no repetirlas). Las privadas no se envían al proveedor. */
+  existingNotes: Array<{ kind: string; body: string }>;
+  callTranscript?: string;
+}
+
+export interface SessionNotesResult {
+  draft: SessionNotesDraft;
   provider: "simulated" | "openrouter";
   usage?: AiUsage;
 }
@@ -289,6 +311,7 @@ export interface AiProvider {
   readonly label: string;
   interpret(ctx: InterviewContext): Promise<AiResult>;
   suggestFirstReview(ctx: FirstReviewContext): Promise<FirstReviewResult>;
+  suggestSessionNotes(ctx: SessionNotesContext): Promise<SessionNotesResult>;
   suggestHypotheses(ctx: HypothesisSuggestionContext): Promise<HypothesesSuggestionResult>;
   suggestExperiment(ctx: ExperimentSuggestionContext): Promise<ExperimentSuggestionResult>;
   suggestExperimentTasks(ctx: ExperimentTasksContext): Promise<ExperimentTasksResult>;

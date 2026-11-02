@@ -18,9 +18,10 @@ import {
   type PostSessionSynthesisResult,
   type PreSessionBriefingContext,
   type PreSessionBriefingResult,
+  type SessionNotesContext,
 } from "@/lib/ai/provider";
 import { SimulatedProvider } from "@/lib/ai/simulated";
-import type { FirstReviewSuggestion } from "@/lib/ai/schema";
+import type { FirstReviewSuggestion, SessionNotesDraft } from "@/lib/ai/schema";
 import { createTask } from "./validation";
 import { assertHypothesisTransition } from "@/features/hypotheses/rules";
 import { forbidden, notFound, validation } from "@/lib/errors";
@@ -194,6 +195,88 @@ export async function suggestFirstReview(d: ServiceDeps, sessionId: string): Pro
         task: "first_review_suggestion",
         reason: e instanceof AiUnavailableError ? e.reason : "unknown",
       },
+    });
+    throw e;
+  }
+}
+
+const SESSION_STAGE: Record<MentorSession["kind"], string> = {
+  exploratory: "Explorar",
+  first_review: "Orientar",
+  follow_up: "Ejecución",
+  second_review: "Decidir",
+  evaluation: "Evaluar",
+};
+
+export interface SessionNotesSuggestion {
+  notes: SessionNotesDraft["notes"];
+  /** De dónde salió el borrador: la transcripción de la llamada o solo el contexto del proyecto. */
+  basedOn: "transcript" | "context";
+}
+
+/**
+ * Borrador de notas con IA para el mentor de la sesión: a partir de la transcripción de la reunión
+ * (si hubo llamada), la síntesis y el estado actual del proyecto. No guarda nada: el mentor edita
+ * el borrador y lo guarda con addNotesBatch.
+ */
+export async function suggestSessionNotes(d: ServiceDeps, sessionId: string): Promise<SessionNotesSuggestion> {
+  const s = await loadSession(d, sessionId);
+  const { project } = await guard(d, s.projectId, "mentor.note");
+  if (s.mentorId !== d.actor.id) throw forbidden("Esta sesión está asignada a otra persona.");
+  if (s.status === "completed") throw validation("La sesión ya terminó; abrí una nueva para agregar notas.");
+  if (!project) throw notFound("Proyecto no encontrado.");
+
+  const [[dx], items, sessionNotes, relations, callTranscript] = await Promise.all([
+    d.repo.diagnoses.list({ projectId: s.projectId }),
+    d.repo.diagnosisItems.list({ projectId: s.projectId }),
+    d.repo.sessionNotes.list({ sessionId }),
+    d.repo.mentorshipRelations.list({ projectId: s.projectId }),
+    sessionTranscriptForAi(d, sessionId),
+  ]);
+  const relation = relations.find((r) => r.stage !== "closed") ?? relations[0];
+  const goals = relation ? await d.repo.mentorshipGoals.list({ relationId: relation.id }) : [];
+  const current = items.filter((i) => isCurrent(i) && i.reviewStatus !== "rejected");
+  const syn = s.postSessionSynthesis;
+
+  const ctx: SessionNotesContext = {
+    projectName: project.name,
+    projectSummary: dx?.summary ?? project.description,
+    sessionKind: s.kind,
+    stage: SESSION_STAGE[s.kind] ?? s.kind,
+    items: current.slice(0, 40).map((i) => ({
+      id: i.id,
+      category: i.category,
+      title: i.title,
+      content: i.content.slice(0, 500),
+      infoType: i.infoType,
+      uncertainty: i.uncertainty,
+      priorityRank: i.priority?.rank,
+    })),
+    goals: goals.map((g) => g.title),
+    briefingAgenda: s.preSessionBriefing?.suggestedAgenda,
+    synthesis: syn ? { summary: syn.summary, agreedDecisions: syn.agreedDecisions, nextSteps: syn.nextSteps } : undefined,
+    // Las notas privadas del mentor no salen al proveedor de IA.
+    existingNotes: sessionNotes.filter((n) => !n.isPrivate).map((n) => ({ kind: n.kind, body: n.body })),
+    callTranscript,
+  };
+
+  try {
+    const result = await d.ai.suggestSessionNotes(ctx);
+    await audit(d, "ai.invoked", {
+      projectId: s.projectId,
+      targetId: sessionId,
+      meta: { task: "session_notes", provider: result.provider, fromCall: Boolean(callTranscript) },
+    });
+    const validIds = new Set(current.map((i) => i.id));
+    const notes = result.draft.notes
+      .map((n) => ({ ...n, body: n.body.trim(), relatedItemId: n.relatedItemId && validIds.has(n.relatedItemId) ? n.relatedItemId : null }))
+      .filter((n) => n.body.length > 0);
+    return { notes, basedOn: callTranscript ? "transcript" : "context" };
+  } catch (e) {
+    await audit(d, "ai.failed", {
+      projectId: s.projectId,
+      targetId: sessionId,
+      meta: { task: "session_notes", reason: e instanceof AiUnavailableError ? e.reason : "unknown" },
     });
     throw e;
   }

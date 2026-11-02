@@ -51,6 +51,7 @@ import {
   startSession,
   updatePostSessionSynthesis,
   suggestFirstReview,
+  suggestSessionNotes,
 } from "@/lib/services/mentoring";
 import { endCall, getCallTranscript, getSessionCallState, startCall, synthesizeEndedCall } from "@/lib/services/session-calls";
 import {
@@ -453,6 +454,8 @@ export const suggestFirstReviewAction = async (projectId: string, sessionId: str
   run(projectId, async (d) => {
     return suggestFirstReview(d, V.parse(V.Ids, sessionId));
   });
+export const suggestSessionNotesAction = async (projectId: string, sessionId: string) =>
+  run(projectId, (d) => suggestSessionNotes(d, V.parse(V.Ids, sessionId)), { revalidate: false });
 export const addNotesBatchAction = async (
   projectId: string,
   sessionId: string,
