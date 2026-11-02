@@ -38,7 +38,6 @@ import { createProject, deleteProject, setConversationSharing, setProjectStatus 
 import { addComment, addItem, changeItem, confirmSummary, editSummary } from "@/lib/services/diagnosis";
 import {
   addNote,
-  getMentorSessionWorkspace,
   addNotesBatch,
   adoptPostSessionCommitments,
   completeFirstReview,
@@ -53,6 +52,7 @@ import {
   suggestFirstReview,
 } from "@/lib/services/mentoring";
 import { endCall, getCallTranscript, getSessionCallState, startCall, synthesizeEndedCall } from "@/lib/services/session-calls";
+import { addNoteReply, getSessionWorkspaceWithReplies, updateNoteReply, updateSessionNote } from "@/lib/services/session-notes";
 import {
   addEvidence,
   approveHypothesis,
@@ -429,7 +429,19 @@ export const synthesizeCallAction = async (projectId: string, callId: string) =>
   });
 
 export const getMentorSessionWorkspaceAction = async (projectId: string, sessionId: string) =>
-  run(projectId, async (d) => getMentorSessionWorkspace(d, V.parse(V.Ids, sessionId)));
+  run(projectId, async (d) => getSessionWorkspaceWithReplies(d, V.parse(V.Ids, sessionId)));
+
+/** Responder una nota de sesión (emprendedor, colaborador o mentor). */
+export const replyToNoteAction = async (projectId: string, noteId: string, body: string) =>
+  run(projectId, async (d) => addNoteReply(d, V.parse(V.Ids, noteId), V.parse(V.Text(2000), body)));
+
+/** Editar una respuesta propia. */
+export const updateNoteReplyAction = async (projectId: string, replyId: string, body: string) =>
+  run(projectId, async (d) => updateNoteReply(d, V.parse(V.Ids, replyId), V.parse(V.Text(2000), body)));
+
+/** Editar una nota propia. */
+export const updateSessionNoteAction = async (projectId: string, noteId: string, body: string) =>
+  run(projectId, async (d) => updateSessionNote(d, V.parse(V.Ids, noteId), { body: V.parse(V.Text(2000), body) }));
 
 export const addNoteAction = async (
   projectId: string,
