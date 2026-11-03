@@ -1,18 +1,14 @@
 import Link from "next/link";
 import { PHASE_ORDER } from "@/features/labels";
-import { cx, formatDate } from "@/shared/ui/primitives";
+import { formatDate } from "@/shared/ui/primitives";
 import type { Workspace } from "@/lib/services/projects";
 
-type StepState = "done" | "current" | "upcoming";
+export type StepState = "done" | "current" | "upcoming";
 
 export type CycleStepId = "orientar" | "validacion" | "decidir" | "evaluacion";
 
-/**
- * El ciclo de mentoría en una sola línea: primera revisión → probar → segunda revisión → cierre del ciclo.
- * Se ve arriba de cada pantalla del ciclo para que quede claro dónde está el proyecto y qué viene,
- * y cuántas sesiones de seguimiento hubo en el camino.
- */
-export function CycleTrack({ w, active }: { w: Workspace; active: CycleStepId }) {
+/** Estado de cada paso del ciclo de mentoría: primera revisión → probar → segunda revisión → cierre. */
+export function cycleSteps(w: Workspace) {
   const at = PHASE_ORDER.indexOf(w.phase);
   const reached = (p: (typeof PHASE_ORDER)[number]) => at >= PHASE_ORDER.indexOf(p);
   const done = (k: string) => w.sessions.some((s) => s.kind === k && s.status === "completed");
@@ -76,45 +72,23 @@ export function CycleTrack({ w, active }: { w: Workspace; active: CycleStepId })
     },
   ];
 
+  return { steps, cycleNumber, followUps: followUps.length };
+}
+
+export type CycleStep = ReturnType<typeof cycleSteps>["steps"][number];
+
+/**
+ * En las páginas que se abren desde el hilo del ciclo (acuerdo, cierre del ciclo): de dónde se vino y
+ * en qué ciclo se está, en una línea.
+ */
+export function BackToCycle({ w, to }: { w: Workspace; to: "orientar" | "decidir" }) {
+  const { cycleNumber } = cycleSteps(w);
   return (
-    <nav aria-label="Ciclo de mentoría" className="@container rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs sm:p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="eyebrow text-slate-500">Ciclo de mentoría · #{cycleNumber}</p>
-        {followUps.length > 0 && (
-          <p className="text-xs text-slate-500">
-            {followUps.length} seguimiento{followUps.length === 1 ? "" : "s"} en el camino
-          </p>
-        )}
-      </div>
-      <ol className="mt-3 grid grid-cols-2 gap-2 @2xl:grid-cols-4">
-        {steps.map((s, i) => (
-          <li key={s.id} className="min-w-0">
-            <Link
-              href={`/app/p/${w.project.id}/${s.id}`}
-              aria-current={s.id === active ? "step" : undefined}
-              className={cx(
-                "flex h-full flex-col rounded-xl border px-3 py-2.5 transition-colors",
-                s.id === active ? "border-blue-600 bg-blue-50/70" : "border-slate-200/80 hover:border-slate-300 hover:bg-slate-50",
-              )}
-            >
-              <span className="flex items-center gap-2 text-[0.6875rem] font-semibold">
-                <span
-                  aria-hidden
-                  className={cx(
-                    "grid h-5 w-5 shrink-0 place-items-center rounded-full font-mono text-[0.625rem]",
-                    s.state === "done" ? "bg-emerald-600 text-white" : s.state === "current" ? "bg-blue-600 text-white" : "border border-slate-300 text-slate-400",
-                  )}
-                >
-                  {s.state === "done" ? "✓" : i + 1}
-                </span>
-                <span className={cx("truncate", s.state === "upcoming" ? "text-slate-400" : "text-slate-900")}>{s.label}</span>
-                <span className="sr-only">({s.state === "done" ? "hecho" : s.state === "current" ? "en curso" : "por venir"})</span>
-              </span>
-              <span className="mt-1 truncate pl-7 text-[0.6875rem] text-slate-500">{s.detail}</span>
-            </Link>
-          </li>
-        ))}
-      </ol>
-    </nav>
+    <Link
+      href={`/app/p/${w.project.id}/${to}`}
+      className="inline-flex items-center gap-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
+    >
+      ← Volver al ciclo de mentoría #{cycleNumber}
+    </Link>
   );
 }

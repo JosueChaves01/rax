@@ -1,5 +1,5 @@
 import { loadWorkspace } from "../data";
-import { CycleTrack } from "../cycle-track";
+import { BackToCycle } from "../cycle-track";
 import { AgreementsUI } from "./agreements-ui";
 
 export default async function AgreementsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -8,7 +8,7 @@ export default async function AgreementsPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="space-y-6">
-      <CycleTrack w={w} active="orientar" />
+      <BackToCycle w={w} to="orientar" />
       <AgreementsUI projectId={id} workspace={w} actor={actor} />
     </div>
   );

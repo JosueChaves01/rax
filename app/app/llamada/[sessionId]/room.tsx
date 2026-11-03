@@ -8,6 +8,7 @@ import { getSessionCallStateAction } from "@/app/actions";
 import { CallErrorBoundary, PastCall, Result, TranscriptList, clock, type CallState } from "@/shared/ui/session-call";
 import { useSessionCall } from "@/shared/ui/use-session-call";
 import { Notice, cx } from "@/shared/ui/primitives";
+import { RoomAssistant, type RoomMode } from "./assistant";
 
 /** Sección del contexto ya serializada desde el servidor. */
 export interface RoomSection {
@@ -198,7 +199,21 @@ function Window({
 
 /* ───────────── Pantalla ───────────── */
 
-export function CallRoom(props: { sessionId: string; title: string; subtitle: string; backHref: string; sections: RoomSection[] }) {
+/** Lo que la sala necesita además de la llamada: el asistente y el cierre de la sesión. */
+export interface RoomExtras {
+  projectId: string;
+  sessionTitle: string;
+  isMentor: boolean;
+  initialMode: RoomMode;
+  /** El cierre de la sesión (síntesis y borrador), ya armado en el servidor. */
+  close: ReactNode;
+  /** La sesión ya está cerrada: la sala abre directo en el cierre. */
+  closed: boolean;
+}
+
+type RoomProps = { sessionId: string; title: string; subtitle: string; backHref: string; sections: RoomSection[] } & RoomExtras;
+
+export function CallRoom(props: RoomProps) {
   return (
     <CallErrorBoundary>
       <RoomLoader {...props} />
@@ -206,7 +221,7 @@ export function CallRoom(props: { sessionId: string; title: string; subtitle: st
   );
 }
 
-function RoomLoader(props: { sessionId: string; title: string; subtitle: string; backHref: string; sections: RoomSection[] }) {
+function RoomLoader(props: RoomProps) {
   const [state, setState] = useState<CallState | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -233,15 +248,31 @@ function Room({
   state,
   error,
   reload,
-}: {
-  title: string;
-  subtitle: string;
-  backHref: string;
-  sections: RoomSection[];
+  sessionId,
+  projectId,
+  sessionTitle,
+  isMentor,
+  initialMode,
+  close,
+  closed,
+}: RoomProps & {
   state: CallState | null;
   error: string | null;
   reload: () => Promise<void>;
 }) {
+  const [mode, setMode] = useState<RoomMode>(closed ? "cierre" : initialMode);
+  // En escritorio el asistente arranca abierto al costado; en el celular se abre como hoja inferior.
+  const [assistant, setAssistant] = useState<"docked" | "sheet" | "hidden">("hidden");
+  useEffect(() => {
+    setAssistant(window.matchMedia("(min-width: 1024px)").matches ? "docked" : "hidden");
+  }, []);
+  const switchMode = (m: RoomMode) => {
+    setMode(m);
+    const url = new URL(window.location.href);
+    if (m === "cierre") url.searchParams.set("modo", "cierre");
+    else url.searchParams.delete("modo");
+    window.history.replaceState(null, "", url);
+  };
   const stage = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
   const w = useWindows(stage);
@@ -267,29 +298,95 @@ function Room({
 
   const content: Record<string, { title: string; short: string; count?: number; node: ReactNode }> = Object.fromEntries(sections.map((s) => [s.id, s]));
 
+  const assistantPanel = (cls: string, onClose?: () => void) => (
+    <RoomAssistant projectId={projectId} sessionId={sessionId} sessionTitle={sessionTitle} mode={mode} isMentor={isMentor} className={cls} onClose={onClose} />
+  );
+
   return (
     <div className="fixed inset-0 z-[70] flex flex-col overflow-hidden bg-slate-100 text-slate-900">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 sm:px-5">
-        <Link href={backHref} aria-label="Salir de la pantalla de llamada" className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-3 py-2 sm:px-5">
+        <Link href={backHref} aria-label="Salir de la sala" className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
           <Icon name="back" />
         </Link>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-slate-900">{title}</p>
           <p className="truncate text-[11px] text-slate-500">{subtitle}</p>
         </div>
+        <div role="group" aria-label="Momento de la sesión" className="order-last flex w-full rounded-full bg-slate-100 p-1 sm:order-none sm:w-auto">
+          {(
+            [
+              ["reunion", "Reunión"],
+              ["cierre", "Cierre"],
+            ] as const
+          ).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={mode === m}
+              disabled={closed && m === "reunion"}
+              onClick={() => switchMode(m)}
+              className={cx(
+                "flex-1 cursor-pointer rounded-full px-4 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none",
+                mode === m ? "bg-white text-blue-700 shadow-2xs" : "text-slate-500 hover:text-slate-900",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setAssistant((a) => (a === "hidden" ? (window.matchMedia("(min-width: 1024px)").matches ? "docked" : "sheet") : "hidden"))}
+          aria-pressed={assistant !== "hidden"}
+          className={cx(
+            "flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
+            assistant !== "hidden" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+          )}
+        >
+          <Icon name="mic" className="h-4 w-4" />
+          RAX
+        </button>
       </header>
 
-      {state && state.ready ? (
-        <Live state={state} reload={reload} stage={stage} compact={compact} windows={w} content={content} sections={sections} menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
-      ) : (
-        <div ref={stage} className="flex min-h-0 flex-1 items-center justify-center p-4">
-          {error ? (
-            <Notice tone="error">{error}</Notice>
-          ) : state && !state.ready ? (
-            <Notice tone="warn">Las llamadas necesitan la migración 20261101000003_session_calls.sql en Supabase.</Notice>
-          ) : (
-            <p className="text-sm text-slate-500">Preparando la llamada…</p>
+      <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          {/* La llamada queda montada (oculta) en el cierre, para no cortarla al cambiar de momento. */}
+          <div className={cx("flex min-h-0 flex-1 flex-col", mode !== "reunion" && "hidden")}>
+            {state && state.ready ? (
+              <Live state={state} reload={reload} stage={stage} compact={compact} windows={w} content={content} sections={sections} menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
+            ) : (
+              <div ref={stage} className="flex min-h-0 flex-1 items-center justify-center p-4">
+                {error ? (
+                  <Notice tone="error">{error}</Notice>
+                ) : state && !state.ready ? (
+                  <Notice tone="warn">Las llamadas necesitan la migración 20261101000003_session_calls.sql en Supabase.</Notice>
+                ) : (
+                  <p className="text-sm text-slate-500">Preparando la llamada…</p>
+                )}
+              </div>
+            )}
+          </div>
+          {mode === "cierre" && (
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+              <div className="mx-auto max-w-3xl space-y-4">
+                <div>
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Cierre · un solo borrador</p>
+                  <h2 className="mt-1 text-xl font-bold text-slate-900">Lo que acordaron</h2>
+                </div>
+                {close}
+              </div>
+            </div>
           )}
+        </div>
+
+        {assistant === "docked" && <div className="hidden w-[380px] shrink-0 flex-col border-l border-slate-200 lg:flex">{assistantPanel("flex-1")}</div>}
+      </div>
+
+      {assistant === "sheet" && (
+        <div className="fixed inset-0 z-[90] flex flex-col justify-end bg-slate-900/30 lg:hidden" onClick={() => setAssistant("hidden")}>
+          <div className="h-[75vh] overflow-hidden rounded-t-3xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {assistantPanel("h-full pb-[env(safe-area-inset-bottom)]", () => setAssistant("hidden"))}
+          </div>
         </div>
       )}
     </div>
@@ -538,7 +635,7 @@ function Live({
               </div>
             )}
           </div>
-          <div className="hidden min-w-0 items-center gap-0.5 lg:flex">
+          <div className="hidden min-w-0 items-center gap-0.5 overflow-hidden lg:flex">
             {navSections.map((id) => (
               <button
                 key={id}
@@ -552,7 +649,7 @@ function Live({
                 )}
               >
                 <Icon name={id} />
-                <span className="hidden xl:block">{all[id].short}</span>
+                <span className="hidden 2xl:block">{all[id].short}</span>
                 {all[id].count !== undefined && (
                   <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-slate-200 px-1 text-center font-mono text-[9px] leading-4 text-slate-700">{all[id].count}</span>
                 )}

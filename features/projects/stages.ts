@@ -78,6 +78,11 @@ export interface Section {
   id: "inicio" | StageId | "archivo";
   label: string;
   pages: Array<{ slug: string; label: string }>;
+  /**
+   * Las secciones del ciclo de mentoría (Orientar y Decidir) se ven como un solo hilo: sus páginas
+   * extra (acuerdo, cierre del ciclo) se abren desde el hilo y no llevan sub-pestañas.
+   */
+  threaded?: boolean;
 }
 
 export const SECTIONS: Section[] = [
@@ -93,6 +98,7 @@ export const SECTIONS: Section[] = [
   {
     id: "orientar",
     label: "Orientar",
+    threaded: true,
     pages: [
       { slug: "orientar", label: "Revisión con el mentor" },
       { slug: "acuerdos", label: "Acuerdo y objetivos" },
@@ -102,6 +108,7 @@ export const SECTIONS: Section[] = [
   {
     id: "decidir",
     label: "Decidir",
+    threaded: true,
     pages: [
       { slug: "decidir", label: "Segunda revisión" },
       { slug: "evaluacion", label: "Cierre del ciclo" },
