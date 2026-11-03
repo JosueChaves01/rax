@@ -1,5 +1,5 @@
 import { loadWorkspace } from "../data";
-import { CycleTrack } from "../cycle-track";
+import { BackToCycle } from "../cycle-track";
 import { CycleEvaluationView } from "./cycle-evaluation-view";
 
 export const metadata = { title: "Cierre del ciclo · RAX" };
@@ -10,7 +10,7 @@ export default async function CycleEvaluationPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-6">
-      <CycleTrack w={w} active="evaluacion" />
+      <BackToCycle w={w} to="decidir" />
       <CycleEvaluationView projectId={id} workspace={w} />
     </div>
   );
