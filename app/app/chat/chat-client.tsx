@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "@/shared/ui/primitives";
+import { isStaleDeploymentError, STALE_DEPLOYMENT_MESSAGE } from "@/shared/ui/stale-deployment";
 import type { AgentArtifact, AgentMessage, AgentThread } from "@/types/domain";
 import type { ProjectSessionsView } from "@/lib/services/agent-sessions";
 import {
@@ -196,6 +197,10 @@ export default function ChatClient({
       }
       setNotice(!res.ok ? res.error : "No se pudieron cargar las sesiones.");
       return null;
+    } catch (err) {
+      // Se llama también al terminar cada turno: si falla, la respuesta ya está en pantalla y no debe romperse.
+      setNotice(isStaleDeploymentError(err) ? STALE_DEPLOYMENT_MESSAGE : "No se pudo actualizar la lista de sesiones.");
+      return null;
     } finally {
       setLoadingSessions(false);
     }
@@ -378,7 +383,10 @@ export default function ChatClient({
       }
       if (!finished) showTurnError("La conexión se cortó antes de terminar. Recarga el hilo: si la respuesta se alcanzó a guardar, aparecerá.", "Error");
     } catch (err: unknown) {
-      showTurnError(`Error al comunicar con el agente: ${err instanceof Error ? err.message : String(err)}`, "Error");
+      showTurnError(
+        isStaleDeploymentError(err) ? STALE_DEPLOYMENT_MESSAGE : `Error al comunicar con el agente: ${err instanceof Error ? err.message : String(err)}`,
+        "Error",
+      );
     } finally {
       setLive(null);
       setIsLoading(false);
