@@ -59,6 +59,8 @@ export interface ChatCompletion {
   content: string;
   toolCalls: ChatToolCall[];
   usage?: ChatUsage;
+  /** Por qué terminó el modelo («stop», «length»…), si el proveedor lo informa. */
+  finishReason?: string;
 }
 
 export interface ChatFailure {
@@ -98,6 +100,11 @@ interface CallOptions {
   onDelta?: (text: string) => void;
   /** El modelo falló a mitad de la respuesta y se prueba otro: lo ya entregado se descarta. */
   onReset?: () => void;
+  /**
+   * Un texto más corto que esto (y sin herramientas) cuenta como fallo y se prueba el siguiente modelo.
+   * Para respuestas largas (p. ej. un documento) donde algunos modelos gratuitos devuelven texto vacío.
+   */
+  minContentChars?: number;
 }
 
 type Attempt = { ok: true; data: ChatCompletion; firstTokenMs?: number } | { ok: false; status: number; detail: string };
@@ -126,6 +133,16 @@ export async function chatWithFallback(
       const attemptStart = Date.now();
       const perModel = isLocalModel(model) ? localTimeoutMs() : (opts.timeoutMs ?? (opts.onDelta ? PER_MODEL_TIMEOUT_MS.firstChunk : PER_MODEL_TIMEOUT_MS.complete));
       const attempt = await callOnce(model, opts, { useTools, merge, json }, Math.min(perModel, remaining), deadline);
+      if (attempt.ok && opts.minContentChars && !attempt.data.toolCalls.length && attempt.data.content.trim().length < opts.minContentChars) {
+        // Respondió, pero sin el texto pedido (a menudo un modelo de razonamiento que gastó los tokens pensando).
+        console.warn(
+          `[agent-llm] ${model}: respuesta demasiado corta (${attempt.data.content.trim().length} caracteres${attempt.data.finishReason ? `, fin: ${attempt.data.finishReason}` : ""}); pruebo otro modelo`,
+        );
+        if (attempt.data.content) opts.onReset?.();
+        trace.failedModels.push(model);
+        failure = { code: "provider_error", message: `El modelo ${model} devolvió una respuesta vacía.` };
+        break;
+      }
       if (attempt.ok) {
         cooldownUntil.delete(model);
         console.info(`[agent-llm] respondió ${model}${trace.failedModels.length ? ` (fallaron: ${trace.failedModels.join(", ")})` : ""}`);
@@ -233,7 +250,7 @@ async function callOnce(
 
   type Body = {
     model?: string;
-    choices?: Array<{ message?: { content?: string | null; tool_calls?: ChatToolCall[] } }>;
+    choices?: Array<{ message?: { content?: string | null; tool_calls?: ChatToolCall[] }; finish_reason?: string | null }>;
     usage?: ChatUsage;
     error?: { message?: string; code?: number; metadata?: { provider_name?: string; raw?: unknown } };
   };
@@ -264,7 +281,13 @@ async function callOnce(
     if (stream && content) opts.onDelta?.(content);
     return {
       ok: true,
-      data: { model: endpoint.isLocal ? model : (data.model ?? model), content, toolCalls: msg?.tool_calls ?? [], usage: data.usage },
+      data: {
+        model: endpoint.isLocal ? model : (data.model ?? model),
+        content,
+        toolCalls: msg?.tool_calls ?? [],
+        usage: data.usage,
+        ...(data.choices?.[0]?.finish_reason ? { finishReason: data.choices[0].finish_reason } : {}),
+      },
       firstTokenMs: Date.now() - started,
     };
   }
@@ -299,6 +322,7 @@ async function readStream(model: string, res: Response, opts: CallOptions, start
   let usage: ChatUsage | undefined;
   let responseModel = model;
   let firstTokenMs: number | undefined;
+  let finishReason: string | undefined;
   const calls = new Map<number, { id?: string; name: string; args: string }>();
   type Chunk = {
     model?: string;
@@ -339,6 +363,7 @@ async function readStream(model: string, res: Response, opts: CallOptions, start
         if (chunk.model) responseModel = chunk.model;
         if (chunk.usage) usage = chunk.usage;
         const delta = chunk.choices?.[0]?.delta;
+        if (chunk.choices?.[0]?.finish_reason) finishReason = chunk.choices[0].finish_reason;
         if (delta?.content) {
           if (firstTokenMs === undefined) firstTokenMs = Date.now() - started;
           content += delta.content;
@@ -369,7 +394,7 @@ async function readStream(model: string, res: Response, opts: CallOptions, start
     .filter(([, c]) => c.name)
     .map(([i, c]) => ({ id: c.id ?? `call_${i}`, type: "function", function: { name: c.name, arguments: c.args || "{}" } }));
   if (!content && toolCalls.length === 0) return fail(502, "empty_stream");
-  return { ok: true, data: { model: responseModel, content, toolCalls, usage }, firstTokenMs };
+  return { ok: true, data: { model: responseModel, content, toolCalls, usage, ...(finishReason ? { finishReason } : {}) }, firstTokenMs };
 }
 
 function classify(model: string, status: number, detail: string): ChatFailure {
