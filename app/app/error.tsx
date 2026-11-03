@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { isStaleDeploymentError, STALE_DEPLOYMENT_MESSAGE } from "@/shared/ui/stale-deployment";
 
 /**
  * Si una pantalla privada falla en el navegador, se muestra este aviso en vez de la página en blanco
@@ -10,6 +11,17 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
   useEffect(() => {
     console.error("[rax] Error en la pantalla:", error);
   }, [error]);
+  if (isStaleDeploymentError(error)) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 rounded-2xl border border-amber-200 bg-white p-6 shadow-xs">
+        <h2 className="text-base font-bold text-slate-900">Hay una versión nueva de RAX</h2>
+        <p className="text-sm text-slate-600">{STALE_DEPLOYMENT_MESSAGE}</p>
+        <button type="button" onClick={() => window.location.reload()} className="cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+          Recargar la página
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="mx-auto max-w-xl space-y-4 rounded-2xl border border-rose-200 bg-white p-6 shadow-xs">
       <h2 className="text-base font-bold text-slate-900">Algo falló al mostrar esta pantalla</h2>

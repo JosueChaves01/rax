@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { isStaleDeploymentError, STALE_DEPLOYMENT_MESSAGE } from "./stale-deployment";
 
 type Result = { ok: true; data?: unknown } | { ok: false; error: string; code?: string };
 
@@ -19,7 +20,16 @@ export function useAction() {
     setError(null);
     setCode(null);
     start(async () => {
-      const r = await fn();
+      let r: R;
+      try {
+        r = await fn();
+      } catch (err) {
+        // Pestaña de un despliegue anterior: se avisa en vez de tumbar la pantalla con el error.
+        if (!isStaleDeploymentError(err)) throw err;
+        setError(STALE_DEPLOYMENT_MESSAGE);
+        setCode("stale_deployment");
+        return;
+      }
       if (r.ok) {
         onOk?.(r);
         router.refresh();

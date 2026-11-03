@@ -6,6 +6,7 @@ import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
 import { NotificationDrawer, type NotificationItem } from "./notification-drawer";
 import { MobileBottomNav } from "./mobile-bottom-nav";
+import { StaleDeploymentGuard } from "./stale-deployment";
 
 interface AppShellProps {
   actor: Profile;
@@ -29,6 +30,7 @@ export function AppShell({ actor, notifications = [], children }: AppShellProps)
       </div>
 
       <NotificationDrawer isOpen={notificationsOpen} onClose={() => setNotificationsOpen(false)} notifications={notifications} />
+      <StaleDeploymentGuard />
     </div>
   );
 }
