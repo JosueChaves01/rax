@@ -3,7 +3,7 @@ import { closeWorlds, world } from "./helpers";
 import { createProject, getWorkspace } from "@/lib/services/projects";
 import { assignMentor } from "@/lib/services/admin";
 import { scheduleSession } from "@/lib/services/mentoring";
-import { endCall, getCallTranscript, getSessionCallState, iceServers, startCall, transcribeCallAudio } from "@/lib/services/session-calls";
+import { endCall, getCallTranscript, getSessionCallState, iceServers, resolveIceServers, startCall, transcribeCallAudio } from "@/lib/services/session-calls";
 import { cleanTranscript, GroqTranscriber, TranscriptionUnavailableError, type Transcriber } from "@/lib/ai/transcription";
 import { buildProjectState, renderProjectState } from "@/lib/ai/project-state";
 
@@ -115,6 +115,50 @@ describe("Llamadas con transcripción entre mentor y emprendedor", () => {
     expect(sent?.get("model")).toBe("whisper-large-v3-turbo");
     expect(new GroqTranscriber(undefined).available).toBe(false);
     expect(cleanTranscript("¡Gracias por ver el video!")).toBe("");
+  });
+
+  it("con dos llamadas abiertas por una carrera, todos entran a la más antigua", async () => {
+    const { ent, mentor, session, repo } = await setup();
+    // Simula la carrera: la otra persona ya insertó su llamada justo antes que esta.
+    const first = await startCall(mentor, session.id);
+    const dup = { ...first, id: crypto.randomUUID(), startedAt: new Date(Date.parse(first.startedAt) + 500).toISOString() };
+    await repo.sessionCalls.insert(dup);
+    const joined = await startCall(ent, session.id);
+    expect(joined.id).toBe(first.id);
+  });
+
+  it("cierra una llamada que quedó abierta hace horas en vez de reabrirla", async () => {
+    const { ent, mentor, session, repo } = await setup();
+    const old = await startCall(mentor, session.id);
+    await repo.sessionCalls.update(old.id, { startedAt: "2020-01-01T00:00:00.000Z" });
+    const fresh = await startCall(ent, session.id);
+    expect(fresh.id).not.toBe(old.id);
+    expect((await repo.sessionCalls.get(old.id))?.status).toBe("ended");
+  });
+
+  it("pide credenciales TURN temporales a Cloudflare si están configuradas", async () => {
+    const env = { CLOUDFLARE_TURN_KEY_ID: "k1", CLOUDFLARE_TURN_API_TOKEN: "tok" } as unknown as NodeJS.ProcessEnv;
+    let url = "";
+    const ok = (async (u: string) => {
+      url = u;
+      return new Response(
+        JSON.stringify({
+          iceServers: [
+            { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"] },
+            { urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turn:turn.cloudflare.com:53?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"], username: "u", credential: "c" },
+          ],
+        }),
+        { status: 201 },
+      );
+    }) as unknown as typeof fetch;
+    const servers = await resolveIceServers(env, ok);
+    expect(url).toContain("/turn/keys/k1/credentials/generate-ice-servers");
+    expect(servers).toHaveLength(2);
+    expect(servers[1]).toEqual({ urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"], username: "u", credential: "c" });
+
+    const down = (async () => new Response("no", { status: 500 })) as unknown as typeof fetch;
+    expect(await resolveIceServers(env, down)).toHaveLength(1);
+    expect(await resolveIceServers({} as NodeJS.ProcessEnv, ok)).toHaveLength(1);
   });
 
   it("agrega TURN solo si está configurado", () => {
