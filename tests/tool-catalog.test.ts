@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { TOOL_CATALOG, catalogFor, missingFields, readableDateTime, REQUESTABLE_TOOLS } from "@/lib/ai/tool-catalog";
 
-const source = ["lib/ai/claude-orchestrator.ts", "lib/ai/research-tools.ts", "lib/ai/workflow-tools.ts"]
+const source = ["lib/ai/claude-orchestrator.ts", "lib/ai/tools/registry.ts", "lib/ai/research-tools.ts", "lib/ai/workflow-tools.ts"]
   .map((f) => readFileSync(path.join(__dirname, "..", f), "utf8"))
   .join("\n");
 
