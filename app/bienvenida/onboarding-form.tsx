@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { completeOnboardingAction } from "@/app/actions";
+import { completeB2BOnboardingAction } from "@/app/actions/mentor";
 import { EXPERIENCE_LABEL, EXPERTISE_LABEL, GOAL_LABEL, NATURE_LABEL, WEEKLY_HOURS_LABEL } from "@/features/labels";
 import type { EntrepreneurGoal, ExperienceBand, Expertise, InitiativeNature, WeeklyHours } from "@/types/domain";
 import { Button, Field, Notice, cx, inputClass } from "@/shared/ui/primitives";
@@ -13,8 +14,25 @@ type Mode = "choose" | "entrepreneur" | "mentor" | "admin";
  * Bienvenida por tipo de usuario. Lo que la persona cuenta acá le sirve a la administración para
  * asignar mentores y al mentor para entender qué espera cada emprendedor.
  */
-export function OnboardingForm({ mode: initial, defaultName, reapply = false }: { mode: Mode; defaultName: string; reapply?: boolean }) {
+export function OnboardingForm({
+  mode: initial,
+  defaultName,
+  reapply = false,
+  b2b = false,
+}: {
+  mode: Mode;
+  defaultName: string;
+  reapply?: boolean;
+  /** Flujo B2B (sin administración): «Soy mentor» o «Vengo a trabajar con un mentor». */
+  b2b?: boolean;
+}) {
   const [mode, setMode] = useState<Mode>(initial);
+  if (b2b) {
+    const back = initial === "choose" ? () => setMode("choose") : undefined;
+    if (mode === "mentor") return <B2BMentorFlow defaultName={defaultName} onBack={back} />;
+    if (mode === "entrepreneur") return <B2BClientFlow defaultName={defaultName} onBack={back} />;
+    return <Choose onPick={setMode} b2b />;
+  }
   if (mode === "choose") return <Choose onPick={setMode} />;
   if (mode === "entrepreneur") return <EntrepreneurFlow defaultName={defaultName} onBack={initial === "choose" ? () => setMode("choose") : undefined} />;
   if (mode === "mentor") return <MentorFlow defaultName={defaultName} alreadyMentor={initial === "mentor" && !reapply} onBack={initial === "choose" ? () => setMode("choose") : undefined} />;
@@ -30,8 +48,13 @@ function Title({ eyebrow, children }: { eyebrow: string; children: ReactNode }) 
   );
 }
 
-function Choose({ onPick }: { onPick: (m: Mode) => void }) {
-  const options: Array<{ mode: Mode; title: string; body: string }> = [
+const B2B_OPTIONS: Array<{ mode: Mode; title: string; body: string }> = [
+  { mode: "mentor", title: "Soy mentor", body: "Creas proyectos para tus clientes, cargas tu metodología y RAX prepara cada sesión contigo." },
+  { mode: "entrepreneur", title: "Vengo a trabajar con un mentor", body: "Tu mentor te invita a su proyecto. Aceptas desde tu panel y respondes una entrevista corta antes de la primera sesión." },
+];
+
+function Choose({ onPick, b2b = false }: { onPick: (m: Mode) => void; b2b?: boolean }) {
+  const options: Array<{ mode: Mode; title: string; body: string }> = b2b ? B2B_OPTIONS : [
     { mode: "entrepreneur", title: "Tengo un emprendimiento", body: "Una idea, algo que estás armando o un negocio que ya funciona. RAX te ayuda a ordenarlo y a decidir qué probar primero." },
     { mode: "mentor", title: "Quiero acompañar como mentor/a", body: "Revisás diagnósticos, priorizás problemas y aprobás hipótesis. La administración valida tu perfil antes de asignarte proyectos." },
   ];
@@ -405,6 +428,119 @@ function AdminFlow({ defaultName }: { defaultName: string }) {
             onClick={() => run(() => completeOnboardingAction({ intent: "admin", name, profile: { intent: "admin", organization, program } }))}
           >
             {pending ? "Guardando…" : "Entrar al panel"}
+          </Button>
+        }
+      />
+    </>
+  );
+}
+
+/* ───────────── Flujo B2B (sin administración, plan técnico §6.3) ───────────── */
+
+function B2BMentorFlow({ defaultName, onBack }: { defaultName: string; onBack?: () => void }) {
+  const [name, setName] = useState(defaultName);
+  const [yearsExperience, setYears] = useState<ExperienceBand>("3to7");
+  const [expertise, setExpertise] = useState<Expertise[]>([]);
+  const [bio, setBio] = useState("");
+  const { run, pending, error } = useAction();
+  const [local, setLocal] = useState<string | null>(null);
+
+  const submit = () => {
+    setLocal(null);
+    if (name.trim().length < 2) return setLocal("Cuéntanos cómo te llamas.");
+    run(() =>
+      completeB2BOnboardingAction({
+        name,
+        profile: { intent: "mentor", expertise, sectors: "", yearsExperience, monthlyHours: 0, maxProjects: 0, bio },
+      }),
+    );
+  };
+
+  return (
+    <>
+      <Title eyebrow="Mentoría">
+        Tu cuenta de <span className="text-highlight">mentor.</span>
+      </Title>
+      <div className="mt-6">
+        <Notice>Tu cuenta queda activa al instante. Después completas tu perfil, tu metodología y la guía de entrevista para tus clientes.</Notice>
+      </div>
+      <div className="mt-8 space-y-5">
+        <Field id="b2m-name" label="¿Cómo te llamas?">
+          <input id="b2m-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoComplete="name" />
+        </Field>
+        <Field id="b2m-years" label="Años de experiencia acompañando negocios">
+          <select id="b2m-years" className={inputClass} value={yearsExperience} onChange={(e) => setYears(e.target.value as ExperienceBand)}>
+            {Object.entries(EXPERIENCE_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Chips label="Áreas en las que acompañas (opcional)" options={EXPERTISE_LABEL} value={expertise} onChange={setExpertise} />
+        <Field id="b2m-bio" label="Tu recorrido en pocas líneas (opcional)" hint="Lo puedes ampliar después en tu perfil.">
+          <textarea id="b2m-bio" rows={3} className={inputClass} value={bio} onChange={(e) => setBio(e.target.value)} maxLength={1200} />
+        </Field>
+      </div>
+      <Nav
+        onBack={onBack}
+        pending={pending}
+        error={local ?? error}
+        next={
+          <Button type="button" variant="primary" disabled={pending} onClick={submit}>
+            {pending ? "Creando…" : "Crear mi cuenta de mentor"}
+          </Button>
+        }
+      />
+    </>
+  );
+}
+
+function B2BClientFlow({ defaultName, onBack }: { defaultName: string; onBack?: () => void }) {
+  const [name, setName] = useState(defaultName);
+  const [sector, setSector] = useState("");
+  const [mentorExpectation, setMentorExpectation] = useState("");
+  const { run, pending, error } = useAction();
+  const [local, setLocal] = useState<string | null>(null);
+
+  const submit = () => {
+    setLocal(null);
+    if (name.trim().length < 2) return setLocal("Cuéntanos cómo te llamas.");
+    run(() =>
+      completeB2BOnboardingAction({
+        name,
+        profile: { intent: "entrepreneur", sector, stage: "unknown", goals: [], weeklyHours: "2to5", mentorExpectation },
+        firstProject: { name: "", description: "", nature: "unknown" },
+      }),
+    );
+  };
+
+  return (
+    <>
+      <Title eyebrow="Bienvenida">
+        Cuéntanos <span className="text-highlight">de ti.</span>
+      </Title>
+      <div className="mt-6">
+        <Notice>No necesitas crear nada: tu mentor te invita a su proyecto y la invitación aparece en tu panel para que la aceptes.</Notice>
+      </div>
+      <div className="mt-8 space-y-5">
+        <Field id="b2c-name" label="¿Cómo te llamas?">
+          <input id="b2c-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoComplete="name" />
+        </Field>
+        <Field id="b2c-sector" label="¿De qué rubro es tu negocio? (opcional)" hint="Con tus palabras: comida, educación, servicios…">
+          <input id="b2c-sector" className={inputClass} value={sector} onChange={(e) => setSector(e.target.value)} maxLength={120} />
+        </Field>
+        <Field id="b2c-expect" label="¿Qué esperas de tu mentor? (opcional)">
+          <textarea id="b2c-expect" rows={3} className={inputClass} value={mentorExpectation} onChange={(e) => setMentorExpectation(e.target.value)} maxLength={600} />
+        </Field>
+      </div>
+      <Nav
+        onBack={onBack}
+        pending={pending}
+        error={local ?? error}
+        next={
+          <Button type="button" variant="primary" disabled={pending} onClick={submit}>
+            {pending ? "Entrando…" : "Entrar a mi panel"}
           </Button>
         }
       />

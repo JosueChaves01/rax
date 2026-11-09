@@ -1,6 +1,7 @@
 import type { AdminOnboarding, EntrepreneurOnboarding, InitiativeNature, MentorOnboarding, Profile, Project } from "@/types/domain";
 import { forbidden, validation } from "@/lib/errors";
-import { audit, type ServiceDeps } from "./base";
+import { isB2BFlow } from "@/lib/flags";
+import { audit, sysRepo, type ServiceDeps } from "./base";
 import { createProject } from "./projects";
 
 export type OnboardingInput =
@@ -15,6 +16,7 @@ export type OnboardingInput =
  * - Administración: solo para quien ya tiene ese rol (lo asigna otra administración o la base).
  */
 export async function completeOnboarding(d: ServiceDeps, input: OnboardingInput): Promise<{ profile: Profile; project?: Project }> {
+  if (isB2BFlow()) return completeB2BOnboarding(d, input);
   const name = input.name.trim();
   if (name.length < 2) throw validation("Contanos cómo te llamás.");
   const intent = input.profile.intent;
@@ -46,4 +48,65 @@ export async function completeOnboarding(d: ServiceDeps, input: OnboardingInput)
     return { profile, project };
   }
   return { profile };
+}
+
+/**
+ * Bienvenida del flujo B2B (plan técnico §6.3, sin administración):
+ * - «Soy mentor»: queda activo de una vez (rol mentor, aprobado) y sigue en /app/mentor/perfil.
+ *   También activa a quien había pedido ser mentor en el flujo viejo y quedó esperando aprobación.
+ * - «Vengo a trabajar con un mentor»: cliente. No crea proyecto: entra por invitación del mentor.
+ * La administración ya no existe en este flujo.
+ */
+export async function completeB2BOnboarding(d: ServiceDeps, input: OnboardingInput): Promise<{ profile: Profile; project?: Project }> {
+  const name = input.name.trim();
+  if (name.length < 2) throw validation("Cuéntanos cómo te llamas.");
+  const intent = input.profile.intent;
+  const me = d.actor;
+  if (intent === "admin") throw forbidden();
+
+  if (intent === "mentor") {
+    const m = input.profile as MentorOnboarding;
+    // Un mentor que ya pasó por aquí no repite; quien quedó pendiente en el flujo viejo sí se activa.
+    if (me.onboardedAt && me.role === "mentor") throw validation("Ya completaste esta bienvenida.");
+    if (me.onboardedAt && me.onboarding?.intent !== "mentor") throw validation("Tu cuenta ya está registrada como cliente.");
+    if (me.role !== "entrepreneur" && me.role !== "mentor") throw validation("Tu cuenta ya tiene otro rol en RAX.");
+    if (!Array.isArray(m.expertise ?? [])) throw validation("Revisa tus áreas de experiencia.");
+    // Llega del navegador: se arma de nuevo campo por campo, con límites.
+    const count = (v: unknown, max: number) => (Number.isFinite(Number(v)) ? Math.min(Math.max(Math.round(Number(v)), 0), max) : 0);
+    const profile: MentorOnboarding = {
+      intent: "mentor",
+      expertise: [...new Set((m.expertise ?? []).filter((x) => typeof x === "string"))].slice(0, 12),
+      sectors: String(m.sectors ?? "").trim().slice(0, 300),
+      yearsExperience: m.yearsExperience ?? "3to7",
+      monthlyHours: count(m.monthlyHours, 80),
+      maxProjects: count(m.maxProjects, 50),
+      bio: String(m.bio ?? "").trim().slice(0, 1200),
+      ...(typeof m.linkedinUrl === "string" && /^https:\/\//.test(m.linkedinUrl.trim()) ? { linkedinUrl: m.linkedinUrl.trim() } : {}),
+    };
+    // El rol solo lo cambia el servidor (trigger guard_profile_role): se escribe como sistema tras validar.
+    const saved = await sysRepo(d).profiles.update(me.id, {
+      name: name.slice(0, 120),
+      onboarding: profile,
+      onboardedAt: me.onboardedAt ?? d.now(),
+      role: "mentor",
+      mentorStatus: "approved",
+    });
+    await audit(d, "profile.onboarded", { targetId: me.id, meta: { intent, b2b: true, selfActivated: true } });
+    return { profile: saved };
+  }
+
+  if (me.role !== "entrepreneur") throw validation("Tu cuenta ya tiene otro rol en RAX.");
+  if (me.onboardedAt) throw validation("Ya completaste esta bienvenida.");
+  const e = input.profile as EntrepreneurOnboarding;
+  const profile: EntrepreneurOnboarding = {
+    intent: "entrepreneur",
+    sector: String(e.sector ?? "").trim().slice(0, 120),
+    stage: e.stage ?? "unknown",
+    goals: Array.isArray(e.goals) ? e.goals : [],
+    weeklyHours: e.weeklyHours ?? "2to5",
+    mentorExpectation: String(e.mentorExpectation ?? "").trim().slice(0, 600),
+  };
+  const saved = await d.repo.profiles.update(me.id, { name: name.slice(0, 120), onboarding: profile, onboardedAt: d.now() });
+  await audit(d, "profile.onboarded", { targetId: me.id, meta: { intent, b2b: true } });
+  return { profile: saved };
 }

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDeps, homeFor } from "@/lib/runtime";
 import { loadMyWorkspaces } from "@/lib/services/pending";
-import { mentorInbox } from "@/features/mentoring/inbox";
+import { intakeInbox, mentorInbox } from "@/features/mentoring/inbox";
+import { isB2BFlow } from "@/lib/flags";
+import { listMentorProjects } from "@/lib/services/mentor-projects";
 import { EXPERIENCE_LABEL, EXPERTISE_LABEL, SESSION_KIND_LABEL } from "@/features/labels";
 import type { MentorOnboarding } from "@/types/domain";
 import { Empty, Heading, Notice, Tag, formatDate } from "@/shared/ui/primitives";
@@ -17,6 +19,8 @@ export default async function ProjectsPage({ searchParams }: { searchParams?: Pr
   if (!d) redirect("/entrar");
   if (homeFor(d.actor) !== "/app") redirect(homeFor(d.actor));
   if (d.actor.onboarding?.intent === "mentor" && d.actor.role !== "mentor") {
+    // Flujo B2B: sin administración, quien pidió ser mentor se activa desde la bienvenida.
+    if (isB2BFlow()) redirect("/bienvenida");
     return (
       <MentorApplication
         status={d.actor.mentorStatus}
@@ -35,6 +39,17 @@ export default async function ProjectsPage({ searchParams }: { searchParams?: Pr
       d.actor.id,
       workspaces.map((w) => ({ id: w.project.id, name: w.project.name, sessions: w.sessions, hypotheses: w.hypotheses })),
     );
+    // Flujo B2B: «Intake listo para revisar» lleva al brief del proyecto.
+    const b2b = isB2BFlow();
+    const intakeItems = b2b
+      ? intakeInbox(
+          (await listMentorProjects(d).catch(() => [])).map((m) => ({ id: m.project.id, name: m.project.name, mode: m.project.mode, intakes: m.intakes })),
+        )
+      : [];
+    const inboxRows = [
+      ...intakeItems.map((i) => ({ key: `${i.kind}-${i.projectId}`, label: INTAKE_READY_LABEL, ...i })),
+      ...inbox.map((i) => ({ key: `${i.kind}-${i.projectId}-${i.since}`, label: INBOX_LABEL[i.kind], ...i })),
+    ].sort((a, b) => a.since.localeCompare(b.since));
     const upcoming = workspaces
       .flatMap((w) => w.sessions.filter((s) => s.mentorId === d.actor.id && s.status !== "completed" && s.scheduledAt).map((s) => ({ s, w })))
       .sort((a, b) => (a.s.scheduledAt ?? "").localeCompare(b.s.scheduledAt ?? ""))
@@ -46,31 +61,33 @@ export default async function ProjectsPage({ searchParams }: { searchParams?: Pr
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Hola, {firstName}</h1>
             <p className="mt-1 text-sm text-slate-500">
-              {inbox.length
-                ? `${inbox.length} ${inbox.length === 1 ? "pedido espera" : "pedidos esperan"} tu respuesta.`
+              {inboxRows.length
+                ? `${inboxRows.length} ${inboxRows.length === 1 ? "pedido espera" : "pedidos esperan"} tu respuesta.`
                 : "Nada espera tu respuesta ahora."}
             </p>
           </div>
           <Link href="/app/mentor" className="text-xs font-semibold text-blue-600 hover:underline">
-            Ver cartera y cupo →
+            {b2b ? "Ver clientes →" : "Ver cartera y cupo →"}
           </Link>
         </header>
 
         <section aria-labelledby="bandeja" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-6">
           <h2 id="bandeja" className="text-base font-bold text-slate-900">Bandeja</h2>
           <p className="mt-0.5 text-xs text-slate-500">Revisiones e hipótesis que te pidieron, la más vieja primero.</p>
-          {inbox.length === 0 ? (
+          {inboxRows.length === 0 ? (
             <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-              Cuando un emprendedor pida una revisión o envíe una hipótesis, aparece aquí.
+              {b2b
+                ? "Cuando un cliente termine su entrevista o pida algo, aparece aquí."
+                : "Cuando un emprendedor pida una revisión o envíe una hipótesis, aparece aquí."}
             </p>
           ) : (
             <ul className="mt-4 divide-y divide-slate-100">
-              {inbox.map((i) => (
-                <li key={`${i.kind}-${i.projectId}-${i.since}`}>
+              {inboxRows.map((i) => (
+                <li key={i.key}>
                   <Link href={`/app/p/${i.projectId}/${i.tab}`} className="group flex items-start justify-between gap-4 py-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-900 group-hover:text-blue-600">
-                        {INBOX_LABEL[i.kind]} · {i.projectName}
+                        {i.label} · {i.projectName}
                       </p>
                       <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">{i.detail}</p>
                     </div>
@@ -86,7 +103,17 @@ export default async function ProjectsPage({ searchParams }: { searchParams?: Pr
           <h2 id="proyectos-mentor" className="text-base font-bold text-slate-900">Tus proyectos ({workspaces.length})</h2>
           {workspaces.length === 0 ? (
             <div className="mt-4">
-              <Empty title="Sin proyectos asignados">La administración te asigna proyectos según tu cupo y especialidades.</Empty>
+              {b2b ? (
+                <Empty title="Todavía no tienes proyectos">
+                  Crea uno desde{" "}
+                  <Link href="/app/mentor" className="font-semibold text-blue-600 hover:underline">
+                    Clientes
+                  </Link>{" "}
+                  e invita a tu cliente por correo.
+                </Empty>
+              ) : (
+                <Empty title="Sin proyectos asignados">La administración te asigna proyectos según tu cupo y especialidades.</Empty>
+              )}
             </div>
           ) : (
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -167,6 +194,8 @@ export default async function ProjectsPage({ searchParams }: { searchParams?: Pr
     </div>
   );
 }
+
+const INTAKE_READY_LABEL = "Intake listo para revisar";
 
 const INBOX_LABEL = {
   first_review: "Primera revisión",
