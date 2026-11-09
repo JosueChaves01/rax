@@ -175,10 +175,14 @@ export function b2bProjectTabs(isMentor: boolean): Array<{ slug: string; label: 
         { slug: "", label: "Inicio" },
         { slug: "brief", label: "Brief" },
         { slug: "sesiones", label: "Sesiones" },
+        { slug: "material", label: "Material" },
+        { slug: "evaluaciones", label: "Evaluaciones" },
       ]
     : [
         { slug: "", label: "Inicio" },
         { slug: "intake", label: "Entrevista" },
         { slug: "sesiones", label: "Sesiones" },
+        { slug: "material", label: "Material" },
+        { slug: "evaluaciones", label: "Evaluaciones" },
       ];
 }

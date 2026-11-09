@@ -93,15 +93,41 @@ function describe(n: Notification): NotificationItem | null {
         kind: "material",
         title: `Material nuevo${project ? ` · ${project}` : ""}`,
         detail: str(p.title) ? `Tu mentor publicó «${str(p.title)}».` : "Tu mentor publicó material nuevo.",
-        href: "/app/documentos",
+        href: projectId ? `/app/p/${projectId}/material` : "/app/documentos",
       };
     case "comment_added":
       return {
         ...base,
         kind: "review",
         title: `Comentario nuevo${project ? ` · ${project}` : ""}`,
-        detail: str(p.authorName) ? `${str(p.authorName)} comentó.` : "Hay un comentario nuevo.",
-        href: projectId ? `/app/p/${projectId}` : "/app",
+        detail: `${str(p.authorName) || "Alguien"} comentó${str(p.title) ? ` «${str(p.title)}»` : ""}.`,
+        href: projectId ? `/app/p/${projectId}/material` : "/app",
+      };
+    case "assessment_published": {
+      const due = str(p.dueAt);
+      return {
+        ...base,
+        kind: "task",
+        title: `Evaluación nueva${project ? ` · ${project}` : ""}`,
+        detail: `Tu mentor publicó «${str(p.title) || "una evaluación"}»${due ? `; respóndela antes del ${formatDate(due)}` : ""}.`,
+        href: projectId && str(p.assessmentId) ? `/app/p/${projectId}/evaluaciones/${str(p.assessmentId)}` : "/app",
+      };
+    }
+    case "assessment_submitted":
+      return {
+        ...base,
+        kind: "review",
+        title: `Evaluación respondida${project ? ` · ${project}` : ""}`,
+        detail: `${str(p.clientName) || "Tu cliente"} respondió «${str(p.title) || "la evaluación"}». Revísala y déjale tu comentario.`,
+        href: projectId && str(p.assessmentId) ? `/app/p/${projectId}/evaluaciones/${str(p.assessmentId)}` : "/app",
+      };
+    case "assessment_reviewed":
+      return {
+        ...base,
+        kind: "review",
+        title: `Evaluación revisada${project ? ` · ${project}` : ""}`,
+        detail: `Tu mentor revisó «${str(p.title) || "tu evaluación"}»${typeof p.score === "number" ? `: ${p.score} pts` : ""}.`,
+        href: projectId && str(p.assessmentId) ? `/app/p/${projectId}/evaluaciones/${str(p.assessmentId)}` : "/app",
       };
     default:
       return null;

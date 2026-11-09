@@ -204,7 +204,7 @@ describe("herramientas del agente del cliente", () => {
 
   it("record_intake_answer y finish_intake usan el servicio del intake", async () => {
     await seed();
-    expect(CLIENT_TOOLS.map((t) => t.definition.name)).toEqual(["record_intake_answer", "finish_intake"]);
+    expect(CLIENT_TOOLS.map((t) => t.definition.name)).toEqual(["record_intake_answer", "finish_intake", "explain_resource", "prepare_for_session"]);
     const check = await tool("finish_intake").run(ctx(CAMI), {});
     expect(check.data).toMatchObject({ status: "not_started", pendingRequired: ["q_negocio", "q_dolor"] });
 

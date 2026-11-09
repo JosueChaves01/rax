@@ -11,15 +11,17 @@ interface AppSidebarProps {
   userName: string;
   /** Flujo B2B (lo decide el servidor). */
   b2b?: boolean;
+  /** Flujo B2B: proyectos donde la persona es cliente (para «Material»). */
+  clientProjectIds?: string[];
 }
 
 const ROLE_BADGE: Record<Role, string> = { entrepreneur: "Emprendedor", mentor: "Mentor", admin: "Admin" };
 
-export function AppSidebar({ role, b2b = false }: AppSidebarProps) {
+export function AppSidebar({ role, b2b = false, clientProjectIds }: AppSidebarProps) {
   const pathname = usePathname();
   const currentProjectId = pathname.match(/\/app\/p\/([^/]+)/)?.[1];
   const chatHref = currentProjectId ? `/app/chat?project=${currentProjectId}` : "/app/chat";
-  const { main, support } = navFor(role, chatHref, { b2b });
+  const { main, support } = navFor(role, chatHref, { b2b, clientProjectIds, currentProjectId });
   const home = role === "admin" ? "/app/admin" : "/app";
 
   return (

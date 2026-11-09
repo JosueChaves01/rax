@@ -80,7 +80,7 @@ const B2B_PAGE_WHAT: Record<string, Partial<Record<Role, string>>> = {
     entrepreneur: "Agenda de las sesiones con el mentor en todos los proyectos. Cada proyecto tiene además su pestaña Sesiones.",
     mentor: "Agenda de las sesiones de todos los proyectos. Cada proyecto tiene además su pestaña Sesiones, donde se agenda y se arma la agenda de temas.",
   },
-  "/app/documentos": { entrepreneur: "Material: lo que el mentor publicó para la persona (guías, resúmenes de sesión), para leer, descargar y comentar." },
+  "/app/documentos": { entrepreneur: "Material: lo que el mentor publicó para la persona (guías, resúmenes de sesión), para leer, descargar y comentar. Con un solo proyecto abre directo su pestaña Material (/app/p/[id]/material)." },
 };
 
 /** Pantallas generales del menú B2B de cada rol (alineado con navFor(role, …, { b2b: true })). */
@@ -95,6 +95,8 @@ export const B2B_PROJECT_PAGES: Array<{ slug: string; label: string; roles: Role
   { slug: "intake", label: "Entrevista", roles: ["entrepreneur"], what: "Entrevista de intake con el asistente, guiada por las preguntas del mentor, con una barra de avance por tema. Al enviarla, el mentor recibe un brief y prepara la Sesión 1." },
   { slug: "brief", label: "Brief", roles: ["mentor"], what: "Brief del intake de cada persona (en proyectos grupales, también el consolidado): resumen, respuestas, brechas, riesgos y agenda sugerida; el mentor completa el contexto que falta y lo marca revisado." },
   { slug: "sesiones", label: "Sesiones", roles: ["entrepreneur", "mentor"], what: "Todas las sesiones con su número, fecha, estado y temas. El mentor agenda, edita la agenda (agregar temas, marcarlos cubiertos) y abre la sala; el cliente confirma asistencia y se une. Muestra el acuerdo vigente (solo lectura para el cliente) y la síntesis de cada sesión realizada." },
+  { slug: "material", label: "Material", roles: ["entrepreneur", "mentor"], what: "Material publicado por el mentor (guías, resúmenes de sesión, acuerdos), agrupado por sesión, con visor y descarga. Cada material y cada sesión tiene su hilo de comentarios: en proyectos grupales lo ve todo el grupo; en individuales, la persona y su mentor. El cliente solo ve lo publicado para él o para todo el grupo." },
+  { slug: "evaluaciones", label: "Evaluaciones", roles: ["entrepreneur", "mentor"], what: "Evaluaciones del mentor (preguntas abiertas, de una o varias opciones y escalas del 1 al 5), opcionalmente ligadas a una sesión. El mentor las crea en borrador, las publica, las cierra y revisa cada entrega con puntaje y comentario; en proyectos grupales ve el promedio y la dispersión. El cliente guarda un borrador, envía una sola entrega y ve la revisión." },
 ];
 
 const B2B_ROLE_GUIDE: Partial<Record<Role, string>> = {
@@ -102,14 +104,15 @@ const B2B_ROLE_GUIDE: Partial<Record<Role, string>> = {
 - Aceptar o rechazar invitaciones desde su panel.
 - Responder la entrevista de intake de cada proyecto (una por persona en proyectos grupales).
 - Ver sus sesiones, confirmar su asistencia y unirse a la llamada; leer el acuerdo, los objetivos, la síntesis de cada sesión y sus compromisos.
-- Leer y comentar el material que el mentor publicó.
+- Leer y comentar el material que el mentor publicó, y responder sus evaluaciones (ve el puntaje y el comentario cuando el mentor las revisa).
+- Pedirle al asistente que le explique un material publicado (explain_resource) o que le ayude a preparar la próxima sesión (prepare_for_session).
 No crea proyectos, no agenda sesiones, no edita el acuerdo ni sube documentos: eso lo hace su mentor. No ve el brief del intake ni las notas privadas del mentor.`,
   mentor: `La persona es MENTORA: dueña operativa de sus proyectos. Puede:
 - Crear proyectos (individuales o grupales) e invitar a sus clientes por correo; configurar su perfil, su metodología, la guía de la entrevista y su biblioteca de documentos (Mi perfil).
 - Leer el brief del intake y completar el contexto que falta.
 - Agendar la Sesión 1 y las sesiones del ciclo, armar la agenda de temas de cada una y conducirlas desde la sala (notas en vivo, acuerdo y objetivos en la Sesión 1, síntesis al cerrar).
 - Al cerrar una sesión, lo que no se cubrió pasa a la siguiente, que queda sugerida sin fecha.
-- Publicar material para sus clientes.`,
+- Publicar material para sus clientes, leer sus comentarios y crear evaluaciones (publicar, cerrar y revisar cada entrega con puntaje y comentario).`,
 };
 
 function renderB2BPlatformGuide(role: Role): string {

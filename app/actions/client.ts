@@ -4,8 +4,10 @@ import { isB2BFlow } from "@/lib/flags";
 import { getIntakeState, runIntakeTurn, submitIntake } from "@/lib/services/intake";
 import { respondInvitation } from "@/lib/services/invitations";
 import { markNotificationRead } from "@/lib/services/notifications";
-import type { InvitationStatus } from "@/types/b2b";
-import { run, type ActionResult } from "./_run";
+import { submitAssessment } from "@/lib/services/assessments";
+import { commentOnResource, listResourceComments, type ResourceComment } from "@/lib/services/client-portal";
+import type { AssessmentAnswer, AssessmentSubmission, InvitationStatus } from "@/types/b2b";
+import { read, run, type ActionResult } from "./_run";
 
 /**
  * Server Actions del lado del cliente (Dev B): invitaciones, notificaciones, intake, evaluaciones
@@ -49,4 +51,31 @@ export async function markNotificationReadAction(id: string): Promise<ActionResu
     await markNotificationRead(d, id);
     return undefined;
   });
+}
+
+/* ───────────── Evaluaciones (persona cliente) ───────────── */
+
+/** Guarda el borrador (`draft: true`) o envía la entrega de una evaluación. */
+export async function submitAssessmentAction(projectId: string, assessmentId: string, answers: AssessmentAnswer[], draft = false): Promise<ActionResult<AssessmentSubmission>> {
+  if (!isB2BFlow()) return unavailable();
+  return run(projectId, (d) => submitAssessment(d, assessmentId, answers, { draft }), { revalidate: !draft });
+}
+
+/* ───────────── Material publicado y comentarios (los dos roles) ───────────── */
+
+type ResourceTarget = { type: "document" | "session"; id: string };
+
+/** Comenta un material publicado o una sesión y devuelve el hilo actualizado. */
+export async function commentOnResourceAction(projectId: string, target: ResourceTarget, body: string): Promise<ActionResult<ResourceComment[]>> {
+  if (!isB2BFlow()) return unavailable();
+  return run(projectId, async (d) => {
+    await commentOnResource(d, target, body);
+    return listResourceComments(d, target);
+  });
+}
+
+/** Comentarios de un material publicado o de una sesión. */
+export async function listResourceCommentsAction(target: ResourceTarget): Promise<ActionResult<ResourceComment[]>> {
+  if (!isB2BFlow()) return unavailable();
+  return read((d) => listResourceComments(d, target));
 }

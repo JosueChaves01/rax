@@ -10,7 +10,9 @@ import {
 import { getProjectKnowledgeContext } from "@/lib/ai/knowledge-retrieval";
 import { buildProjectState, type ProjectStateSnapshot } from "@/lib/ai/project-state";
 import { messagesToFold, normalizeMemory, recentHistory, THREAD_WINDOW } from "@/lib/ai/thread-memory";
-import { guard, sysRepo, type ServiceDeps } from "./base";
+import { isB2BFlow } from "@/lib/flags";
+import { guard, isOnlyClient, relationOf, sysRepo, type ServiceDeps } from "./base";
+import { publishedKnowledgeContext } from "./client-portal";
 import { getWorkspace } from "./projects";
 import { loadSessionAgentContext, type SessionAgentContext } from "./agent-sessions";
 import {
@@ -60,7 +62,10 @@ export async function runAgentTurn(
   input: { projectId: string; threadId?: string; message: string; sessionContext?: SessionContext; ephemeral?: boolean; onEvent?: AgentTurnEventHandler },
 ): Promise<AgentTurnResult> {
   const startedAt = Date.now();
-  const { project } = await guard(d, input.projectId, "agent.chat");
+  // Pivot B2B: la persona cliente conversa con su permiso de lectura y su asistente solo conoce el
+  // material publicado para ella (nunca documentos «solo mentor»).
+  const clientTurn = isB2BFlow() && isOnlyClient(await relationOf(d, input.projectId));
+  const { project } = await guard(d, input.projectId, clientTurn ? "resource.read" : "agent.chat");
   const thread = input.threadId ? await authorizedThread(d, input.threadId) : await getOrCreateAgentThread(d, project.id);
   if (thread.projectId !== project.id) throw new Error("thread_project_mismatch");
   await enforceAiQuota(d, "agent_message");
@@ -73,7 +78,7 @@ export async function runAgentTurn(
 
   const [projectState, knowledge, session] = await Promise.all([
     loadProjectState(d, project.id),
-    getProjectKnowledgeContext(d.repo, project.id, input.message),
+    clientTurn ? publishedKnowledgeContext(d, project.id, input.message) : getProjectKnowledgeContext(d.repo, project.id, input.message),
     input.ephemeral ? Promise.resolve(undefined) : loadSessionContext(d, thread),
   ]);
 

@@ -27,10 +27,24 @@ export interface NavOptions {
    * el navegador, donde la variable de entorno no existe.
    */
   b2b?: boolean;
+  /**
+   * Flujo B2B, persona cliente: proyectos donde es cliente (los manda el servidor). «Material» abre
+   * el material del proyecto actual o, si tiene uno solo, el de ese proyecto; si no, Documentos.
+   */
+  clientProjectIds?: string[];
+  /** Proyecto abierto en la pantalla (de la ruta /app/p/[id]). */
+  currentProjectId?: string;
+}
+
+/** A dónde lleva «Material» en el menú del cliente B2B. */
+export function materialHref(opts: NavOptions): string {
+  const ids = opts.clientProjectIds ?? [];
+  const id = opts.currentProjectId && ids.includes(opts.currentProjectId) ? opts.currentProjectId : ids.length === 1 ? ids[0] : undefined;
+  return id ? `/app/p/${id}/material` : "/app/documentos";
 }
 
 export function navFor(role: Role, chatHref = "/app/chat", opts: NavOptions = {}): NavGroups {
-  if (opts.b2b && role !== "admin") return b2bNav(role, chatHref);
+  if (opts.b2b && role !== "admin") return b2bNav(role, chatHref, opts);
   if (role === "admin") {
     return {
       main: [{ label: "Operaciones", href: "/app/admin", icon: "ops" }],
@@ -68,7 +82,7 @@ export function navFor(role: Role, chatHref = "/app/chat", opts: NavOptions = {}
 }
 
 /** Menú del flujo B2B: el mentor conduce a sus clientes; el cliente ve sus proyectos, sesiones y material. */
-function b2bNav(role: Role, chatHref: string): NavGroups {
+function b2bNav(role: Role, chatHref: string, opts: NavOptions): NavGroups {
   if (role === "mentor") {
     return {
       main: [
@@ -85,8 +99,7 @@ function b2bNav(role: Role, chatHref: string): NavGroups {
     main: [
       { label: "Mis proyectos", href: "/app", icon: "home", exact: true },
       { label: "Sesiones", href: "/app/sesiones", icon: "calendar" },
-      // Hasta que exista /app/p/[id]/material (Fase 4), el material publicado se ve en Documentos.
-      { label: "Material", href: "/app/documentos", icon: "doc" },
+      { label: "Material", href: materialHref(opts), icon: "doc" },
     ],
     support: [],
   };
@@ -95,7 +108,7 @@ function b2bNav(role: Role, chatHref: string): NavGroups {
 /** Si el elemento corresponde a la ruta actual. Las páginas de un proyecto cuentan como Inicio. */
 export function isActive(item: NavItem, pathname: string): boolean {
   const base = item.href.split("?")[0];
-  if (base === "/app" && pathname.startsWith("/app/p/")) return true;
+  if (base === "/app" && pathname.startsWith("/app/p/")) return !/^\/app\/p\/[^/]+\/material(\/|$)/.test(pathname);
   if (base === "/app/sesiones" && pathname.startsWith("/app/calendario")) return true;
   if (item.exact) return pathname === base;
   return pathname === base || pathname.startsWith(base + "/");
