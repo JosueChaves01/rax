@@ -18,6 +18,7 @@ import {
   ensureMentorshipRelation,
   saveMentorshipAgreement,
 } from "./mentorship-relation";
+import { loadSessionForAccessCheck } from "./session-visibility";
 import { createTask } from "./validation";
 
 /**
@@ -76,7 +77,8 @@ export async function b2bSessionViewer(d: ServiceDeps, session: MentorSession, p
 
 /** Carga la sesión y verifica que quien mira es su mentor o un cliente del proyecto. */
 export async function sessionAccess(d: ServiceDeps, sessionId: Id): Promise<SessionAccess> {
-  const session = await d.repo.mentorSessions.get(sessionId);
+  // El cliente ya no lee mentor_sessions por RLS (20261109000104): se carga y se verifica abajo.
+  const session = await loadSessionForAccessCheck(d, sessionId);
   const project = session ? await d.repo.projects.get(session.projectId) : null;
   const viewer = session && project ? await b2bSessionViewer(d, session, project) : null;
   if (!session || !project || !viewer) {

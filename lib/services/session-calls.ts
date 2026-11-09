@@ -10,6 +10,7 @@ import { bySpeech, names, transcriptLines } from "./session-transcript";
 import { enforceAiQuota } from "./ai-quota";
 import { isB2BFlow } from "@/lib/flags";
 import { b2bSessionViewer, type RoomViewer } from "./session-room";
+import { loadSessionForAccessCheck } from "./session-visibility";
 
 /**
  * Llamadas entre el mentor de una sesión y la persona emprendedora (dueña o colaboradora del
@@ -47,7 +48,8 @@ export function iceServers(env: NodeJS.ProcessEnv = process.env): IceServer[] {
 }
 
 async function loadSession(d: ServiceDeps, sessionId: string) {
-  const s = await d.repo.mentorSessions.get(sessionId);
+  // Cada llamador verifica después que sea su mentor, del equipo o cliente B2B (assertParticipant).
+  const s = await loadSessionForAccessCheck(d, sessionId);
   if (!s) throw notFound("Sesión no encontrada.");
   return s;
 }
@@ -174,7 +176,7 @@ export async function transcribeCallAudio(
 /** Fragmentos de una llamada con el nombre de quien habló (para ver la transcripción en vivo o después). */
 export async function getCallTranscript(d: ServiceDeps, callId: string) {
   const call = await loadCall(d, callId);
-  const session = isB2BFlow() ? await d.repo.mentorSessions.get(call.sessionId) : undefined;
+  const session = isB2BFlow() ? await loadSessionForAccessCheck(d, call.sessionId) : undefined;
   if (!session || (await b2bViewer(d, session)) !== "client") await guard(d, call.projectId, "project.read");
   const segments = (await d.repo.sessionCallSegments.list({ callId })).sort(bySpeech);
   const people = await names(d, segments.map((s) => s.speakerId));

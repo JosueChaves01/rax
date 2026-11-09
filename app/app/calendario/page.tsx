@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDeps } from "@/lib/runtime";
 import { listMyProjects } from "@/lib/services/projects";
+import { listSessionsForViewer } from "@/lib/services/session-visibility";
 import { formatDate } from "@/shared/ui/primitives";
 
 export const metadata = { title: "Calendario · RAX" };
@@ -15,7 +16,7 @@ export default async function CalendarPage() {
 
   const allSessions = (
     await Promise.all(
-      projects.map((p) => d.repo.mentorSessions.list({ projectId: p.id }).catch(() => []))
+      projects.map((p) => listSessionsForViewer(d, p.id).catch(() => []))
     )
   ).flat();
 

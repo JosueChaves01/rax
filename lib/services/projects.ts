@@ -5,6 +5,7 @@ import { derivePhase } from "@/features/projects/phase";
 import { deriveDiagnosisStatus, isCurrent } from "@/features/diagnosis/rules";
 import { DIMENSION_QUESTION } from "@/features/conversation/interview";
 import { audit, guard, guardWorkspace, isOnlyClient, relationOf, sysRepo, type ServiceDeps } from "./base";
+import { listSessionsForViewer } from "./session-visibility";
 
 export async function listMyProjects(d: ServiceDeps): Promise<Project[]> {
   const owned = await d.repo.projects.list({ ownerId: d.actor.id });
@@ -124,7 +125,8 @@ export async function getWorkspace(d: ServiceDeps, projectId: string, opts: { fo
       skip(() => r.diagnosisItemHistory.list(where)),
       skip(() => r.comments.list(where)),
       r.messages.list(where),
-      r.mentorSessions.list(where),
+      // El cliente B2B no lee mentor_sessions por RLS: recibe la versión sin la preparación del mentor.
+      clientView ? listSessionsForViewer(d, projectId) : r.mentorSessions.list(where),
       r.sessionNotes.list(where),
       r.hypotheses.list(where),
       r.experiments.list(where),
