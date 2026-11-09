@@ -10,6 +10,8 @@ import { supabaseDb } from "@/lib/data/supabase-db";
 import { missingConfig } from "@/lib/supabase/config";
 import { createSystemClient, createUserClient } from "@/lib/supabase/server";
 
+export { isB2BFlow } from "@/lib/flags";
+
 /** Sesión real de Supabase Auth: la persona y su perfil, o null si no hay sesión. */
 const getSession = cache(async () => {
   // Siempre por pedido: sin esto, una build sin variables prerenderiza las páginas privadas.

@@ -102,5 +102,13 @@ export function createMemoryRepository(): Repository {
     cycleEvaluations: new MemoryTable(),
     projectDocuments: new MemoryTable(),
     projectDocumentChunks: new MemoryTable(),
+    mentorProfiles: new MemoryTable(),
+    mentorDocuments: new MemoryTable(),
+    mentorDocumentChunks: new MemoryTable(),
+    projectInvitations: new MemoryTable(),
+    notifications: new MemoryTable(),
+    intakeBriefs: new MemoryTable(),
+    assessments: new MemoryTable(),
+    assessmentSubmissions: new MemoryTable(),
   };
 }

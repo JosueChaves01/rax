@@ -283,6 +283,7 @@ const SESSION_STAGE: Record<MentorSession["kind"], string> = {
   follow_up: "Ejecución",
   second_review: "Decidir",
   evaluation: "Evaluar",
+  kickoff: "Acordar",
 };
 
 export interface SessionNotesSuggestion {

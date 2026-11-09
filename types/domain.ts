@@ -4,6 +4,8 @@
  * Ver docs/domain-model.md.
  */
 
+import type { AgentThreadScope, CycleStage, DocKind, DocumentVisibility, ProjectMode, SessionTopic } from "./b2b";
+
 export type Id = string;
 export type ISODate = string;
 
@@ -73,7 +75,8 @@ export interface AdminOnboarding {
 
 export type Onboarding = EntrepreneurOnboarding | MentorOnboarding | AdminOnboarding;
 
-export type ProjectMemberRole = "owner" | "collaborator";
+/** `client`: persona invitada por el mentor (pivot B2B, ver types/b2b.ts). */
+export type ProjectMemberRole = "owner" | "collaborator" | "client";
 
 export interface ProjectMember {
   projectId: Id;
@@ -129,6 +132,14 @@ export interface Project {
   updatedAt: ISODate;
   /** Borrado lógico: la persona dueña lo borró y ya no lo ve nadie. Los repositorios lo ocultan. */
   deletedAt?: ISODate;
+  /* Pivot B2B (opcionales hasta que el flujo nuevo reemplace al actual; ver types/b2b.ts). */
+  /** Mentor dueño operativo del proyecto. */
+  mentorId?: Id;
+  mode?: ProjectMode;
+  /** La escribe solo advanceCycleStage (lib/services/cycle.ts). */
+  cycleStage?: CycleStage;
+  /** Contexto que completa el mentor en la Sesión 1. */
+  clientContext?: string;
 }
 
 /* ───────────── Conversación ───────────── */
@@ -182,6 +193,10 @@ export interface AgentThread {
   memory?: AgentThreadMemory;
   /** Sesión del proyecto a la que pertenece el hilo (Proyecto → Sesión → Hilo). */
   sessionId?: Id;
+  /** Pivot B2B: alcance del hilo (por defecto `project`). */
+  scope?: AgentThreadScope;
+  /** Pivot B2B: sesión de mentoría del hilo de la sala (`scope = session_room`). */
+  mentorSessionId?: Id;
   createdAt: ISODate;
   updatedAt: ISODate;
 }
@@ -282,6 +297,13 @@ export interface ProjectKnowledgeDocument {
   createdBy: Id;
   createdAt: ISODate;
   updatedAt: ISODate;
+  /* Pivot B2B: el cliente solo ve lo publicado para él o para todo el grupo. */
+  visibility?: DocumentVisibility;
+  publishedAt?: ISODate;
+  mentorSessionId?: Id;
+  docKind?: DocKind;
+  /** Vacío = para todo el grupo. */
+  audienceClientId?: Id;
 }
 
 export interface ProjectDocumentChunk {
@@ -441,7 +463,8 @@ export interface DiagnosisItemHistory {
 export interface Comment {
   id: Id;
   projectId: Id;
-  targetType: "diagnosis_item" | "hypothesis" | "experiment";
+  /** `document` y `session`: comentarios del cliente en el pivot B2B. */
+  targetType: "diagnosis_item" | "hypothesis" | "experiment" | "document" | "session";
   targetId: Id;
   authorId: Id;
   body: string;
@@ -455,7 +478,9 @@ export type MentorSessionKind =
   | "second_review"
   | "exploratory"
   | "follow_up"
-  | "evaluation";
+  | "evaluation"
+  /** Pivot B2B: Sesión 1 (acuerdos). */
+  | "kickoff";
 export type MentorSessionStatus = "pending" | "in_progress" | "completed";
 
 export type MentorDecision = "continue" | "reformulate" | "deepen" | "pause" | "discard";
@@ -513,6 +538,12 @@ export interface MentorSession {
   decision?: { value: MentorDecision; justification: string; hypothesisId?: Id; decidedAt: ISODate };
   createdAt: ISODate;
   completedAt?: ISODate;
+  /* Pivot B2B. */
+  sessionNumber?: number;
+  agenda?: SessionTopic[];
+  /** Notas en vivo del mentor en la sala (autosave con control por liveNotesUpdatedAt). */
+  liveNotes?: string;
+  liveNotesUpdatedAt?: ISODate;
 }
 
 /** Llamada (WebRTC) entre el mentor de la sesión y la persona emprendedora, con transcripción. */

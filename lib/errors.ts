@@ -1,7 +1,7 @@
 /** Errores de dominio. La UI los traduce a mensajes comprensibles sin exponer detalles internos. */
 export class DomainError extends Error {
   constructor(
-    readonly code: "forbidden" | "not_found" | "conflict" | "validation" | "invalid_transition" | "ai_unavailable" | "rate_limited",
+    readonly code: "forbidden" | "not_found" | "conflict" | "validation" | "invalid_transition" | "ai_unavailable" | "rate_limited" | "not_implemented",
     message: string,
   ) {
     super(message);
@@ -18,6 +18,10 @@ export const invalidTransition = (from: string, to: string) =>
   new DomainError("invalid_transition", `No se puede pasar de «${from}» a «${to}».`);
 
 export const rateLimited = (msg: string) => new DomainError("rate_limited", msg);
+
+/** Contratos del pivot B2B que todavía no tienen implementación (stubs de la Fase 0). */
+export const notImplemented = (name: string) =>
+  new DomainError("not_implemented", `«${name}» todavía no está disponible.`);
 
 export function isDomainError(e: unknown): e is DomainError {
   return e instanceof DomainError;

@@ -197,6 +197,7 @@ export const SESSION_KIND_LABEL: Record<MentorSessionKind, string> = {
   exploratory: "Sesión exploratoria",
   follow_up: "Sesión de seguimiento",
   evaluation: "Evaluación de ciclo / Cierre",
+  kickoff: "Sesión 1: acuerdos",
 };
 
 export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {

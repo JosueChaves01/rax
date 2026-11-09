@@ -33,6 +33,16 @@ import type {
   ProjectKnowledgeDocument,
   ProjectDocumentChunk,
 } from "@/types/domain";
+import type {
+  Assessment,
+  AssessmentSubmission,
+  IntakeBriefRecord,
+  MentorDocument,
+  MentorDocumentChunk,
+  MentorProfile,
+  Notification,
+  ProjectInvitation,
+} from "@/types/b2b";
 
 /**
  * Puerto de persistencia. Los servicios de dominio solo conocen esta interfaz:
@@ -69,6 +79,8 @@ export type AiUsageKind = "agent_message" | "audio_chunk" | "web_search";
 
 /** Tablas con clave compuesta se exponen con un id sintético. */
 export type ProjectMemberRow = ProjectMember & { id: string };
+/** `mentor_profiles` tiene como clave el id del mentor: `id` = `mentorId`. */
+export type MentorProfileRow = MentorProfile & { id: string };
 
 export interface Repository {
   agentSessions: Table<AgentSession>;
@@ -104,5 +116,14 @@ export interface Repository {
   cycleEvaluations: Table<CycleEvaluation>;
   projectDocuments: Table<ProjectKnowledgeDocument>;
   projectDocumentChunks: Table<ProjectDocumentChunk>;
+  /* Pivot B2B (types/b2b.ts). */
+  mentorProfiles: Table<MentorProfileRow>;
+  mentorDocuments: Table<MentorDocument>;
+  mentorDocumentChunks: Table<MentorDocumentChunk>;
+  projectInvitations: Table<ProjectInvitation>;
+  notifications: Table<Notification>;
+  intakeBriefs: Table<IntakeBriefRecord>;
+  assessments: Table<Assessment>;
+  assessmentSubmissions: Table<AssessmentSubmission>;
   fn: RepositoryFunctions;
 }
