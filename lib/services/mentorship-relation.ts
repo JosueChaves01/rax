@@ -18,6 +18,7 @@ import { assertCanDecideCompatibility, assertMentorshipStageTransition } from "@
 import { isCurrent } from "@/features/diagnosis/rules";
 import type { GoalsSuggestionContext, GoalsSuggestionResult } from "@/lib/ai/provider";
 import { dispatchEventToN8n } from "@/lib/n8n/dispatcher";
+import { isB2BFlow } from "@/lib/flags";
 
 /* ───────────── Relación de Mentoría ───────────── */
 
@@ -76,17 +77,28 @@ export async function initiateMentorshipRelation(
 export async function ensureMentorshipRelation(d: ServiceDeps, projectId: Id): Promise<MentorshipRelation> {
   const relations = await d.repo.mentorshipRelations.list({ projectId });
   let rel = relations.find((r) => r.stage !== "closed");
+  let b2b = false;
   if (!rel) {
     const [project, [assignment]] = await Promise.all([
       d.repo.projects.get(projectId),
       d.repo.mentorAssignments.list({ projectId, status: "active" }),
     ]);
     if (!project) throw notFound("El proyecto no existe.");
-    if (!assignment) throw validation("Los objetivos y el acuerdo se definen con el mentor: todavía no hay uno asignado.");
-    rel = await initiateMentorshipRelation(d, projectId, project.ownerId, assignment.mentorId);
+    if (isB2BFlow() && project.mentorId) {
+      // Pivot B2B: el mentor creó el proyecto. La relación se arma con el cliente principal (dueño)
+      // o, mientras no haya dueño, con la primera persona que aceptó la invitación.
+      b2b = true;
+      const members = await d.repo.projectMembers.list({ projectId });
+      const clientId = project.ownerId || members.find((m) => m.role === "client")?.profileId;
+      if (!clientId) throw validation("Primero alguien tiene que aceptar la invitación al proyecto.");
+      rel = await initiateMentorshipRelation(d, projectId, clientId, project.mentorId);
+    } else {
+      if (!assignment) throw validation("Los objetivos y el acuerdo se definen con el mentor: todavía no hay uno asignado.");
+      rel = await initiateMentorshipRelation(d, projectId, project.ownerId, assignment.mentorId);
+    }
   }
   if (rel.compatibilityStatus === "pending") {
-    rel = await decideCompatibility(d, rel.id, "proceed", "Mentor asignado por la administración.");
+    rel = await decideCompatibility(d, rel.id, "proceed", b2b ? "El mentor creó el proyecto e invitó a la persona." : "Mentor asignado por la administración.");
   }
   return rel;
 }
@@ -290,9 +302,17 @@ export async function confirmMentorshipAgreement(
 
   const isMentor = d.actor.id === rel.mentorId;
   const isEntrepreneur = d.actor.id === rel.entrepreneurId;
+  // Pivot B2B: el acuerdo se cierra en vivo en la Sesión 1, así que la confirmación del mentor del
+  // proyecto lo deja vigente; el cliente lo ve en modo lectura.
+  const b2bMentor = isMentor && isB2BFlow() && (await d.repo.projects.get(rel.projectId))?.mentorId === rel.mentorId;
+  if (b2bMentor && (agreement.status === "active" || agreement.status === "superseded")) {
+    throw validation(agreement.status === "active" ? "Este acuerdo ya está vigente." : "Este acuerdo fue reemplazado por una versión nueva.");
+  }
 
   let nextStatus: AgreementStatus = agreement.status;
-  if (isMentor) {
+  if (b2bMentor) {
+    nextStatus = "active";
+  } else if (isMentor) {
     if (agreement.status === "confirmed_by_entrepreneur") nextStatus = "active";
     else nextStatus = "confirmed_by_mentor";
   } else if (isEntrepreneur) {
@@ -310,8 +330,17 @@ export async function confirmMentorshipAgreement(
     agreement.version,
   );
 
+  if (b2bMentor) {
+    // La versión anterior vigente queda reemplazada por la nueva.
+    const others = await d.repo.mentorshipAgreements.list({ relationId: rel.id });
+    for (const prev of others.filter((a) => a.id !== agreementId && a.status === "active")) {
+      await d.repo.mentorshipAgreements.update(prev.id, { status: "superseded" }, prev.version);
+    }
+  }
+
   // Si el acuerdo queda activo, avanzamos la etapa de la relación a 'active_mentoring' si estaba en 'agreement'
-  if (nextStatus === "active" && rel.stage === "agreement") {
+  // (en B2B no hay etapas previas que recorrer: también desde 'diagnosis').
+  if (nextStatus === "active" && (rel.stage === "agreement" || (b2bMentor && rel.stage === "diagnosis"))) {
     await d.repo.mentorshipRelations.update(
       rel.id,
       { stage: "active_mentoring", updatedAt: now },

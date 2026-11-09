@@ -43,3 +43,6 @@ grant usage on schema storage to authenticated;
 grant select, insert on storage.objects to authenticated;
 grant all on storage.objects, storage.buckets to service_role;
 grant usage on schema storage to service_role;
+create or replace function auth.email() returns text language sql stable as $$
+  select nullif(current_setting('request.jwt.claim.email', true), '')
+$$;

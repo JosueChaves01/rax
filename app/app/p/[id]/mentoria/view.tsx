@@ -24,6 +24,7 @@ const PAST_LABEL: Record<MentorSession["kind"], string> = {
   follow_up: "Seguimiento",
   exploratory: "Sesión exploratoria",
   evaluation: "Evaluación de ciclo",
+  kickoff: "Sesión 1: acuerdos",
 };
 
 /**

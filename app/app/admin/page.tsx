@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDeps, homeFor } from "@/lib/runtime";
+import { isB2BFlow } from "@/lib/flags";
 import { adminOverview } from "@/lib/services/admin";
 import { EXPERIENCE_LABEL, EXPERTISE_LABEL, GOAL_LABEL, MENTOR_STATUS_LABEL, NATURE_LABEL, PROJECT_STATUS_LABEL, ROLE_LABEL, WEEKLY_HOURS_LABEL } from "@/features/labels";
 import type { EntrepreneurOnboarding, MentorOnboarding, Profile } from "@/types/domain";
-import { Empty, Tag, cx, formatDate } from "@/shared/ui/primitives";
+import { Empty, Heading, Notice, Tag, cx, formatDate } from "@/shared/ui/primitives";
 import { suggestMentor } from "@/features/mentoring/inbox";
 import { AssignmentControls } from "./assignment-controls";
 import { MentorReview } from "./mentor-review";
@@ -39,6 +40,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const d = await getDeps();
   if (!d) redirect("/entrar");
   if (d.actor.role !== "admin") redirect(homeFor(d.actor));
+  // Flujo B2B (plan técnico §6.3): sin administración. Los mentores se registran solos y crean sus
+  // proyectos; no hay aprobaciones ni asignaciones. El código se borra en la Fase 5.
+  if (isB2BFlow()) return <AdminRetired />;
   const o = await adminOverview(d);
   const { ver } = await searchParams;
   const tab: TabId = TABS.some((t) => t.id === ver) ? (ver as TabId) : "operaciones";
@@ -269,5 +273,21 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </section>
       )}
     </div>
+  );
+}
+
+function AdminRetired() {
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+      <p className="eyebrow">Administración</p>
+      <Heading level={1} highlight="ya no se usa." className="mt-3">
+        Este panel
+      </Heading>
+      <div className="mt-6">
+        <Notice>
+          Ahora cada mentor se registra solo, crea sus proyectos e invita a sus clientes. No hay solicitudes que aprobar ni asignaciones que hacer.
+        </Notice>
+      </div>
+    </main>
   );
 }

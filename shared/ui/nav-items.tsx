@@ -6,7 +6,7 @@ import type { Role } from "@/types/domain";
  * Mantener alineado con PLATFORM_PAGES en lib/ai/platform-guide.ts.
  */
 
-export type NavIcon = "home" | "inbox" | "people" | "ai" | "tasks" | "calendar" | "doc" | "book" | "library" | "ops" | "chart";
+export type NavIcon = "home" | "inbox" | "people" | "ai" | "tasks" | "calendar" | "doc" | "book" | "library" | "ops" | "chart" | "user";
 
 export interface NavItem {
   label: string;
@@ -21,7 +21,30 @@ export interface NavGroups {
   support: NavItem[];
 }
 
-export function navFor(role: Role, chatHref = "/app/chat"): NavGroups {
+export interface NavOptions {
+  /**
+   * Flujo B2B (RAX_B2B_FLOW). Lo decide el servidor y llega como prop: este archivo también corre en
+   * el navegador, donde la variable de entorno no existe.
+   */
+  b2b?: boolean;
+  /**
+   * Flujo B2B, persona cliente: proyectos donde es cliente (los manda el servidor). «Material» abre
+   * el material del proyecto actual o, si tiene uno solo, el de ese proyecto; si no, Documentos.
+   */
+  clientProjectIds?: string[];
+  /** Proyecto abierto en la pantalla (de la ruta /app/p/[id]). */
+  currentProjectId?: string;
+}
+
+/** A dónde lleva «Material» en el menú del cliente B2B. */
+export function materialHref(opts: NavOptions): string {
+  const ids = opts.clientProjectIds ?? [];
+  const id = opts.currentProjectId && ids.includes(opts.currentProjectId) ? opts.currentProjectId : ids.length === 1 ? ids[0] : undefined;
+  return id ? `/app/p/${id}/material` : "/app/documentos";
+}
+
+export function navFor(role: Role, chatHref = "/app/chat", opts: NavOptions = {}): NavGroups {
+  if (opts.b2b && role !== "admin") return b2bNav(role, chatHref, opts);
   if (role === "admin") {
     return {
       main: [{ label: "Operaciones", href: "/app/admin", icon: "ops" }],
@@ -58,10 +81,34 @@ export function navFor(role: Role, chatHref = "/app/chat"): NavGroups {
   };
 }
 
+/** Menú del flujo B2B: el mentor conduce a sus clientes; el cliente ve sus proyectos, sesiones y material. */
+function b2bNav(role: Role, chatHref: string, opts: NavOptions): NavGroups {
+  if (role === "mentor") {
+    return {
+      main: [
+        { label: "Bandeja", href: "/app", icon: "inbox", exact: true },
+        { label: "Clientes", href: "/app/mentor", icon: "people", exact: true },
+        { label: "Asistente IA", href: chatHref, icon: "ai" },
+        { label: "Sesiones", href: "/app/sesiones", icon: "calendar" },
+        { label: "Mi perfil", href: "/app/mentor/perfil", icon: "user" },
+      ],
+      support: [],
+    };
+  }
+  return {
+    main: [
+      { label: "Mis proyectos", href: "/app", icon: "home", exact: true },
+      { label: "Sesiones", href: "/app/sesiones", icon: "calendar" },
+      { label: "Material", href: materialHref(opts), icon: "doc" },
+    ],
+    support: [],
+  };
+}
+
 /** Si el elemento corresponde a la ruta actual. Las páginas de un proyecto cuentan como Inicio. */
 export function isActive(item: NavItem, pathname: string): boolean {
   const base = item.href.split("?")[0];
-  if (base === "/app" && pathname.startsWith("/app/p/")) return true;
+  if (base === "/app" && pathname.startsWith("/app/p/")) return !/^\/app\/p\/[^/]+\/material(\/|$)/.test(pathname);
   if (base === "/app/sesiones" && pathname.startsWith("/app/calendario")) return true;
   if (item.exact) return pathname === base;
   return pathname === base || pathname.startsWith(base + "/");
@@ -145,6 +192,13 @@ export function NavGlyph({ icon, className = "w-4 h-4" }: { icon: NavIcon; class
       return (
         <svg {...p}>
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        </svg>
+      );
+    case "user":
+      return (
+        <svg {...p}>
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
         </svg>
       );
     case "chart":

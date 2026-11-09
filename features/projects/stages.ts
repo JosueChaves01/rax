@@ -1,5 +1,6 @@
 import type { ProjectPhase } from "@/types/domain";
 import { PHASE_ORDER } from "@/features/labels";
+import type { CycleStage } from "@/types/b2b";
 
 /**
  * Las 10 fases derivadas se agrupan en 4 etapas, que son las que ve la persona en la navegación
@@ -127,4 +128,61 @@ export const SECTIONS: Section[] = [
 
 export function sectionOfSlug(slug: string): Section {
   return SECTIONS.find((s) => s.pages.some((p) => p.slug === slug)) ?? SECTIONS[0];
+}
+
+/* ───────────── Pivot B2B: ciclo explícito (projects.cycle_stage) ───────────── */
+
+/**
+ * Proyectos del flujo B2B (con mentor_id y RAX_B2B_FLOW encendida): la etapa no se deriva de las
+ * 10 fases, es explícita (`projects.cycle_stage`, la escribe solo lib/services/cycle.ts) y tiene 4
+ * pasos: Entrevista (intake) → Sesión 1 (kickoff) → Ciclo (sesiones 2..n) → Cierre. Los proyectos
+ * viejos siguen con STAGES.
+ */
+export interface B2BStage {
+  id: CycleStage;
+  n: number;
+  label: string;
+  question: string;
+}
+
+export const B2B_STAGES: B2BStage[] = [
+  { id: "intake", n: 1, label: "Entrevista", question: "¿Qué necesita saber el mentor antes de la primera sesión?" },
+  { id: "kickoff", n: 2, label: "Sesión 1", question: "¿Qué acordamos y hacia dónde vamos?" },
+  { id: "cycle", n: 3, label: "Ciclo", question: "¿Cómo avanzamos sesión a sesión?" },
+  { id: "closed", n: 4, label: "Cierre", question: "¿Qué logramos y qué sigue?" },
+];
+
+/** Si un proyecto usa la línea B2B. La bandera llega del servidor (isB2BFlow()). */
+export function usesB2BStages(project: { mentorId?: string | null }, b2bFlow: boolean): boolean {
+  return b2bFlow && !!project.mentorId;
+}
+
+export function b2bStageOf(stage: CycleStage | undefined): B2BStage {
+  return B2B_STAGES.find((s) => s.id === (stage ?? "intake")) ?? B2B_STAGES[0];
+}
+
+/** Estado de una etapa B2B respecto de la etapa actual. «closed» cierra también la última. */
+export function b2bStageState(stage: B2BStage, current: CycleStage | undefined): StageState {
+  const cur = b2bStageOf(current);
+  if (cur.id === "closed") return "done";
+  return stage.n < cur.n ? "done" : stage.n === cur.n ? "current" : "upcoming";
+}
+
+/** Pestañas de un proyecto B2B según el rol (slug vacío = inicio). */
+export function b2bProjectTabs(isMentor: boolean): Array<{ slug: string; label: string }> {
+  return isMentor
+    ? [
+        { slug: "", label: "Inicio" },
+        { slug: "brief", label: "Brief" },
+        { slug: "sesiones", label: "Sesiones" },
+        { slug: "material", label: "Material" },
+        { slug: "evaluaciones", label: "Evaluaciones" },
+      ]
+    : [
+        { slug: "", label: "Inicio" },
+        { slug: "intake", label: "Entrevista" },
+        { slug: "sesiones", label: "Sesiones" },
+        { slug: "material", label: "Material" },
+        { slug: "evaluaciones", label: "Evaluaciones" },
+      ];
 }

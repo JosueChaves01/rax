@@ -1,10 +1,18 @@
 import "server-only";
 import type { AgentArtifact, AgentMessage, AgentThread, AgentTurnMetrics, KnowledgeCitation } from "@/types/domain";
 import { notFound, validation } from "@/lib/errors";
-import { guard, sysRepo, type ServiceDeps } from "./base";
+import { isB2BFlow } from "@/lib/flags";
+import { guard, guardWorkspace, sysRepo, type ServiceDeps } from "./base";
 
 const MAX_AGENT_MESSAGE_LENGTH = 10_000;
 const MAX_PROPOSALS = 50;
+
+/**
+ * Acceso a los hilos del proyecto. Con RAX_B2B_FLOW la persona cliente entra con su permiso de
+ * lectura (`guardWorkspace` → resource.read); lo que su asistente ve lo filtra agent-turn (solo
+ * material publicado). Sin la bandera, igual que siempre.
+ */
+const guardChat = (d: ServiceDeps, projectId: string) => (isB2BFlow() ? guardWorkspace(d, projectId) : guard(d, projectId, "project.read"));
 
 function ensureChatRole(role: ServiceDeps["actor"]["role"]) {
   if (role !== "entrepreneur" && role !== "mentor") throw notFound("Este proyecto no existe o no tenés acceso.");
@@ -13,7 +21,7 @@ function ensureChatRole(role: ServiceDeps["actor"]["role"]) {
 export async function authorizedThread(d: ServiceDeps, threadId: string): Promise<AgentThread> {
   const thread = await d.repo.agentThreads.get(threadId);
   if (!thread || thread.creatorId !== d.actor.id) throw notFound("Este hilo no existe o no tenés acceso.");
-  await guard(d, thread.projectId, "project.read");
+  await guardChat(d, thread.projectId);
   ensureChatRole(d.actor.role);
   return thread;
 }
@@ -23,7 +31,7 @@ export async function authorizedThread(d: ServiceDeps, threadId: string): Promis
  * esa sesión (que debe ser del actor y del mismo proyecto); sin sesión, se agrupa en «Sesión general».
  */
 export async function createAgentThread(d: ServiceDeps, projectId: string, title?: string, sessionId?: string): Promise<AgentThread> {
-  await guard(d, projectId, "project.read");
+  await guardChat(d, projectId);
   ensureChatRole(d.actor.role);
   if (sessionId) {
     const session = await d.repo.agentSessions.get(sessionId);
@@ -52,7 +60,7 @@ export async function createAgentThread(d: ServiceDeps, projectId: string, title
 
 /** Devuelve los hilos del actor en el proyecto ordenados por actualización reciente. */
 export async function listProjectThreads(d: ServiceDeps, projectId: string): Promise<AgentThread[]> {
-  await guard(d, projectId, "project.read");
+  await guardChat(d, projectId);
   ensureChatRole(d.actor.role);
   let threads = (await d.repo.agentThreads.list({ projectId, creatorId: d.actor.id })).filter((t) => t.status !== "closed");
   if (threads.length === 0) {
@@ -73,7 +81,7 @@ export async function renameAgentThread(d: ServiceDeps, threadId: string, newTit
 
 /** Recupera el hilo más reciente o crea uno nuevo por defecto si no hay ninguno. */
 export async function getOrCreateAgentThread(d: ServiceDeps, projectId: string): Promise<AgentThread> {
-  await guard(d, projectId, "project.read");
+  await guardChat(d, projectId);
   ensureChatRole(d.actor.role);
   const threads = (await d.repo.agentThreads.list({ projectId, creatorId: d.actor.id })).filter((t) => t.status !== "closed");
   const sorted = threads.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -83,7 +91,7 @@ export async function getOrCreateAgentThread(d: ServiceDeps, projectId: string):
 
 /** Returns the current actor's thread without creating one, for history loading. */
 export async function getAgentThread(d: ServiceDeps, projectId: string): Promise<AgentThread | undefined> {
-  await guard(d, projectId, "project.read");
+  await guardChat(d, projectId);
   ensureChatRole(d.actor.role);
   const threads = await d.repo.agentThreads.list({ projectId, creatorId: d.actor.id });
   return threads.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];

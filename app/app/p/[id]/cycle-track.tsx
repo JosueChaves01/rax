@@ -1,7 +1,58 @@
 import Link from "next/link";
 import { PHASE_ORDER } from "@/features/labels";
-import { formatDate } from "@/shared/ui/primitives";
+import { cx, formatDate } from "@/shared/ui/primitives";
 import type { Workspace } from "@/lib/services/projects";
+import type { CycleOverview } from "@/lib/services/cycle";
+import { B2B_STAGES, b2bStageState } from "@/features/projects/stages";
+
+/* ───────────── Flujo B2B: Entrevista → Sesión 1 → Ciclo → Cierre ───────────── */
+
+/** Detalle de cada etapa B2B con lo que realmente pasó (entrevistas, Sesión 1, sesiones del ciclo). */
+export function b2bTrackDetails(o: CycleOverview): Record<(typeof B2B_STAGES)[number]["id"], string> {
+  const sent = o.intake.filter((i) => i.status === "submitted" || i.status === "reviewed").length;
+  const kickoff = o.sessions.find((s) => s.kind === "kickoff");
+  const followUps = o.sessions.filter((s) => s.kind === "follow_up");
+  const done = followUps.filter((s) => s.status === "completed").length;
+  return {
+    intake: o.intake.length === 0 ? "Esperando a la persona cliente" : o.intake.length === 1 ? (sent ? "Entrevista enviada" : "Entrevista pendiente") : `${sent} de ${o.intake.length} entrevistas`,
+    kickoff: !kickoff
+      ? "Por agendar"
+      : kickoff.status === "completed"
+        ? "Hecha"
+        : kickoff.status === "in_progress"
+          ? "En curso"
+          : kickoff.scheduledAt
+            ? formatDate(kickoff.scheduledAt)
+            : "Por agendar",
+    cycle: followUps.length ? `${done} sesión${done === 1 ? "" : "es"} hecha${done === 1 ? "" : "s"}` : "Después de la Sesión 1",
+    closed: o.stage === "closed" ? "Ciclo cerrado" : "Al final",
+  };
+}
+
+/** Línea del ciclo B2B para el inicio del proyecto (la cabecera muestra solo la barra). */
+export function B2BCycleTrack({ overview }: { overview: CycleOverview }) {
+  const details = b2bTrackDetails(overview);
+  return (
+    <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Avance del ciclo">
+      {B2B_STAGES.map((s) => {
+        const state = b2bStageState(s, overview.stage);
+        return (
+          <li
+            key={s.id}
+            aria-current={state === "current" ? "step" : undefined}
+            className={cx("min-w-0 rounded-xl border px-3 py-2.5 shadow-2xs", state === "current" ? "border-blue-600 bg-blue-50/60" : "border-slate-200/80 bg-white")}
+          >
+            <p className="font-mono text-[0.625rem] text-slate-400">
+              {s.n} · {state === "done" ? "hecha" : state === "current" ? "en curso" : "por venir"}
+            </p>
+            <p className={cx("mt-0.5 truncate text-base font-bold", state === "current" ? "text-slate-900" : "text-slate-500")}>{s.label}</p>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{details[s.id]}</p>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 export type StepState = "done" | "current" | "upcoming";
 

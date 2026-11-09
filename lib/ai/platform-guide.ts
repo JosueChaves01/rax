@@ -1,5 +1,6 @@
 import type { Role } from "@/types/domain";
-import { STAGES } from "@/features/projects/stages";
+import { B2B_STAGES, STAGES } from "@/features/projects/stages";
+import { isB2BFlow } from "@/lib/flags";
 
 /**
  * Mapa de la plataforma que el agente necesita para orientar a las personas: qué es RAX, cómo se
@@ -15,6 +16,8 @@ export interface PlatformPage {
   label: string;
   what: string;
   roles: Role[];
+  /** Solo existe en el flujo B2B (RAX_B2B_FLOW): con la bandera apagada no se nombra al agente. */
+  flow?: "b2b";
 }
 
 /** Páginas generales (fuera de un proyecto). */
@@ -26,6 +29,7 @@ export const PLATFORM_PAGES: PlatformPage[] = [
   { path: "/app/sesiones", label: "Sesiones", what: "Agenda de las sesiones de mentoría de todos los proyectos (próximas, abiertas y cerradas, con su fecha pedida o confirmada por el mentor), con vista de calendario (/app/calendario). Es un índice: cada sesión se trabaja dentro de su proyecto, en Orientar (primera revisión y seguimientos) o Decidir (segunda revisión). Ahí está el briefing (se prepara solo al pedir la revisión), la videollamada con transcripción, las notas con sus respuestas, la síntesis (se arma sola al colgar y se puede editar) y el cierre del mentor: acuerdo y problema prioritario, o decisión formal. Al cerrar, los compromisos del emprendedor se vuelven tareas.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/documentos", label: "Documentos", what: "Apoyo: biblioteca con los documentos de todos tus proyectos (los que compartió el mentor, los que generó el asistente y las transcripciones), filtrables por proyecto o «solo del mentor», más la biblioteca metodológica de guías y plantillas. Todo se descarga en PDF o Word.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/aprendizaje", label: "Aprendizaje", what: "Apoyo: tutor de ejercicios; el agente propone ejercicios según el objetivo del proyecto y los evalúa con puntaje y retroalimentación.", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/mentor/perfil", label: "Mi perfil", what: "Perfil del mentor: presentación, metodología, guía de la entrevista de intake (preguntas con tema, para qué sirven y si son obligatorias), tono del asistente y su biblioteca de documentos (metodología, plantillas, referencias), que el asistente usa para entrevistar y responder a sus clientes.", roles: ["mentor"], flow: "b2b" },
   { path: "/app/mentor/recursos", label: "Recursos", what: "Apoyo: biblioteca de recursos y plantillas metodológicas del mentor.", roles: ["mentor"] },
   { path: "/app/admin", label: "Operaciones", what: "Panel de administración: proyectos sin mentor, solicitudes de mentores, cupos, personas y auditoría.", roles: ["admin"] },
   { path: "/app/reportes", label: "Reportes", what: "Indicadores agregados de la plataforma.", roles: ["admin"] },
@@ -62,10 +66,94 @@ No edita el diagnóstico del emprendedor ni confirma su resumen: le sugiere camb
 No tiene acceso al contenido de los proyectos por ser admin: no inventes datos de proyectos que no ves.`,
 };
 
-/** Guía de la plataforma adaptada al rol de quien conversa. */
-export function renderPlatformGuide(role: Role): string {
+/* ───────────── Flujo B2B (RAX_B2B_FLOW) ───────────── */
+
+/** Qué es cada pantalla general en el flujo B2B (reemplaza la descripción del flujo viejo). */
+const B2B_PAGE_WHAT: Record<string, Partial<Record<Role, string>>> = {
+  "/app": {
+    entrepreneur: "Inicio de la persona cliente: invitaciones de mentores (las acepta o rechaza aquí), sus proyectos con la etapa del ciclo, la entrevista pendiente, la próxima sesión y el material nuevo.",
+    mentor: "Bandeja del mentor: lo que pide su atención (entrevistas listas para revisar, sesiones por agendar, comentarios nuevos).",
+  },
+  "/app/chat": { mentor: "Asistente del mentor: chat por proyecto, con sesiones de trabajo e hilos, que conoce el estado del ciclo, el brief y la biblioteca del mentor; prepara sesiones y genera documentos en PDF o Word." },
+  "/app/mentor": { mentor: "Clientes: los proyectos del mentor con su etapa del ciclo y el estado de las invitaciones; desde aquí crea un proyecto nuevo (individual o grupal) e invita a sus clientes por correo." },
+  "/app/sesiones": {
+    entrepreneur: "Agenda de las sesiones con el mentor en todos los proyectos. Cada proyecto tiene además su pestaña Sesiones.",
+    mentor: "Agenda de las sesiones de todos los proyectos. Cada proyecto tiene además su pestaña Sesiones, donde se agenda y se arma la agenda de temas.",
+  },
+  "/app/documentos": { entrepreneur: "Material: lo que el mentor publicó para la persona (guías, resúmenes de sesión), para leer, descargar y comentar. Con un solo proyecto abre directo su pestaña Material (/app/p/[id]/material)." },
+};
+
+/** Pantallas generales del menú B2B de cada rol (alineado con navFor(role, …, { b2b: true })). */
+export const B2B_NAV_PATHS: Partial<Record<Role, string[]>> = {
+  mentor: ["/app", "/app/mentor", "/app/chat", "/app/sesiones", "/app/mentor/perfil"],
+  entrepreneur: ["/app", "/app/sesiones", "/app/documentos"],
+};
+
+/** Páginas dentro de un proyecto B2B (/app/p/[id]/...). */
+export const B2B_PROJECT_PAGES: Array<{ slug: string; label: string; roles: Role[]; what: string }> = [
+  { slug: "", label: "Inicio del proyecto", roles: ["entrepreneur", "mentor"], what: "Línea del ciclo (Entrevista → Sesión 1 → Ciclo → Cierre), la próxima sesión (el cliente confirma su asistencia y se une a la llamada; el mentor la agenda), el estado de la entrevista, el resumen de la última sesión, el acuerdo y los compromisos." },
+  { slug: "intake", label: "Entrevista", roles: ["entrepreneur"], what: "Entrevista de intake con el asistente, guiada por las preguntas del mentor, con una barra de avance por tema. Al enviarla, el mentor recibe un brief y prepara la Sesión 1." },
+  { slug: "brief", label: "Brief", roles: ["mentor"], what: "Brief del intake de cada persona (en proyectos grupales, también el consolidado): resumen, respuestas, brechas, riesgos y agenda sugerida; el mentor completa el contexto que falta y lo marca revisado." },
+  { slug: "sesiones", label: "Sesiones", roles: ["entrepreneur", "mentor"], what: "Todas las sesiones con su número, fecha, estado y temas. El mentor agenda, edita la agenda (agregar temas, marcarlos cubiertos) y abre la sala; el cliente confirma asistencia y se une. Muestra el acuerdo vigente (solo lectura para el cliente) y la síntesis de cada sesión realizada." },
+  { slug: "material", label: "Material", roles: ["entrepreneur", "mentor"], what: "Material publicado por el mentor (guías, resúmenes de sesión, acuerdos), agrupado por sesión, con visor y descarga. Cada material y cada sesión tiene su hilo de comentarios: en proyectos grupales lo ve todo el grupo; en individuales, la persona y su mentor. El cliente solo ve lo publicado para él o para todo el grupo." },
+  { slug: "evaluaciones", label: "Evaluaciones", roles: ["entrepreneur", "mentor"], what: "Evaluaciones del mentor (preguntas abiertas, de una o varias opciones y escalas del 1 al 5), opcionalmente ligadas a una sesión. El mentor las crea en borrador, las publica, las cierra y revisa cada entrega con puntaje y comentario; en proyectos grupales ve el promedio y la dispersión. El cliente guarda un borrador, envía una sola entrega y ve la revisión." },
+];
+
+const B2B_ROLE_GUIDE: Partial<Record<Role, string>> = {
+  entrepreneur: `La persona es CLIENTE de un mentor: entró por invitación del mentor. Puede:
+- Aceptar o rechazar invitaciones desde su panel.
+- Responder la entrevista de intake de cada proyecto (una por persona en proyectos grupales).
+- Ver sus sesiones, confirmar su asistencia y unirse a la llamada; leer el acuerdo, los objetivos, la síntesis de cada sesión y sus compromisos.
+- Leer y comentar el material que el mentor publicó, y responder sus evaluaciones (ve el puntaje y el comentario cuando el mentor las revisa).
+- Pedirle al asistente que le explique un material publicado (explain_resource) o que le ayude a preparar la próxima sesión (prepare_for_session).
+No crea proyectos, no agenda sesiones, no edita el acuerdo ni sube documentos: eso lo hace su mentor. No ve el brief del intake ni las notas privadas del mentor.`,
+  mentor: `La persona es MENTORA: dueña operativa de sus proyectos. Puede:
+- Crear proyectos (individuales o grupales) e invitar a sus clientes por correo; configurar su perfil, su metodología, la guía de la entrevista y su biblioteca de documentos (Mi perfil).
+- Leer el brief del intake y completar el contexto que falta.
+- Agendar la Sesión 1 y las sesiones del ciclo, armar la agenda de temas de cada una y conducirlas desde la sala (notas en vivo, acuerdo y objetivos en la Sesión 1, síntesis al cerrar).
+- Al cerrar una sesión, lo que no se cubrió pasa a la siguiente, que queda sugerida sin fecha.
+- Publicar material para sus clientes, leer sus comentarios y crear evaluaciones (publicar, cerrar y revisar cada entrega con puntaje y comentario).`,
+};
+
+function renderB2BPlatformGuide(role: Role): string {
+  const stages = B2B_STAGES.map((s) => `${s.n}. «${s.label}» — ${s.question}`).join("\n");
+  const pages = PLATFORM_PAGES.filter((p) => p.roles.includes(role) && (B2B_NAV_PATHS[role] ?? []).includes(p.path))
+    .map((p) => `- ${p.label} (${p.path}): ${B2B_PAGE_WHAT[p.path]?.[role] ?? p.what}`)
+    .join("\n");
+  const projectPages = B2B_PROJECT_PAGES.filter((p) => p.roles.includes(role))
+    .map((p) => `- ${p.label} (/${p.slug}): ${p.what}`)
+    .join("\n");
+  return `<platform_guide flow="b2b">
+RAX es la plataforma de trabajo de un mentor con sus clientes. El mentor crea cada proyecto e invita a una persona (proyecto individual) o a varias (proyecto grupal); el asistente entrevista a los clientes, prepara al mentor y acompaña entre sesiones. La IA estructura, propone y explica; el mentor decide.
+
+Ciclo de cada proyecto (la etapa es explícita y la avanza el sistema al pasar cada hito):
+${stages}
+Entrevista: cada persona cliente responde la entrevista de intake; al enviarla se crea la Sesión 1 pendiente. Sesión 1: el mentor la agenda y en ella se acuerdan la forma de trabajo y los objetivos; al cerrarla el proyecto pasa a «Ciclo» y queda sugerida la Sesión 2 con los temas del acuerdo. Ciclo: una sesión tras otra, cada una con su agenda; lo no cubierto pasa a la siguiente. Cierre: el mentor cierra el ciclo.
+
+${B2B_ROLE_GUIDE[role] ?? ROLE_GUIDE[role]}
+
+Pantallas disponibles para este rol:
+${pages}
+Dentro de cada proyecto (/app/p/<id>/...):
+${projectPages}
+- Sala de la sesión (/app/llamada/<sesión>): videollamada con transcripción${role === "mentor" ? ", notas en vivo, asistente y formulario de acuerdo" : ""}.
+
+Cómo actúa el agente en la plataforma:
+- Las herramientas generan PROPUESTAS que aparecen como tarjetas; queda guardado cuando la persona las aplica. Nunca digas que algo ya quedó guardado.
+- Si te preguntan cómo hacer algo en RAX, explica el paso y nombra la pantalla y su ruta.
+- Si una acción le corresponde al otro rol (por ejemplo agendar una sesión, que es del mentor), dilo y sugiere cómo pedírsela.
+</platform_guide>`;
+}
+
+/**
+ * Guía de la plataforma adaptada al rol de quien conversa. Con RAX_B2B_FLOW encendida (o `b2b: true`)
+ * describe el flujo del mentor y sus clientes; apagada, el flujo de siempre sin cambios.
+ */
+export function renderPlatformGuide(role: Role, opts: { b2b?: boolean } = {}): string {
+  const b2b = opts.b2b ?? isB2BFlow();
+  if (b2b && role !== "admin") return renderB2BPlatformGuide(role);
   const stages = STAGES.map((s) => `${s.n}. «${s.label}» — ${s.question}`).join("\n");
-  const pages = PLATFORM_PAGES.filter((p) => p.roles.includes(role))
+  const pages = PLATFORM_PAGES.filter((p) => p.roles.includes(role) && (!p.flow || b2b))
     .map((p) => `- ${p.label} (${p.path}): ${p.what}`)
     .join("\n");
   const projectPages = role === "admin"

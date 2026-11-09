@@ -7,7 +7,9 @@ import { extractArtifacts } from "./artifact-parser";
 import { extractFollowUps, FOLLOW_UP_INSTRUCTIONS } from "./follow-ups";
 import type { ServiceDeps } from "@/lib/services/base";
 import { STEP_ACTIONS, stepActionTitle, type StepActionParams } from "./step-actions";
-import { executeWorkflowTool, makeProposal, RAX_WORKFLOW_TOOLS, type WorkflowToolDefinition } from "./workflow-tools";
+import { executeWorkflowTool, makeProposal, type WorkflowToolDefinition } from "./workflow-tools";
+import { findB2BTool, toolsFor as registryToolsFor } from "./tools/registry";
+import { isB2BFlow } from "@/lib/flags";
 import type { AiProposalItem } from "@/lib/n8n/contracts";
 import { renderPlatformGuide, PLATFORM_PAGES, PROJECT_PAGES } from "./platform-guide";
 import { renderProjectState, type ProjectStateSnapshot } from "./project-state";
@@ -19,7 +21,7 @@ import { addAgentDocumentToProject, createAgentDocument, listDocumentTargetProje
 import { addNoteReply, createSessionNote, isNoteKind, listProjectNotes, renderNotesForAgent, updateNoteReply, updateSessionNote } from "@/lib/services/session-notes";
 import { isDocumentFormat, DOCUMENT_FORMAT_LABEL, type DocumentFormat } from "@/lib/documents/types";
 import { simulatedDocumentContent, writeDocumentWithAi } from "./document-writer";
-import { RESEARCH_TOOL_NAMES, RESEARCH_TOOL_STATUS, researchTools, runResearchTool } from "./research-tools";
+import { RESEARCH_TOOL_NAMES, RESEARCH_TOOL_STATUS, runResearchTool } from "./research-tools";
 import { webSearchProvider } from "./web-search";
 import { isDomainError } from "@/lib/errors";
 
@@ -337,139 +339,15 @@ Valor actual: ${field.currentValue ? field.currentValue.slice(0, 2000) : "(vací
 </current_screen>`;
 }
 
-const DRAFT_FIELD_TOOL: WorkflowToolDefinition = {
-  name: "draft_field_value",
-  description: "Redacta el borrador del campo de formulario que la persona está completando. El borrador no se guarda hasta que la persona lo aplica.",
-  parameters: {
-    type: "object",
-    properties: {
-      value: { type: "string", description: "Valor propuesto para el campo, listo para pegar" },
-      rationale: { type: "string", description: "Por qué se propone este valor, en una frase" },
-    },
-    required: ["value"],
-  },
-};
-
-const SESSION_NOTES_TOOL: WorkflowToolDefinition = {
-  name: "update_session_notes",
-  description:
-    "Guarda en la sesión actual su objetivo, un resumen actualizado, decisiones de la persona, preguntas abiertas y próximos pasos. Lo ven todos los hilos de la sesión.",
-  parameters: {
-    type: "object",
-    properties: {
-      goal: { type: "string", description: "Objetivo de la sesión, si la persona lo definió o cambió" },
-      summary: { type: "string", description: "Resumen de la sesión hasta ahora (reemplaza al anterior; integra lo previo)" },
-      add_decisions: { type: "array", items: { type: "string" }, description: "Decisiones explícitas de la persona" },
-      add_open_questions: { type: "array", items: { type: "string" }, description: "Preguntas o dudas que quedan abiertas" },
-      resolve_open_questions: { type: "array", items: { type: "string" }, description: "Preguntas abiertas ya respondidas (texto exacto)" },
-      next_steps: { type: "array", items: { type: "string" }, description: "Lista completa de próximos pasos (reemplaza la anterior)" },
-    },
-  },
-};
-
-const READ_SESSION_THREAD_TOOL: WorkflowToolDefinition = {
-  name: "read_session_thread",
-  description: "Lee los mensajes recientes de otro hilo de la sesión actual.",
-  parameters: {
-    type: "object",
-    properties: { thread_id: { type: "string", description: "Id del hilo, tal como aparece en <session_state>" } },
-    required: ["thread_id"],
-  },
-};
-
-const READ_MENTOR_NOTES_TOOL: WorkflowToolDefinition = {
-  name: "read_mentor_notes",
-  description:
-    "Lee las notas de las sesiones de mentoría del proyecto con sus respuestas e ids. Sin session_id, trae las más recientes de todas las sesiones. No incluye notas privadas de otras personas.",
-  parameters: {
-    type: "object",
-    properties: {
-      session_id: { type: "string", description: "Id de una sesión de mentoría (opcional)" },
-      limit: { type: "number", description: "Cuántas notas traer como máximo (por defecto 20)" },
-    },
-  },
-};
-
-const SAVE_MENTOR_NOTE_TOOL: WorkflowToolDefinition = {
-  name: "save_mentor_note",
-  description:
-    "Crea una nota en una sesión de mentoría abierta (solo el mentor de la sesión) o, con note_id, corrige una nota que escribió esta persona. Se guarda directo.",
-  parameters: {
-    type: "object",
-    properties: {
-      note_id: { type: "string", description: "Id de la nota a editar (solo para editar)" },
-      session_id: { type: "string", description: "Id de la sesión de mentoría donde crear la nota (para crear)" },
-      body: { type: "string", description: "Texto de la nota (máximo 2000 caracteres)" },
-      kind: {
-        type: "string",
-        enum: ["observation", "question", "suggestion", "agreement", "commitment", "blocker", "decision"],
-        description: "Tipo de nota. Por defecto observation.",
-      },
-      is_private: { type: "boolean", description: "true para que solo la vea quien la escribe" },
-    },
-    required: ["body"],
-  },
-};
-
-const SAVE_NOTE_REPLY_TOOL: WorkflowToolDefinition = {
-  name: "save_note_reply",
-  description:
-    "Responde una nota de mentoría (note_id) o, con reply_id, corrige una respuesta que escribió esta persona. La pueden usar el emprendedor/estudiante y el mentor. Se guarda directo.",
-  parameters: {
-    type: "object",
-    properties: {
-      note_id: { type: "string", description: "Id de la nota que se responde (para responder)" },
-      reply_id: { type: "string", description: "Id de la respuesta a corregir (solo para editar)" },
-      body: { type: "string", description: "Texto de la respuesta (máximo 2000 caracteres)" },
-    },
-    required: ["body"],
-  },
-};
-
-/** Herramientas de notas de mentoría según el rol: todos leen y responden; el mentor además crea notas. */
-function noteToolsFor(role: Role): WorkflowToolDefinition[] {
-  return role === "mentor" || role === "admin"
-    ? [READ_MENTOR_NOTES_TOOL, SAVE_MENTOR_NOTE_TOOL, SAVE_NOTE_REPLY_TOOL]
-    : [READ_MENTOR_NOTES_TOOL, SAVE_NOTE_REPLY_TOOL];
-}
-
-const GENERATE_DOCUMENT_TOOL: WorkflowToolDefinition = {
-  name: "generate_document",
-  description:
-    "Genera un documento descargable en PDF o Word (.docx) sobre un tema, redactado con el contexto del proyecto. Opcionalmente lo agrega al conocimiento del proyecto.",
-  parameters: {
-    type: "object",
-    properties: {
-      title: { type: "string", description: "Título del documento" },
-      topic: { type: "string", description: "Tema y alcance: qué debe cubrir el documento" },
-      format: { type: "string", enum: ["pdf", "docx"], description: "pdf para PDF, docx para Word. Si la persona no lo dice, pdf." },
-      instructions: { type: "string", description: "Indicaciones de la persona: público, extensión, tono, secciones obligatorias" },
-      add_to_project: { type: "boolean", description: "true para guardarlo también en los documentos (conocimiento) del proyecto" },
-    },
-    required: ["title", "topic"],
-  },
-};
-
-const ADD_DOCUMENT_TO_PROJECT_TOOL: WorkflowToolDefinition = {
-  name: "add_document_to_project",
-  description:
-    "Agrega a los documentos (conocimiento) de un proyecto un documento que el agente YA generó en este hilo. Solo proyectos donde la persona tiene acceso; para un mentor, los que tiene asignados. Si no se indica el proyecto y la persona tiene varios, devuelve la lista para preguntarle.",
-  parameters: {
-    type: "object",
-    properties: {
-      project: { type: "string", description: "Nombre (o id) del proyecto destino. Para «este proyecto» usa el nombre del proyecto actual. Omítelo si la persona no lo dijo." },
-      document_title: { type: "string", description: "Título del documento ya generado. Omítelo para el último documento del hilo." },
-    },
-  },
-};
-
 function toolsFor(input: ClaudeTurnInput): WorkflowToolDefinition[] {
   if (!input.deps) return [];
-  const base = input.sessionContext?.field
-    ? [DRAFT_FIELD_TOOL, ...RAX_WORKFLOW_TOOLS]
-    : [GENERATE_DOCUMENT_TOOL, ...(input.thread?.id ? [ADD_DOCUMENT_TO_PROJECT_TOOL] : []), ...researchTools(), ...noteToolsFor(input.role), ...RAX_WORKFLOW_TOOLS];
-  if (!input.session || !input.thread?.id) return base;
-  return [SESSION_NOTES_TOOL, ...(input.session.siblings.length ? [READ_SESSION_THREAD_TOOL] : []), ...base];
+  return registryToolsFor(input.role, {
+    field: !!input.sessionContext?.field,
+    thread: !!input.thread?.id,
+    session: !!(input.session && input.thread?.id),
+    siblings: (input.session?.siblings.length ?? 0) > 0,
+    b2b: isB2BFlow(),
+  });
 }
 
 const stringList = (v: unknown): string[] | undefined =>
@@ -480,6 +358,9 @@ async function runTool(
   name: string,
   args: Record<string, unknown>,
 ): Promise<{ summary: string; proposals: AiProposalItem[]; data?: unknown; sessionUpdated?: boolean; artifacts?: AgentArtifact[] }> {
+  // Herramientas del pivot B2B (lib/ai/tools/mentor y client): solo existen con RAX_B2B_FLOW encendida.
+  const b2bTool = input.deps && isB2BFlow() ? findB2BTool(input.role, name) : undefined;
+  if (b2bTool) return b2bTool.run({ deps: input.deps!, project: input.project, threadId: input.thread?.id, deadline: input.deadline }, args);
   if (name === "generate_document" && input.deps) return generateDocumentTool(input, args);
   if (RESEARCH_TOOL_NAMES.has(name) && input.deps) {
     const r = await runResearchTool(input.deps, input.project.id, name, args, input.deadline);
