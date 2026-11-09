@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getActor, homeFor } from "@/lib/runtime";
+import { isB2BFlow } from "@/lib/flags";
 import { signOutAction } from "@/app/actions";
 import { OnboardingForm } from "./onboarding-form";
 
@@ -10,9 +11,22 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
   const actor = await getActor();
   if (!actor) redirect("/entrar");
   // Un mentor rechazado vuelve acá para mandar una solicitud nueva.
-  const reapply = (await searchParams).repostular === "1" && actor.role !== "mentor" && actor.mentorStatus === "rejected";
-  if (!reapply && homeFor(actor) !== "/bienvenida") redirect(homeFor(actor));
-  const mode = reapply ? "mentor" : actor.role === "admin" ? "admin" : actor.role === "mentor" ? "mentor" : "choose";
+  const b2b = isB2BFlow();
+  // Flujo B2B (sin administración): quien había pedido ser mentor y quedó esperando se activa aquí.
+  const activating = b2b && actor.onboarding?.intent === "mentor" && actor.role !== "mentor";
+  const reapply = !b2b && (await searchParams).repostular === "1" && actor.role !== "mentor" && actor.mentorStatus === "rejected";
+  if (!reapply && !activating && homeFor(actor) !== "/bienvenida") redirect(homeFor(actor));
+  const mode = b2b
+    ? actor.role === "mentor" || activating
+      ? "mentor"
+      : "choose"
+    : reapply
+      ? "mentor"
+      : actor.role === "admin"
+        ? "admin"
+        : actor.role === "mentor"
+          ? "mentor"
+          : "choose";
   return (
     <main className="ambient min-h-dvh px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-2xl">
@@ -26,7 +40,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
             </button>
           </form>
         </div>
-        <OnboardingForm mode={mode} defaultName={actor.name} reapply={reapply} />
+        <OnboardingForm mode={mode} defaultName={actor.name} reapply={reapply} b2b={b2b} />
       </div>
     </main>
   );
