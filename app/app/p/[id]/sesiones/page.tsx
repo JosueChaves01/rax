@@ -4,7 +4,9 @@ import { isB2BFlow } from "@/lib/flags";
 import { AGREEMENT_FREQUENCY_LABEL, AGREEMENT_STATUS_LABEL, GOAL_STATUS_LABEL } from "@/features/labels";
 import { Card, Empty, Tag, cx } from "@/shared/ui/primitives";
 import type { CycleOverview, CycleSessionView } from "@/lib/services/cycle";
+import { listAssessments, type AssessmentListItem } from "@/lib/services/assessments";
 import { loadWorkspace } from "../data";
+import { loadB2B } from "../evaluaciones/data";
 import { loadCycleOverview, sessionTitle, sessionWhen } from "../cycle-data";
 import { AgendaEditor, AgendaList, ConfirmAttendanceButton, ScheduleSessionForm } from "./session-controls";
 
@@ -26,7 +28,7 @@ export default async function SessionsPage({ params }: { params: Promise<{ id: s
   if (!isB2BFlow()) notFound();
   const { w } = await loadWorkspace(id);
   if (!w.project.mentorId) notFound();
-  const o = await loadCycleOverview(id);
+  const [o, assessments] = await Promise.all([loadCycleOverview(id), loadB2B((d) => listAssessments(d, id))]);
   const isMentor = o.viewer === "mentor";
   const open = o.sessions.filter((s) => s.status !== "completed");
   const done = o.sessions.filter((s) => s.status === "completed").reverse();
@@ -45,7 +47,7 @@ export default async function SessionsPage({ params }: { params: Promise<{ id: s
               {isMentor ? "Agenda la siguiente sesión del ciclo." : "Tu mentor agenda las sesiones; aquí verás la próxima."}
             </Empty>
           ) : (
-            open.map((s) => <SessionCard key={s.id} s={s} o={o} />)
+            open.map((s) => <SessionCard key={s.id} s={s} o={o} assessments={assessments} />)
           )}
           {isMentor && o.stage !== "closed" && o.stage !== "intake" && !open.some((s) => s.kind === "follow_up" && s.status === "pending" && !s.scheduledAt) && (
             <Card className="p-5">
@@ -65,7 +67,7 @@ export default async function SessionsPage({ params }: { params: Promise<{ id: s
           <h2 id="realizadas" className="text-xl font-bold text-slate-900">
             Sesiones realizadas
           </h2>
-          {done.length === 0 ? <p className="text-sm text-slate-500">Todavía no hay sesiones realizadas.</p> : done.map((s) => <SessionCard key={s.id} s={s} o={o} />)}
+          {done.length === 0 ? <p className="text-sm text-slate-500">Todavía no hay sesiones realizadas.</p> : done.map((s) => <SessionCard key={s.id} s={s} o={o} assessments={assessments} />)}
         </section>
       </div>
 
@@ -76,7 +78,8 @@ export default async function SessionsPage({ params }: { params: Promise<{ id: s
   );
 }
 
-function SessionCard({ s, o }: { s: CycleSessionView; o: CycleOverview }) {
+function SessionCard({ s, o, assessments }: { s: CycleSessionView; o: CycleOverview; assessments: AssessmentListItem[] }) {
+  const linked = assessments.filter((a) => a.assessment.sessionId === s.id);
   const isMentor = o.viewer === "mentor";
   const tag = STATUS_TAG[s.status];
   const editable = isMentor && s.status !== "completed";
@@ -122,6 +125,31 @@ function SessionCard({ s, o }: { s: CycleSessionView; o: CycleOverview }) {
         <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Temas</p>
         {editable ? <AgendaEditor key={JSON.stringify(s.agenda)} projectId={o.projectId} sessionId={s.id} agenda={s.agenda} /> : <AgendaList agenda={s.agenda} />}
       </div>
+
+      {(linked.length > 0 || isMentor) && (
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Evaluaciones</p>
+          {linked.length > 0 && (
+            <ul className="space-y-1 text-sm">
+              {linked.map(({ assessment: a, mine }) => (
+                <li key={a.id}>
+                  <Link href={`/app/p/${o.projectId}/evaluaciones/${a.id}`} className="font-medium text-blue-700 hover:underline">
+                    {a.title}
+                  </Link>
+                  <span className="ml-2 text-[0.6875rem] text-slate-500">
+                    {a.status === "draft" ? "Borrador" : a.status === "closed" ? "Cerrada" : isMentor ? "Abierta" : mine && mine.status !== "draft" ? "Enviada" : "Por responder"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {isMentor && (
+            <Link href={`/app/p/${o.projectId}/evaluaciones?sesion=${s.id}`} className="mt-1 inline-block text-xs font-semibold text-blue-700 hover:underline">
+              + Crear evaluación para esta sesión
+            </Link>
+          )}
+        </div>
+      )}
 
       {s.synthesis && (
         <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-sm text-slate-700">

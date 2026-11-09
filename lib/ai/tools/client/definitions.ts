@@ -32,3 +32,24 @@ export const FINISH_INTAKE_TOOL: WorkflowToolDefinition = {
     },
   },
 };
+
+export const EXPLAIN_RESOURCE_TOOL: WorkflowToolDefinition = {
+  name: "explain_resource",
+  description:
+    "Trae el contenido de un material que el mentor PUBLICÓ para la persona (guías, resúmenes de sesión, acuerdos) y el contexto del mentor (su metodología), para explicárselo con palabras simples. Sin document_id ni title devuelve la lista del material publicado. Nunca accede a documentos sin publicar.",
+  parameters: {
+    type: "object",
+    properties: {
+      document_id: { type: "string", description: "Id del material publicado, si lo conoces" },
+      title: { type: "string", description: "Título (o parte del título) del material, si la persona lo nombró" },
+      question: { type: "string", description: "Qué quiere entender la persona del material (opcional)" },
+    },
+  },
+};
+
+export const PREPARE_FOR_SESSION_TOOL: WorkflowToolDefinition = {
+  name: "prepare_for_session",
+  description:
+    "Ayuda a la persona a prepararse para su próxima sesión con el mentor: trae la fecha y los temas de la agenda, sus compromisos pendientes, las evaluaciones que le faltan responder y el material publicado más reciente.",
+  parameters: { type: "object", properties: {} },
+};

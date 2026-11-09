@@ -8,8 +8,9 @@
 
 import { isB2BFlow } from "@/lib/flags";
 import type { MentorSession } from "@/types/domain";
-import type { CycleStage, SessionTopic } from "@/types/b2b";
+import type { Assessment, AssessmentInput, AssessmentSubmission, CycleStage, SessionTopic } from "@/types/b2b";
 import { advanceCycleStage, confirmAttendance, scheduleCycleSession, updateSessionAgenda, type ScheduleCycleSessionInput } from "@/lib/services/cycle";
+import { closeAssessment, createAssessment, publishAssessment, reviewSubmission, updateAssessment } from "@/lib/services/assessments";
 import { run, type ActionResult } from "./_run";
 
 function unavailable(): ActionResult<never> {
@@ -44,4 +45,36 @@ export async function updateSessionAgendaAction(projectId: string, sessionId: st
 export async function confirmAttendanceAction(projectId: string, sessionId: string): Promise<ActionResult<{ sessionId: string; confirmedAt: string }>> {
   if (!isB2BFlow()) return unavailable();
   return run(projectId, (d) => confirmAttendance(d, sessionId));
+}
+
+/* ───────────── Evaluaciones (mentor) ───────────── */
+
+/** El mentor crea una evaluación en borrador. */
+export async function createAssessmentAction(projectId: string, input: AssessmentInput): Promise<ActionResult<Assessment>> {
+  if (!isB2BFlow()) return unavailable();
+  return run(projectId, (d) => createAssessment(d, projectId, input));
+}
+
+/** El mentor edita una evaluación en borrador. */
+export async function updateAssessmentAction(projectId: string, assessmentId: string, input: AssessmentInput): Promise<ActionResult<Assessment>> {
+  if (!isB2BFlow()) return unavailable();
+  return run(projectId, (d) => updateAssessment(d, assessmentId, input));
+}
+
+/** Publica la evaluación (avisa a cada persona cliente). */
+export async function publishAssessmentAction(projectId: string, assessmentId: string): Promise<ActionResult<Assessment>> {
+  if (!isB2BFlow()) return unavailable();
+  return run(projectId, (d) => publishAssessment(d, assessmentId));
+}
+
+/** Cierra la evaluación: ya no recibe entregas. */
+export async function closeAssessmentAction(projectId: string, assessmentId: string): Promise<ActionResult<Assessment>> {
+  if (!isB2BFlow()) return unavailable();
+  return run(projectId, (d) => closeAssessment(d, assessmentId));
+}
+
+/** El mentor revisa una entrega con puntaje y comentario (avisa a la persona). */
+export async function reviewSubmissionAction(projectId: string, submissionId: string, input: { score?: number; feedback: string }): Promise<ActionResult<AssessmentSubmission>> {
+  if (!isB2BFlow()) return unavailable();
+  return run(projectId, (d) => reviewSubmission(d, submissionId, input));
 }

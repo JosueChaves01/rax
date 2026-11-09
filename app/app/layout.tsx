@@ -14,10 +14,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const d = await getDeps();
   const b2b = isB2BFlow();
   let notifications: NotificationItem[] = [];
+  let clientProjectIds: string[] | undefined;
 
   if (d && actor.role !== "admin") {
     try {
       const workspaces = await loadMyWorkspaces(d);
+      // Flujo B2B: proyectos donde la persona es cliente («Material» del menú abre el del proyecto).
+      if (b2b && actor.role === "entrepreneur") clientProjectIds = workspaces.filter((w) => w.project.mentorId && !w.isMentorView).map((w) => w.project.id);
       // Flujo B2B: los proyectos del mentor (mentor_id) no usan los pendientes del flujo viejo.
       const legacy = b2b ? workspaces.filter((w) => !w.project.mentorId) : workspaces;
       notifications = pendingFor(actor.role, actor.id, legacy).map((p) => ({
@@ -36,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <AppShell actor={actor} notifications={notifications} b2b={b2b}>
+    <AppShell actor={actor} notifications={notifications} b2b={b2b} clientProjectIds={clientProjectIds}>
       {children}
     </AppShell>
   );

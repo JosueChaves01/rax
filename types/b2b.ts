@@ -99,7 +99,11 @@ export type NotificationKind =
   | "comment_added"
   /* Fase 3 (Dev B): cierre de una sesión (al cliente) y asistencia confirmada (al mentor). */
   | "session_closed"
-  | "session_confirmed";
+  | "session_confirmed"
+  /* Fase 4 (Dev B): evaluaciones publicada (al cliente), entregada (al mentor) y revisada (al cliente). */
+  | "assessment_published"
+  | "assessment_submitted"
+  | "assessment_reviewed";
 
 export interface Notification {
   id: Id;

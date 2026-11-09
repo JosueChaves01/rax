@@ -70,6 +70,13 @@ const IMPLEMENTED = new Set([
   "updateSessionAgenda",
   "onSessionClosed",
   "cycleSignalsForBriefing",
+  // Dev B · Fase 4
+  "createAssessment",
+  "publishAssessment",
+  "submitAssessment",
+  "reviewSubmission",
+  "listPublishedResources",
+  "commentOnResource",
 ]);
 /** Exportaciones nuevas, fuera del contrato de Fase 0 (ayudantes de los servicios ya implementados). */
 const EXTRA_EXPORTS = new Set([
@@ -108,6 +115,18 @@ const EXTRA_EXPORTS = new Set([
   "validateAgenda",
   "confirmAttendance",
   "getCycleOverview",
+  // Dev B · Fase 4 (assessments.ts, client-portal.ts)
+  "updateAssessment",
+  "closeAssessment",
+  "listAssessments",
+  "getAssessment",
+  "aggregateSubmissions",
+  "normalizeAnswers",
+  "isVisiblePublished",
+  "getPublishedResource",
+  "publishedDocumentSource",
+  "publishedKnowledgeContext",
+  "listResourceComments",
 ]);
 
 const deps = { repo: createMemoryRepository(), actor: B2B_PEOPLE[0] } as unknown as ServiceDeps;
@@ -223,7 +242,7 @@ describe("contratos del pivot B2B (Fase 0)", () => {
     expect(mentorB2B).toEqual(expect.arrayContaining(MENTOR_TOOLS.map((t) => t.definition.name)));
     expect(names("mentor", plain)).not.toContain("draft_material");
     expect(names("entrepreneur", { ...plain, b2b: true })).not.toContain("draft_material");
-    expect(CLIENT_TOOLS.map((t) => t.definition.name)).toEqual(["record_intake_answer", "finish_intake"]);
+    expect(CLIENT_TOOLS.map((t) => t.definition.name)).toEqual(["record_intake_answer", "finish_intake", "explain_resource", "prepare_for_session"]);
     expect(names("entrepreneur", plain)).not.toContain("record_intake_answer");
     expect(names("entrepreneur", { ...plain, b2b: true })).toContain("record_intake_answer");
   });

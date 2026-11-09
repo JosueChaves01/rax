@@ -63,8 +63,8 @@ describe("modelo de etapas B2B", () => {
   });
 
   it("pestañas por rol: el mentor ve el brief, el cliente su entrevista, los dos las sesiones", () => {
-    expect(b2bProjectTabs(true).map((t) => t.slug)).toEqual(["", "brief", "sesiones"]);
-    expect(b2bProjectTabs(false).map((t) => t.slug)).toEqual(["", "intake", "sesiones"]);
+    expect(b2bProjectTabs(true).map((t) => t.slug)).toEqual(["", "brief", "sesiones", "material", "evaluaciones"]);
+    expect(b2bProjectTabs(false).map((t) => t.slug)).toEqual(["", "intake", "sesiones", "material", "evaluaciones"]);
   });
 });
 
