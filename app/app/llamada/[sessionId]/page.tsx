@@ -27,12 +27,15 @@ export default async function CallRoomPage({ params, searchParams }: { params: P
   const d = await getDeps();
   if (!d) redirect("/entrar");
 
+  // Flujo B2B: la sala sabe si mira el mentor de la sesión o un cliente del proyecto. Va primero porque
+  // el cliente no lee mentor_sessions por RLS (20261109000104): la sala verifica y le da lo seguro.
+  const room: SessionRoomState | null = isB2BFlow() ? await getSessionRoomState(d, sessionId).catch(() => null) : null;
+  if (room?.viewer === "client") {
+    return <ClientRoom room={room} backHref={`/app/p/${room.session.projectId}`} initialClosed={room.session.status === "completed"} />;
+  }
+
   const raw = await d.repo.mentorSessions.get(sessionId);
   if (!raw) notFound();
-
-  // Flujo B2B: la sala sabe si mira el mentor de la sesión o un cliente del proyecto.
-  const room: SessionRoomState | null = isB2BFlow() ? await getSessionRoomState(d, sessionId).catch(() => null) : null;
-  if (room?.viewer === "client") return <ClientRoom room={room} backHref={`/app/p/${raw.projectId}`} initialClosed={raw.status === "completed"} />;
 
   // loadWorkspace valida que quien mira pueda ver el proyecto (si no, 404).
   const { w, actor } = await loadWorkspace(raw.projectId);

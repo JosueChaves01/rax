@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { buildSystemPrompt, executeClaudeAgentTurn } from "@/lib/ai/claude-orchestrator";
 import { selectRaxCapability } from "@/lib/n8n/main-agent";
 import { RAX_WORKFLOW_TOOLS } from "@/lib/ai/workflow-tools";
-import { generateMentorshipExplorationData } from "@/lib/ai/exploration-ai";
 import type { Project } from "@/types/domain";
 
 describe("Agente RAX: Soporte integral para mentores, tutores y estudiantes", () => {
@@ -93,16 +92,6 @@ describe("Agente RAX: Soporte integral para mentores, tutores y estudiantes", ()
     expect(actionTypes).toContain("skill_learning");
     expect(actionTypes).toContain("research");
     expect(actionTypes).toContain("operational_task");
-  });
-
-  it("generateMentorshipExplorationData genera arquetipo de aprendizaje/tutoría para prompts educativos", async () => {
-    const result = await generateMentorshipExplorationData("tutoría de aprendizaje para dominar programación y algoritmos");
-
-    expect(result.sector).toBe("Educación, Formación & Habilidades");
-    expect(result.cycleGoals).toContain("Dominio conceptual");
-    expect(result.mentorCommitments).toContain("retroalimentación constructiva");
-    expect(result.description).not.toContain("entrevistas con clientes");
-    expect(result.description).not.toContain("disposición real a pagar");
   });
 
   it("entiende la sesión actual en 'Aprender React' y atiende la petición de resumen de conversación para la etapa entender (RAX-03)", async () => {

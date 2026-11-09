@@ -134,7 +134,8 @@ insert into public.session_notes (session_id, project_id, author_id, kind, body,
   ('b4000000-0000-0000-0000-000000000001', 'b1000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-00000000000a', 'observation', 'Visible', false),
   ('b4000000-0000-0000-0000-000000000001', 'b1000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-00000000000a', 'observation', 'Privada', true);
 select pg_temp.act('b0000000-0000-0000-0000-00000000000c', 'cami@test');
-select pg_temp.expect('Cami ve la sesión', (select count(*) from public.mentor_sessions) = 1);
+select pg_temp.expect('Cami ve la sesión en client_sessions', (select count(*) from public.client_sessions) = 1);
+select pg_temp.expect('Cami no lee la tabla mentor_sessions (20261109000104)', (select count(*) from public.mentor_sessions) = 0);
 select pg_temp.expect('Cami no ve notas privadas', (select array_agg(body) from public.session_notes) = array['Visible']);
 insert into public.comments (project_id, target_type, target_id, author_id, body) values
   ('b1000000-0000-0000-0000-000000000001', 'document', 'b3000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-00000000000c', '¿Esto aplica a mi local?');

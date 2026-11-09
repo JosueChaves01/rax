@@ -1,5 +1,5 @@
 -- Pruebas de RLS de las notas en vivo (20261109000103_session_live_notes.sql): solo el mentor de la
--- sesión las lee y escribe; el cliente (que sí lee su fila de mentor_sessions) nunca las ve.
+-- sesión las lee y escribe; el cliente (que ve su sesión en client_sessions) nunca las ve.
 \set ON_ERROR_STOP 1
 begin;
 
@@ -62,8 +62,8 @@ update public.session_live_notes set text = 'pisado', version = 2 where session_
 select pg_temp.expect('la escritura con versión vieja no pisa', (select text from public.session_live_notes) = 'v2');
 
 select pg_temp.act('d0000000-0000-0000-0000-00000000000c');
-select pg_temp.expect('Cami ve su sesión', (select count(*) from public.mentor_sessions where id = 'd4000000-0000-0000-0000-000000000001') = 1);
-select pg_temp.expect('Cami no ve notas en la fila de la sesión', (select live_notes from public.mentor_sessions where id = 'd4000000-0000-0000-0000-000000000001') = '');
+select pg_temp.expect('Cami ve su sesión (vista client_sessions)', (select count(*) from public.client_sessions where id = 'd4000000-0000-0000-0000-000000000001') = 1);
+select pg_temp.expect('Cami no lee la fila de mentor_sessions', (select count(*) from public.mentor_sessions where id = 'd4000000-0000-0000-0000-000000000001') = 0);
 select pg_temp.expect('Cami no lee las notas en vivo', (select count(*) from public.session_live_notes) = 0);
 select pg_temp.expect_denied('Cami no edita las notas en vivo',
   $$update public.session_live_notes set text = 'x' where session_id = 'd4000000-0000-0000-0000-000000000001'$$);
