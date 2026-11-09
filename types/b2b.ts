@@ -117,6 +117,8 @@ export interface IntakeBrief {
   gaps: string[];
   risks: string[];
   suggestedAgenda: SessionTopic[];
+  /** Documentos del mentor (metodología, plantillas) en los que se apoyó el brief. */
+  citations?: KnowledgeCitation[];
   generatedAt: ISODate;
   model: string;
 }

@@ -175,6 +175,8 @@ export interface Message {
   provider?: "simulated" | "openrouter";
   /** Dimensión que la pregunta del asistente intenta cubrir. */
   dimension?: InterviewDimension;
+  /** Pivot B2B: mensaje de la entrevista de intake de esta persona (vacío = entrevista vieja). */
+  intakeClientId?: Id;
   createdAt: ISODate;
 }
 
