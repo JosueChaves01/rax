@@ -7,5 +7,7 @@ DB="${RAX_TEST_DB:-rax_test}"
 psql -q -v ON_ERROR_STOP=1 -d postgres -c "drop database if exists $DB" -c "create database $DB"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f supabase/tests/00_local_stubs.sql
 for f in supabase/migrations/*.sql; do psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$f"; done
-psql -q -v ON_ERROR_STOP=1 -d "$DB" -f supabase/tests/01_rls.sql 2>&1 | grep -E "NOTICE|ERROR|FALLO" | sed 's/^.*NOTICE:  //'
+for t in supabase/tests/0[1-9]_*.sql; do
+  psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$t" 2>&1 | grep -E "NOTICE|ERROR|FALLO" | sed 's/^.*NOTICE:  //'
+done
 echo "RLS: todas las comprobaciones pasaron"

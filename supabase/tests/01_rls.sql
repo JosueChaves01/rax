@@ -70,7 +70,7 @@ select pg_temp.act('00000000-0000-0000-0000-0000000000ad');
 select pg_temp.expect('admin con fila collaborator heredada no es miembro de proyecto',
   not public.is_project_member('10000000-0000-0000-0000-000000000001'));
 select pg_temp.expect('admin no obtiene acceso al contenido del proyecto', (select count(*) from public.diagnosis_items) = 0);
-select pg_temp.act('00000000-0000-0000-0000-00000000000a');
+select pg_temp.act(null);
 insert into public.messages (conversation_id, project_id, author, content)
 select id, project_id, 'assistant', 'Hola. Texto fijo de la plataforma.' from public.conversations;
 select pg_temp.act('00000000-0000-0000-0000-00000000000a');
