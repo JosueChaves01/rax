@@ -135,6 +135,7 @@ ${guide}
 ${coverage}
 Obligatorias pendientes: ${pending.length ? pending.map((q) => q.id).join(", ") : "ninguna"}
 </coverage>
+${(() => { const n = nextPending(input.guide, input.coverage); return n ? `\nPregunta en curso: [${n.id}] ${n.question}\nNo repitas preguntas ya respondidas o saltadas. Si la persona ya respondió la pregunta en curso, regístrala y pasa a la siguiente.` : "\nNo quedan preguntas pendientes: agradece y pide tocar «Enviar a mi mentor»."; })()}
 
 ${wrapMentorContext(input.mentorContext)}`;
 }
@@ -256,18 +257,61 @@ export async function runInterviewerTurn(input: InterviewerInput): Promise<Inter
     }
   }
 
-  if (!reply) {
-    // Sin texto del modelo: se usa la pregunta del mentor tal cual (no se inventa contenido).
-    const coverage = { ...input.coverage, ...Object.fromEntries([...updates.values()].map((u) => [u.questionId, u.status])) };
-    const next = nextQuestion(input.guide, coverage);
+  // El modelo no siempre registra la cobertura (muchos modelos gratis ignoran las herramientas). Si la
+  // persona respondió y nadie marcó la pregunta en curso, se marca aquí para que la entrevista avance.
+  const inferred = inferCurrentAnswer(input);
+  if (inferred && updates.size === 0) updates.set(inferred.questionId, inferred);
+  const coverage = { ...input.coverage, ...Object.fromEntries([...updates.values()].map((u) => [u.questionId, u.status])) };
+  const next = nextPending(input.guide, coverage);
+
+  if (!reply || repeatsItself(reply, input, coverage)) {
+    // Sin texto útil del modelo (vacío o repitiendo una pregunta ya respondida): se usa la pregunta del
+    // mentor tal cual, sin inventar contenido.
     return {
       reply: next ? `Gracias. ${next.question}` : finishedReply(input.mentorName, "Gracias."),
       updates: [...updates.values()],
       finished: finished || !next,
-      provider: "simulated",
+      provider: reply ? "openrouter" : "simulated",
+      ...(reply ? { model } : {}),
     };
   }
   return { reply: reply.slice(0, 4000), updates: [...updates.values()], finished, provider: "openrouter", model };
+}
+
+/** La pregunta en curso: la primera obligatoria sin responder (o con respuesta parcial), luego las opcionales. */
+export function nextPending(guide: IntakeQuestion[], coverage: Record<string, IntakeCoverage>): IntakeQuestion | undefined {
+  const open = (q: IntakeQuestion) => coverage[q.id] !== "answered" && coverage[q.id] !== "skipped";
+  return guide.find((q) => q.required && open(q)) ?? guide.find((q) => !q.required && !coverage[q.id]);
+}
+
+/**
+ * Si el último mensaje es de la persona y responde a una pregunta ya hecha, la pregunta en curso queda
+ * cubierta. Una respuesta corta cuenta como parcial solo la primera vez; a la segunda ya se da por
+ * respondida, así nunca se repregunta en bucle.
+ */
+export function inferCurrentAnswer(input: Pick<InterviewerInput, "guide" | "coverage" | "transcript">): CoverageUpdate | undefined {
+  const last = input.transcript.at(-1);
+  if (!last || last.role !== "client") return undefined;
+  if (!input.transcript.some((l) => l.role === "interviewer")) return undefined;
+  const current = nextPending(input.guide, input.coverage);
+  if (!current) return undefined;
+  let status = classifyAnswer(last.content);
+  if (status === "partial" && input.coverage[current.id] === "partial") status = "answered";
+  return { questionId: current.id, status, answer: last.content.slice(0, 600) };
+}
+
+const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9ñ ]+/g, " ").replace(/\s+/g, " ").trim();
+
+/** El modelo repite su mensaje anterior o vuelve a hacer una pregunta que ya quedó cubierta. */
+export function repeatsItself(reply: string, input: Pick<InterviewerInput, "guide" | "transcript">, coverage: Record<string, IntakeCoverage>): boolean {
+  const r = norm(reply);
+  if (!r) return true;
+  const prev = [...input.transcript].reverse().find((l) => l.role === "interviewer");
+  if (prev) {
+    const p = norm(prev.content);
+    if (p && (p === r || (r.length > 30 && (p.includes(r) || r.includes(p))))) return true;
+  }
+  return input.guide.some((q) => (coverage[q.id] === "answered" || coverage[q.id] === "skipped") && norm(q.question).length > 15 && r.includes(norm(q.question)));
 }
 
 /* ───────────── Simulación determinista (sin IA) ───────────── */

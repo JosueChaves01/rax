@@ -117,6 +117,38 @@ describe("con IA real (OpenRouter falso)", () => {
     expect(turn).toMatchObject({ provider: "openrouter", model: "m1", reply: "¡Gracias! ¿Qué te quita el sueño hoy del negocio?", updates: [{ questionId: "q_negocio", status: "answered" }] });
   });
 
+  it("si el modelo no registra la cobertura y repite la pregunta, la entrevista avanza igual", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "k");
+    vi.stubEnv("OPENROUTER_MODEL", "m1");
+    vi.stubEnv("OPENROUTER_FALLBACK_MODELS", "");
+    // Un modelo que ignora las herramientas y vuelve a hacer siempre la primera pregunta.
+    fakeOpenRouter([() => ({ content: "Cuéntame, ¿qué vendes y a quién?" })]);
+    const transcript = [
+      { role: "interviewer" as const, content: "Hola, soy el asistente de Mara. ¿Qué vendes y a quién?" },
+      { role: "client" as const, content: "Vendo pan artesanal a las familias del barrio y a dos cafeterías." },
+    ];
+    const turn = await runInterviewerTurn({ ...base, transcript });
+    expect(turn.updates).toEqual([expect.objectContaining({ questionId: "q_negocio", status: "answered" })]);
+    expect(turn.reply).toContain("¿Qué te quita el sueño hoy del negocio?");
+    expect(turn.reply).not.toContain("¿qué vendes y a quién?");
+  });
+
+  it("una respuesta corta se repregunta una sola vez", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "k");
+    vi.stubEnv("OPENROUTER_MODEL", "m1");
+    vi.stubEnv("OPENROUTER_FALLBACK_MODELS", "");
+    fakeOpenRouter([() => ({ content: "¿Me cuentas un poco más sobre qué vendes y a quién?" })]);
+    const transcript = [
+      { role: "interviewer" as const, content: "¿Qué vendes y a quién?" },
+      { role: "client" as const, content: "Pan." },
+      { role: "interviewer" as const, content: "¿Me cuentas un poco más sobre qué vendes y a quién?" },
+      { role: "client" as const, content: "Pan dulce." },
+    ];
+    const turn = await runInterviewerTurn({ ...base, coverage: { q_negocio: "partial" }, transcript });
+    expect(turn.updates).toEqual([expect.objectContaining({ questionId: "q_negocio", status: "answered" })]);
+    expect(turn.reply).toContain("¿Qué te quita el sueño hoy del negocio?");
+  });
+
   it("el brief prueba el siguiente modelo si uno devuelve JSON inválido", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "k");
     vi.stubEnv("OPENROUTER_MODEL", "malo");
