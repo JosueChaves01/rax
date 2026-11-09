@@ -13,9 +13,11 @@ import { sysRepo, type ServiceDeps } from "./base";
  * - session_scheduled:  { projectId*, sessionId*, kind?, scheduledAt? }
  * - resource_published: { projectId*, documentId*, title? }
  * - comment_added:      { projectId*, targetType*, targetId*, authorName? }
+ * - session_closed:     { projectId*, sessionId*, kind?, sessionNumber?, nextSessionId?, projectName? }
+ * - session_confirmed:  { projectId*, sessionId*, clientName?, scheduledAt?, projectName? }
  */
 
-export const NOTIFICATION_KINDS: readonly NotificationKind[] = ["project_invitation", "resource_published", "session_scheduled", "comment_added"];
+export const NOTIFICATION_KINDS: readonly NotificationKind[] = ["project_invitation", "resource_published", "session_scheduled", "comment_added", "session_closed", "session_confirmed"];
 
 const MAX_PAYLOAD_CHARS = 4000;
 const DEFAULT_LIMIT = 30;

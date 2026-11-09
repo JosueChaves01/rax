@@ -8,8 +8,8 @@
 
 import { isB2BFlow } from "@/lib/flags";
 import type { MentorSession } from "@/types/domain";
-import type { CycleStage } from "@/types/b2b";
-import { advanceCycleStage, scheduleCycleSession, type ScheduleCycleSessionInput } from "@/lib/services/cycle";
+import type { CycleStage, SessionTopic } from "@/types/b2b";
+import { advanceCycleStage, confirmAttendance, scheduleCycleSession, updateSessionAgenda, type ScheduleCycleSessionInput } from "@/lib/services/cycle";
 import { run, type ActionResult } from "./_run";
 
 function unavailable(): ActionResult<never> {
@@ -29,4 +29,19 @@ export async function advanceCycleStageAction(projectId: string, to: CycleStage)
     await advanceCycleStage(d, projectId, to);
     return undefined;
   });
+}
+
+/** El mentor edita los temas de una sesión que todavía no terminó. */
+export async function updateSessionAgendaAction(projectId: string, sessionId: string, agenda: SessionTopic[]): Promise<ActionResult> {
+  if (!isB2BFlow()) return unavailable();
+  return run(projectId, async (d) => {
+    await updateSessionAgenda(d, sessionId, agenda);
+    return undefined;
+  });
+}
+
+/** La persona cliente confirma que asistirá a una sesión agendada. */
+export async function confirmAttendanceAction(projectId: string, sessionId: string): Promise<ActionResult<{ sessionId: string; confirmedAt: string }>> {
+  if (!isB2BFlow()) return unavailable();
+  return run(projectId, (d) => confirmAttendance(d, sessionId));
 }

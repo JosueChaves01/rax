@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isActive, navFor } from "@/shared/ui/nav-items";
-import { PLATFORM_PAGES } from "@/lib/ai/platform-guide";
+import { B2B_NAV_PATHS, PLATFORM_PAGES, renderPlatformGuide } from "@/lib/ai/platform-guide";
 
 const labels = (role: "entrepreneur" | "mentor" | "admin", b2b = false) => {
   const { main, support } = navFor(role, "/app/chat", { b2b });
@@ -47,6 +47,15 @@ describe("menú según el alcance", () => {
         const guide = PLATFORM_PAGES.filter((p) => p.roles.includes(role) && (b2b || !p.flow)).map((p) => p.path);
         for (const item of [...main, ...support]) expect(guide).toContain(item.href.split("?")[0]);
       }
+    }
+  });
+
+  it("flujo B2B: la guía del agente nombra exactamente el menú de cada rol", () => {
+    for (const role of ["entrepreneur", "mentor"] as const) {
+      const { main, support } = navFor(role, "/app/chat", { b2b: true });
+      expect(B2B_NAV_PATHS[role]).toEqual([...main, ...support].map((i) => i.href.split("?")[0]));
+      const guide = renderPlatformGuide(role, { b2b: true });
+      for (const path of B2B_NAV_PATHS[role]!) expect(guide).toContain(`(${path})`);
     }
   });
 

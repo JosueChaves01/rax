@@ -3,20 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { CycleStage, ProjectMode } from "@/types/b2b";
+import { B2B_STAGES, b2bProjectTabs, b2bStageState } from "@/features/projects/stages";
 import { Tag, cx } from "@/shared/ui/primitives";
 
 /**
  * Cabecera de un proyecto B2B (RAX_B2B_FLOW): nombre, línea del ciclo (Entrevista → Sesión 1 → Ciclo
- * → Cierre) y las pestañas de cada rol. El cliente ve su entrevista; el mentor, el brief.
+ * → Cierre, de features/projects/stages.ts) y las pestañas de cada rol. El cliente ve su entrevista;
+ * el mentor, el brief. Los dos ven las sesiones.
  */
-
-const STEPS: Array<{ key: CycleStage; label: string }> = [
-  { key: "intake", label: "Entrevista" },
-  { key: "kickoff", label: "Sesión 1" },
-  { key: "cycle", label: "Ciclo" },
-  { key: "closed", label: "Cierre" },
-];
-
 export function B2BProjectHeader({
   projectId,
   name,
@@ -34,16 +28,8 @@ export function B2BProjectHeader({
 }) {
   const pathname = usePathname();
   const base = `/app/p/${projectId}`;
-  const tabs = isMentor
-    ? [
-        { href: base, label: "Inicio" },
-        { href: `${base}/brief`, label: "Brief" },
-      ]
-    : [
-        { href: base, label: "Inicio" },
-        { href: `${base}/intake`, label: "Entrevista" },
-      ];
-  const current = STEPS.findIndex((s) => s.key === stage);
+  const slug = pathname.slice(base.length).split("/")[1] ?? "";
+  const tabs = b2bProjectTabs(isMentor);
 
   return (
     <header className="space-y-4">
@@ -59,26 +45,36 @@ export function B2BProjectHeader({
       </div>
 
       <ol className="grid grid-cols-4 gap-2" aria-label="Etapa del ciclo">
-        {STEPS.map((s, i) => (
-          <li key={s.key} className="min-w-0">
-            <span className={cx("block h-1.5 rounded-full", i < current ? "bg-blue-600" : i === current ? "bg-blue-400" : "bg-slate-200")} aria-hidden />
-            <span
-              className={cx("mt-1 block truncate text-xs", i === current ? "font-semibold text-slate-900" : "text-slate-500")}
-              aria-current={i === current ? "step" : undefined}
-            >
-              {i + 1}. {s.label}
-            </span>
-          </li>
-        ))}
+        {B2B_STAGES.map((s) => {
+          const state = b2bStageState(s, stage);
+          return (
+            <li key={s.id} className="min-w-0">
+              <span
+                className={cx("block h-1.5 rounded-full", state === "done" ? "bg-emerald-600" : state === "current" ? "bg-blue-600" : "bg-slate-200")}
+                aria-hidden
+              />
+              <span
+                className={cx(
+                  "mt-1 block truncate text-xs",
+                  state === "current" ? "font-semibold text-slate-900" : state === "done" ? "text-emerald-700" : "text-slate-500",
+                )}
+                aria-current={state === "current" ? "step" : undefined}
+              >
+                {s.n}. {s.label}
+              </span>
+            </li>
+          );
+        })}
       </ol>
 
       <nav aria-label="Secciones del proyecto" className="flex gap-1 border-b border-slate-200">
         {tabs.map((t) => {
-          const active = pathname === t.href;
+          const href = t.slug ? `${base}/${t.slug}` : base;
+          const active = t.slug === slug;
           return (
             <Link
-              key={t.href}
-              href={t.href}
+              key={t.slug || "inicio"}
+              href={href}
               aria-current={active ? "page" : undefined}
               className={cx(
                 "-mb-px border-b-2 px-3 py-2 text-sm font-medium",

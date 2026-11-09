@@ -92,7 +92,14 @@ export interface MyInvitation extends ProjectInvitation {
   mentorName: string;
 }
 
-export type NotificationKind = "project_invitation" | "resource_published" | "session_scheduled" | "comment_added";
+export type NotificationKind =
+  | "project_invitation"
+  | "resource_published"
+  | "session_scheduled"
+  | "comment_added"
+  /* Fase 3 (Dev B): cierre de una sesión (al cliente) y asistencia confirmada (al mentor). */
+  | "session_closed"
+  | "session_confirmed";
 
 export interface Notification {
   id: Id;
