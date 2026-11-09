@@ -7,6 +7,8 @@ import { STAGES, stageOf, stageState } from "@/features/projects/stages";
 import { StageNav } from "./stage-nav";
 import { nextAction } from "@/lib/services/next-action";
 import { HideOnHome } from "./hide-on-home";
+import { isB2BFlow } from "@/lib/flags";
+import { B2BProjectHeader } from "./b2b-header";
 
 /**
  * Marco del proyecto: una cabecera con el nombre, lo que toca ahora y la franja de etapas.
@@ -14,7 +16,24 @@ import { HideOnHome } from "./hide-on-home";
  */
 export default async function WorkspaceLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { w } = await loadWorkspace(id);
+  const { w, actor } = await loadWorkspace(id);
+  // Flujo B2B: proyectos del mentor (mentor_id) con la línea Entrevista → Sesión 1 → Ciclo → Cierre.
+  if (isB2BFlow() && w.project.mentorId) {
+    return (
+      <div className="mx-auto max-w-[1240px] space-y-6 px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-6 sm:px-6 lg:pb-8">
+        <B2BProjectHeader
+          projectId={id}
+          name={w.project.name}
+          stage={w.project.cycleStage ?? "intake"}
+          mode={w.project.mode ?? "individual"}
+          isMentor={w.isMentorView}
+          mentorName={w.people[w.project.mentorId]?.name ?? (actor.id === w.project.mentorId ? actor.name : undefined)}
+        />
+        {w.project.status === "paused" && <Notice tone="warn">El proceso está pausado. La información se conserva.</Notice>}
+        <div className="min-w-0">{children}</div>
+      </div>
+    );
+  }
   const next = nextAction(w);
   const pending = pendingReview(w.items).length;
   const hypPending = w.hypotheses.filter((h) => h.status === "pending_approval").length;

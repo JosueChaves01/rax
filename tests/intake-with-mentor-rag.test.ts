@@ -1,20 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Profile, Project } from "@/types/domain";
 import type { ServiceDeps } from "@/lib/services/base";
 import { createMemoryRepository } from "@/lib/data/memory-repository";
 import { SimulatedProvider } from "@/lib/ai/simulated";
-import { B2B_PEOPLE, fakeBuildMentorContext, SAMPLE_INTERVIEW_GUIDE, sampleMentorDocument, sampleMentorProfile } from "./fixtures/b2b";
+import { buildMentorContext } from "@/lib/ai/mentor-context";
+import { addMentorDocument } from "@/lib/services/mentor-knowledge";
+import { runIntakeTurn, submitIntake, getIntakeState } from "@/lib/services/intake";
+import { B2B_PEOPLE, SAMPLE_INTERVIEW_GUIDE, sampleMentorDocument, sampleMentorProfile } from "./fixtures/b2b";
 
 /**
  * Integración de Fase 1 (plan técnico §4): con un documento de metodología del mentor cargado, el
  * brief cita ese documento en `citations` y cubre las preguntas obligatorias de la guía.
- * Mientras `buildMentorContext` (Dev A) sea un contrato, se usa el fake de tests/fixtures/b2b.ts;
- * al integrar se quita el vi.mock y se carga el documento con el servicio real de Dev A.
+ * Integrado (Fase 2): usa el `buildMentorContext` real de Dev A (lib/ai/mentor-context.ts) y el
+ * documento se carga con su servicio (`addMentorDocument`, que también arma los fragmentos del RAG).
  */
-vi.mock("@/lib/ai/mentor-context", () => ({ buildMentorContext: vi.fn(fakeBuildMentorContext) }));
-
-const { runIntakeTurn, submitIntake, getIntakeState } = await import("@/lib/services/intake");
-const { buildMentorContext } = await import("@/lib/ai/mentor-context");
 
 const AT = "2026-11-09T10:00:00.000Z";
 const [MARA, CAMI] = B2B_PEOPLE;
@@ -25,8 +24,7 @@ describe("intake con el RAG del mentor", () => {
     for (const p of B2B_PEOPLE) await repo.profiles.insert(p);
     const profile = sampleMentorProfile(MARA.id);
     await repo.mentorProfiles.insert({ ...profile, id: profile.mentorId });
-    const doc = sampleMentorDocument(MARA.id);
-    await repo.mentorDocuments.insert(doc);
+    const sample = sampleMentorDocument(MARA.id);
     await repo.projects.insert({
       id: "prj_panaderia", ownerId: CAMI.id, mentorId: MARA.id, mode: "individual", cycleStage: "intake", name: "Panadería La Espiga",
       description: "", nature: "operating_business", status: "active", shareConversationWithMentor: false, createdAt: AT, updatedAt: AT,
@@ -36,15 +34,20 @@ describe("intake con el RAG del mentor", () => {
     let t = 0;
     const as = (actor: Profile): ServiceDeps => ({ repo, ai: new SimulatedProvider(), actor, now: () => new Date(Date.parse(AT) + ++t * 1000).toISOString(), newId: (p) => `${p}_${++t}` });
     const cami = as(CAMI);
+    const doc = await addMentorDocument(as(MARA), { title: sample.title, filename: sample.filename, content: sample.content, fileType: sample.fileType, kind: sample.kind });
+
+    // El contexto real del mentor ya trae su perfil, su metodología y el documento con cita.
+    const ctx = await buildMentorContext(repo, MARA.id, "margen y caja del mes");
+    expect(ctx.text).toContain("<mentor_context>");
+    expect(ctx.text).toContain(sampleMentorProfile().methodology);
+    expect(ctx.text).toContain(doc.title);
+    expect(ctx.citations.map((c) => c.documentId)).toContain(doc.id);
 
     await runIntakeTurn(cami, "prj_panaderia", "");
     await runIntakeTurn(cami, "prj_panaderia", "Pan artesanal y repostería para las familias del barrio de San Pedro.");
     await runIntakeTurn(cami, "prj_panaderia", "Que a fin de mes no me alcanza la caja y no sé qué producto me deja margen.");
     await runIntakeTurn(cami, "prj_panaderia", "No sé");
     await submitIntake(cami, "prj_panaderia");
-
-    // El contexto del mentor se pidió para su propio RAG (con la identidad del sistema).
-    expect(vi.mocked(buildMentorContext)).toHaveBeenCalledWith(expect.anything(), MARA.id, expect.any(String));
 
     const { brief } = await getIntakeState(as(MARA), "prj_panaderia");
     expect(brief).toBeDefined();

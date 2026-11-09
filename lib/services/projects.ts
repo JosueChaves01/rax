@@ -4,7 +4,7 @@ import { validation } from "@/lib/errors";
 import { derivePhase } from "@/features/projects/phase";
 import { deriveDiagnosisStatus, isCurrent } from "@/features/diagnosis/rules";
 import { DIMENSION_QUESTION } from "@/features/conversation/interview";
-import { audit, guard, relationOf, sysRepo, type ServiceDeps } from "./base";
+import { audit, guard, guardWorkspace, isOnlyClient, relationOf, sysRepo, type ServiceDeps } from "./base";
 
 export async function listMyProjects(d: ServiceDeps): Promise<Project[]> {
   const owned = await d.repo.projects.list({ ownerId: d.actor.id });
@@ -111,7 +111,9 @@ async function ensureDiagnosis(d: ServiceDeps, projectId: string, fallbackDate: 
  * (historial de cambios, comentarios y auditoría, que crecen sin límite): el agente lo arma en cada turno.
  */
 export async function getWorkspace(d: ServiceDeps, projectId: string, opts: { forAgent?: boolean } = {}) {
-  const { project, rel } = await guard(d, projectId, "project.read");
+  // Pivot B2B: la persona cliente entra con su propio permiso de lectura (ver guardWorkspace).
+  const { project, rel } = await guardWorkspace(d, projectId);
+  const clientView = isOnlyClient(rel);
   const r = d.repo;
   const where = { projectId };
   const skip = <T,>(load: () => Promise<T[]>): Promise<T[]> => (opts.forAgent ? Promise.resolve([]) : load());
@@ -136,7 +138,9 @@ export async function getWorkspace(d: ServiceDeps, projectId: string, opts: { fo
       r.cycleEvaluations.list(where),
     ]);
   // Un proyecto cuyo armado inicial quedó a medias puede no tener diagnóstico: se repara en vez de romper la vista.
-  const diagnosis = diagnoses[0] ?? (await ensureDiagnosis(d, project.id, project.updatedAt));
+  // La persona cliente no lee ni crea el diagnóstico (RLS se lo oculta): se usa uno vacío en memoria.
+  const diagnosis =
+    diagnoses[0] ?? (clientView ? { id: `dx_${project.id}`, projectId: project.id, status: "exploring" as const, updatedAt: project.updatedAt } : await ensureDiagnosis(d, project.id, project.updatedAt));
   const status = deriveDiagnosisStatus(diagnosis, items, sessions, hypotheses);
   const phase = derivePhase({
     messages,
@@ -165,10 +169,13 @@ export async function getWorkspace(d: ServiceDeps, projectId: string, opts: { fo
     mentorshipGoals = goals;
   }
 
-  const isMentorView = rel.isAssignedMentor && !rel.isOwner && !rel.isCollaborator;
-  const canSeeConversation = !isMentorView || project.shareConversationWithMentor;
+  const isMentorView = (rel.isAssignedMentor || rel.isProjectMentor === true) && !rel.isOwner && !rel.isCollaborator;
+  // La conversación del proyecto (incluye las entrevistas de intake de cada persona) no es para el cliente.
+  const canSeeConversation = !clientView && (!isMentorView || project.shareConversationWithMentor);
+  const mentorIds = [...new Set([...(project.mentorId ? [project.mentorId] : []), ...assignments.map((a) => a.mentorId)])];
 
-  const peopleIds = new Set<string>([project.ownerId, ...assignments.map((a) => a.mentorId)]);
+  // Proyectos B2B: owner_id queda vacío (el cliente entra como miembro `client`).
+  const peopleIds = new Set<string>([project.ownerId, ...mentorIds].filter(Boolean));
   const people = (await Promise.all([...peopleIds].map((id) => r.profiles.get(id)))).filter(Boolean);
   const ownerProfile = people.find((p) => p!.id === project.ownerId);
 
@@ -232,7 +239,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string, opts: { fo
     mentorshipGoals: byTime(mentorshipGoals),
     roadmapMilestones: byTime(roadmapMilestones).sort((a, b) => a.orderIndex - b.orderIndex),
     evidence: byTime(evidence),
-    mentors: assignments.map((a) => a.mentorId),
+    mentors: mentorIds,
     people: Object.fromEntries(people.map((p) => [p!.id, { id: p!.id, name: p!.name, role: p!.role }])),
     /** Lo que el emprendedor contó en su bienvenida: orienta al mentor desde la primera revisión. */
     founderContext: ownerProfile?.onboarding?.intent === "entrepreneur" ? ownerProfile.onboarding : undefined,
@@ -240,7 +247,7 @@ export async function getWorkspace(d: ServiceDeps, projectId: string, opts: { fo
     mentorContext: Object.fromEntries(
       people.filter((p) => p!.onboarding?.intent === "mentor").map((p) => [p!.id, p!.onboarding as MentorOnboarding]),
     ),
-    audit: isMentorView ? [] : byTime(auditEvents).slice(-50),
+    audit: isMentorView || clientView ? [] : byTime(auditEvents).slice(-50),
     permissions,
     ai: { id: d.ai.id, label: d.ai.label },
   };

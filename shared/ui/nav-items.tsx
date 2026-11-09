@@ -6,7 +6,7 @@ import type { Role } from "@/types/domain";
  * Mantener alineado con PLATFORM_PAGES en lib/ai/platform-guide.ts.
  */
 
-export type NavIcon = "home" | "inbox" | "people" | "ai" | "tasks" | "calendar" | "doc" | "book" | "library" | "ops" | "chart";
+export type NavIcon = "home" | "inbox" | "people" | "ai" | "tasks" | "calendar" | "doc" | "book" | "library" | "ops" | "chart" | "user";
 
 export interface NavItem {
   label: string;
@@ -21,7 +21,16 @@ export interface NavGroups {
   support: NavItem[];
 }
 
-export function navFor(role: Role, chatHref = "/app/chat"): NavGroups {
+export interface NavOptions {
+  /**
+   * Flujo B2B (RAX_B2B_FLOW). Lo decide el servidor y llega como prop: este archivo también corre en
+   * el navegador, donde la variable de entorno no existe.
+   */
+  b2b?: boolean;
+}
+
+export function navFor(role: Role, chatHref = "/app/chat", opts: NavOptions = {}): NavGroups {
+  if (opts.b2b && role !== "admin") return b2bNav(role, chatHref);
   if (role === "admin") {
     return {
       main: [{ label: "Operaciones", href: "/app/admin", icon: "ops" }],
@@ -55,6 +64,31 @@ export function navFor(role: Role, chatHref = "/app/chat"): NavGroups {
       { label: "Documentos", href: "/app/documentos", icon: "doc" },
       { label: "Aprendizaje", href: "/app/aprendizaje", icon: "book" },
     ],
+  };
+}
+
+/** Menú del flujo B2B: el mentor conduce a sus clientes; el cliente ve sus proyectos, sesiones y material. */
+function b2bNav(role: Role, chatHref: string): NavGroups {
+  if (role === "mentor") {
+    return {
+      main: [
+        { label: "Bandeja", href: "/app", icon: "inbox", exact: true },
+        { label: "Clientes", href: "/app/mentor", icon: "people", exact: true },
+        { label: "Asistente IA", href: chatHref, icon: "ai" },
+        { label: "Sesiones", href: "/app/sesiones", icon: "calendar" },
+        { label: "Mi perfil", href: "/app/mentor/perfil", icon: "user" },
+      ],
+      support: [],
+    };
+  }
+  return {
+    main: [
+      { label: "Mis proyectos", href: "/app", icon: "home", exact: true },
+      { label: "Sesiones", href: "/app/sesiones", icon: "calendar" },
+      // Hasta que exista /app/p/[id]/material (Fase 4), el material publicado se ve en Documentos.
+      { label: "Material", href: "/app/documentos", icon: "doc" },
+    ],
+    support: [],
   };
 }
 
@@ -145,6 +179,13 @@ export function NavGlyph({ icon, className = "w-4 h-4" }: { icon: NavIcon; class
       return (
         <svg {...p}>
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        </svg>
+      );
+    case "user":
+      return (
+        <svg {...p}>
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
         </svg>
       );
     case "chart":

@@ -51,6 +51,16 @@ const IMPLEMENTED = new Set([
   "revokeInvitation",
   "setClientContext",
   "markIntakeReviewed",
+  // Dev B · Fase 2
+  "notify",
+  "listNotifications",
+  "markNotificationRead",
+  "listMyInvitations",
+  "respondInvitation",
+  "syncPendingInvitations",
+  "getClientHome",
+  "scheduleCycleSession",
+  "advanceCycleStage",
 ]);
 /** Exportaciones nuevas, fuera del contrato de Fase 0 (ayudantes de los servicios ya implementados). */
 const EXTRA_EXPORTS = new Set([
@@ -62,6 +72,13 @@ const EXTRA_EXPORTS = new Set([
   "normalizeEmail",
   "getIntakeBriefsForMentor",
   "listMentorProjects",
+  // Dev B · Fase 2
+  "markNotificationsReadWhere",
+  "onIntakeSubmitted",
+  "canAdvance",
+  "stageOfProject",
+  "cleanAgenda",
+  "nextSessionOf",
 ]);
 
 const deps = { repo: createMemoryRepository(), actor: B2B_PEOPLE[0] } as unknown as ServiceDeps;
