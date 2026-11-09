@@ -43,7 +43,7 @@ import type {
 } from "@/types/b2b";
 import { conflict, notFound } from "@/lib/errors";
 import type { Db, Row } from "./db";
-import type { MentorProfileRow, ProjectMemberRow, Repository, RepositoryFunctions, Table } from "./repository";
+import type { MentorProfileRow, ProjectMemberRow, Repository, RepositoryFunctions, SessionLiveNotesRow, Table } from "./repository";
 
 /**
  * Repositorio sobre Postgres/Supabase. Traduce el modelo de dominio (camelCase, campos compuestos,
@@ -856,6 +856,16 @@ const assessmentSubmissionSpec: Spec<AssessmentSubmission> = {
   },
 };
 
+const sessionLiveNotesSpec: Spec<SessionLiveNotesRow> = {
+  table: "session_live_notes",
+  fields: {
+    // La clave es la sesión: `id` es la columna session_id.
+    id: ["session_id", same], projectId: ["project_id", same], text: ["text", same], version: ["version", same],
+    updatedAt: ["updated_at", tsReq], updatedBy: ["updated_by", nul],
+  },
+  key: (id) => ({ session_id: id }),
+};
+
 const projectDocumentChunkSpec: Spec<ProjectDocumentChunk> = {
   table: "project_document_chunks",
   fields: {
@@ -940,5 +950,6 @@ export function createPgRepository(db: Db): Repository {
     intakeBriefs: new PgTable(db, intakeBriefSpec),
     assessments: new PgTable(db, assessmentSpec),
     assessmentSubmissions: new PgTable(db, assessmentSubmissionSpec),
+    sessionLiveNotes: new PgTable(db, sessionLiveNotesSpec),
   };
 }

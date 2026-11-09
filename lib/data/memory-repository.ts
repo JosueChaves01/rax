@@ -108,6 +108,7 @@ export function createMemoryRepository(): Repository {
     projectInvitations: new MemoryTable(),
     notifications: new MemoryTable(),
     intakeBriefs: new MemoryTable(),
+    sessionLiveNotes: new MemoryTable(),
     assessments: new MemoryTable(),
     assessmentSubmissions: new MemoryTable(),
   };

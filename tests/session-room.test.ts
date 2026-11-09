@@ -57,14 +57,16 @@ describe.skipIf(BACKEND === "pg")("sala de la sesión (Fase 3, Dev A)", () => {
   it("notas en vivo: solo el mentor de la sesión, con control de concurrencia", async () => {
     const { w, session, mentor, client } = await setup();
     const first = await saveLiveNotes(mentor, session.id, "Vende 300 panes al día", "");
-    expect((await w.repo.mentorSessions.get(session.id))).toMatchObject({ liveNotes: "Vende 300 panes al día", liveNotesUpdatedAt: first.updatedAt });
+    // Las notas viven en session_live_notes (solo el mentor), no en la fila de la sesión que lee el cliente.
+    expect(await w.repo.sessionLiveNotes.get(session.id)).toMatchObject({ text: "Vende 300 panes al día", updatedAt: first.updatedAt, version: 1, updatedBy: "men1" });
+    expect((await w.repo.mentorSessions.get(session.id))?.liveNotes ?? "").toBe("");
 
     const second = await saveLiveNotes(mentor, session.id, "Vende 300 panes al día\n- caja", first.updatedAt);
     expect(second.updatedAt > first.updatedAt).toBe(true);
     // Otra pestaña con la marca vieja (o que cree que nunca se guardó): conflicto, no escribe.
     expect((await errorOf(saveLiveNotes(mentor, session.id, "pisado", first.updatedAt)))?.code).toBe("conflict");
     expect((await errorOf(saveLiveNotes(mentor, session.id, "pisado", "")))?.code).toBe("conflict");
-    expect((await w.repo.mentorSessions.get(session.id))?.liveNotes).toBe("Vende 300 panes al día\n- caja");
+    expect((await w.repo.sessionLiveNotes.get(session.id))?.text).toBe("Vende 300 panes al día\n- caja");
     // Sin marca se sobrescribe.
     await saveLiveNotes(mentor, session.id, "a mano");
 
@@ -75,6 +77,22 @@ describe.skipIf(BACKEND === "pg")("sala de la sesión (Fase 3, Dev A)", () => {
 
     await w.repo.mentorSessions.update(session.id, { status: "completed" });
     expect((await errorOf(saveLiveNotes(mentor, session.id, "tarde")))?.code).toBe("validation");
+  });
+
+  it("notas en vivo: dos guardados con la misma marca no se pisan (escritura condicional)", async () => {
+    const { w, session, mentor } = await setup();
+    const first = await saveLiveNotes(mentor, session.id, "base", "");
+    const results = await Promise.allSettled([
+      saveLiveNotes(mentor, session.id, "pestaña A", first.updatedAt),
+      saveLiveNotes(mentor, session.id, "pestaña B", first.updatedAt),
+    ]);
+    const ok = results.filter((r) => r.status === "fulfilled");
+    const failed = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(ok).toHaveLength(1);
+    expect(failed.map((r) => (r.reason as { code?: string }).code)).toEqual(["conflict"]);
+    const row = await w.repo.sessionLiveNotes.get(session.id);
+    expect(row?.version).toBe(2);
+    expect(["pestaña A", "pestaña B"]).toContain(row?.text);
   });
 
   it("el mentor ve notas, brief y contexto; el cliente no", async () => {

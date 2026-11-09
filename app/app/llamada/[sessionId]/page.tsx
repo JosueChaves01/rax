@@ -13,6 +13,7 @@ import { isB2BFlow } from "@/lib/flags";
 import { getSessionRoomState, type SessionRoomState } from "@/lib/services/session-room";
 import { AgreementPanel, ConfirmedAgreementView, LiveNotesPanel } from "./b2b-panels";
 import type { RoomSection } from "./room";
+import { PublishPanel } from "./publish-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sala de mentoría · RAX" };
@@ -81,12 +82,12 @@ export default async function CallRoomPage({ params, searchParams }: { params: P
       subtitle={subtitle}
       backHref={sessionHref(session)}
       sections={room ? mentorB2BSections(room, buildContextSections({ w, session, documents, replies, b2b: { briefs: room.briefs ?? [], clientContext: room.clientContext ?? "", agenda: room.session.agenda } })) : buildContextSections({ w, session, documents, replies })}
-      b2b={room ? { viewer: "mentor" } : undefined}
+      b2b={room ? { viewer: "mentor", publish: { mode: room.project.mode, clients: room.clients } } : undefined}
     />
   );
 }
 
-/** Mentor en B2B: «Notas en vivo» después de la agenda y, en la Sesión 1, el panel del acuerdo. */
+/** Mentor en B2B: «Notas en vivo» después de la agenda, en la Sesión 1 el panel del acuerdo, y «Publicar al cliente». */
 function mentorB2BSections(room: SessionRoomState, base: RoomSection[]): RoomSection[] {
   const closed = room.session.status === "completed";
   const extra: RoomSection[] = [
@@ -115,6 +116,8 @@ function mentorB2BSections(room: SessionRoomState, base: RoomSection[]): RoomSec
       ),
     });
   }
+  // Fase 4: publicar al cliente la síntesis (un clic), las transcripciones y el material de la sesión.
+  extra.push({ id: "publicar", title: "Publicar al cliente", short: "Publicar", node: <PublishPanel sessionId={room.session.id} /> });
   const at = base.findIndex((s) => s.id === "sesion") + 1;
   return [...base.slice(0, at), ...extra, ...base.slice(at)];
 }

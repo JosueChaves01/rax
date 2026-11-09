@@ -10,6 +10,7 @@ import { useSessionCall } from "@/shared/ui/use-session-call";
 import { useMeshCall, type MeshRemote } from "@/shared/ui/use-mesh-call";
 import { Notice, cx } from "@/shared/ui/primitives";
 import { RoomAssistant, type RoomMode } from "./assistant";
+import type { PublishAudience } from "@/app/app/p/[id]/documentos/publish-controls";
 
 /** Sección del contexto ya serializada desde el servidor. */
 export interface RoomSection {
@@ -43,6 +44,7 @@ const ICON: Record<string, string> = {
   brief: "M7 3h7l5 5v13H7zM14 3v5h5M10 12h6M10 16h6",
   vivo: "M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4M3 3h7",
   acuerdo: "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9",
+  publicar: "M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4",
 };
 
 function Icon({ name, off, className }: { name: string; off?: boolean; className?: string }) {
@@ -217,7 +219,11 @@ export interface RoomExtras {
    * Pivot B2B (solo con RAX_B2B_FLOW): quién mira la sala. El cliente ve solo la llamada y el
    * acuerdo confirmado (sin asistente, sin cierre). Sin valor, la sala es la de siempre.
    */
-  b2b?: { viewer: "mentor" | "client" };
+  b2b?: {
+    viewer: "mentor" | "client";
+    /** Mentor (Fase 4): a quién se le puede publicar desde el asistente de la sala. */
+    publish?: PublishAudience;
+  };
 }
 
 type RoomProps = { sessionId: string; title: string; subtitle: string; backHref: string; sections: RoomSection[] } & RoomExtras;
@@ -310,7 +316,16 @@ function Room({
   const content: Record<string, { title: string; short: string; count?: number; node: ReactNode }> = Object.fromEntries(sections.map((s) => [s.id, s]));
 
   const assistantPanel = (cls: string, onClose?: () => void) => (
-    <RoomAssistant projectId={projectId} sessionId={sessionId} sessionTitle={sessionTitle} mode={mode} isMentor={isMentor} className={cls} onClose={onClose} />
+    <RoomAssistant
+      projectId={projectId}
+      sessionId={sessionId}
+      sessionTitle={sessionTitle}
+      mode={mode}
+      isMentor={isMentor}
+      className={cls}
+      onClose={onClose}
+      b2b={b2b?.viewer === "mentor" ? b2b.publish : undefined}
+    />
   );
 
   return (
