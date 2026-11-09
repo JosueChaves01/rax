@@ -9,15 +9,19 @@ import { NavGlyph, isActive, navFor } from "./nav-items";
 
 interface MobileBottomNavProps {
   role: Role;
+  /** Flujo B2B (lo decide el servidor). */
+  b2b?: boolean;
+  /** Flujo B2B: proyectos donde la persona es cliente (para «Material»). */
+  clientProjectIds?: string[];
 }
 
 /** Barra inferior en celular: las 3 primeras entradas del menú del rol y «Más» con el resto. */
-export function MobileBottomNav({ role }: MobileBottomNavProps) {
+export function MobileBottomNav({ role, b2b = false, clientProjectIds }: MobileBottomNavProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const currentProjectId = pathname.match(/\/app\/p\/([^/]+)/)?.[1];
   const chatHref = currentProjectId ? `/app/chat?project=${currentProjectId}` : "/app/chat";
-  const { main, support } = navFor(role, chatHref);
+  const { main, support } = navFor(role, chatHref, { b2b, clientProjectIds, currentProjectId });
   const all = [...main, ...support];
   const bar = all.slice(0, 3);
   const rest = all.slice(3);

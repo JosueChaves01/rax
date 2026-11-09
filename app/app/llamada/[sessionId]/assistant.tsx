@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createProjectThreadAction, loadThreadMessagesAction, sendClaudeAgentMessageAction } from "@/app/actions";
+import { openRoomAssistantAction } from "@/app/actions/mentor";
 import { FormattedText } from "@/app/app/chat/formatted-text";
 import { cx } from "@/shared/ui/primitives";
+import type { AgentArtifact, AgentMessage } from "@/types/domain";
+import { PublishControls, type PublishAudience } from "@/app/app/p/[id]/documentos/publish-controls";
 
 export type RoomMode = "reunion" | "cierre";
 
@@ -12,11 +15,61 @@ interface Msg {
   from: "user" | "assistant";
   text: string;
   failed?: boolean;
+  /** Pivot B2B: documentos guardados en el proyecto y propuestas de publicación de este mensaje. */
+  documents?: Array<{ documentId: string; title: string }>;
+  publishCards?: PublishCard[];
 }
+
+interface PublishCard {
+  documentId: string;
+  title: string;
+  description?: string;
+  audienceClientId?: string;
+  sessionId?: string;
+}
+
+/** Documentos que el agente dejó en el proyecto (llevan `documentId`): se pueden publicar desde el chat. */
+function savedDocuments(artifacts: AgentArtifact[] | undefined): Msg["documents"] {
+  const docs = (artifacts ?? []).filter((a) => a.type === "application/vnd.rax.document" && a.documentId).map((a) => ({ documentId: a.documentId!, title: a.title }));
+  return docs.length ? docs : undefined;
+}
+
+/** Tarjetas de `propose_publish` (lib/ai/tools/mentor): el mentor confirma con el botón. */
+function publishCards(proposals: Array<Record<string, unknown>> | undefined): PublishCard[] | undefined {
+  const cards = (proposals ?? []).flatMap((p) => {
+    const m = (p.metadata ?? {}) as Record<string, unknown>;
+    if (m.kind !== "publish_document" || typeof m.documentId !== "string") return [];
+    return [
+      {
+        documentId: m.documentId,
+        title: typeof p.title === "string" ? p.title : "Publicar al cliente",
+        description: typeof p.description === "string" ? p.description : undefined,
+        audienceClientId: typeof m.audienceClientId === "string" ? m.audienceClientId : undefined,
+        sessionId: typeof m.sessionId === "string" ? m.sessionId : undefined,
+      },
+    ];
+  });
+  return cards.length ? cards : undefined;
+}
+
+const toMsg = (m: Pick<AgentMessage, "id" | "author" | "content" | "status" | "artifacts" | "proposals">): Msg => ({
+  id: m.id,
+  from: m.author,
+  text: m.content,
+  failed: m.status === "failed",
+  documents: m.author === "assistant" ? savedDocuments(m.artifacts) : undefined,
+  publishCards: m.author === "assistant" ? publishCards(m.proposals) : undefined,
+});
 
 const SUGGESTIONS: Record<RoomMode, string[]> = {
   reunion: ["¿Qué falta de la agenda?", "Resumime lo que llevamos", "¿Qué pregunta conviene hacer ahora?"],
   cierre: ["Proponé el acuerdo de la sesión", "¿Qué compromisos quedaron?", "Hacé la síntesis más corta"],
+};
+
+/** Flujo B2B (mentor): además de la sesión, su metodología y el material para el cliente. */
+const B2B_SUGGESTIONS: Record<RoomMode, string[]> = {
+  reunion: ["¿Qué falta de la agenda?", "¿Qué dice mi metodología sobre esto?", "Resume el último documento del proyecto"],
+  cierre: ["Arma una guía con lo que trabajamos hoy", "¿Qué compromisos quedaron?", "¿Qué material conviene publicarle?"],
 };
 
 const threadKey = (sessionId: string) => `rax:sala-hilo:${sessionId}`;
@@ -106,6 +159,7 @@ export function RoomAssistant({
   isMentor,
   className,
   onClose,
+  b2b,
 }: {
   projectId: string;
   sessionId: string;
@@ -114,6 +168,11 @@ export function RoomAssistant({
   isMentor: boolean;
   className?: string;
   onClose?: () => void;
+  /**
+   * Pivot B2B (mentor, con RAX_B2B_FLOW): el hilo vive en el servidor (agent_threads con
+   * scope = session_room) y los documentos generados se publican al cliente desde el chat.
+   */
+  b2b?: PublishAudience;
 }) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -124,8 +183,27 @@ export function RoomAssistant({
   const [error, setError] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
 
+  const serverThread = Boolean(b2b);
+
+  // B2B: el hilo de la sala es uno por mentor y sesión, en el servidor (cualquier dispositivo).
+  useEffect(() => {
+    if (!serverThread) return;
+    let alive = true;
+    openRoomAssistantAction(sessionId).then((res) => {
+      if (!alive) return;
+      if (res.ok && res.data) {
+        setThreadId(res.data.threadId);
+        setMessages(res.data.messages.map(toMsg));
+      } else if (!res.ok) setError(res.error);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [serverThread, sessionId]);
+
   // Si ya se conversó en esta sesión (en este navegador), se retoma el mismo hilo.
   useEffect(() => {
+    if (serverThread) return;
     const saved = readThread(sessionId);
     if (!saved) return;
     setThreadId(saved);
@@ -134,7 +212,7 @@ export function RoomAssistant({
         setMessages(res.data.messages.map((m) => ({ id: m.id, from: m.author, text: m.content, failed: m.status === "failed" })));
       }
     });
-  }, [projectId, sessionId]);
+  }, [projectId, sessionId, serverThread]);
 
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" });
@@ -160,6 +238,12 @@ export function RoomAssistant({
     setSending(true);
     try {
       let tid = threadId;
+      if (!tid && serverThread) {
+        const opened = await openRoomAssistantAction(sessionId);
+        if (!opened.ok || !opened.data) throw new Error(!opened.ok ? opened.error : "No se pudo abrir la conversación.");
+        tid = opened.data.threadId;
+        setThreadId(tid);
+      }
       if (!tid) {
         const created = await createProjectThreadAction(projectId, `Sala · ${sessionTitle}`.slice(0, 120));
         if (!created.ok || !created.data) throw new Error(!created.ok ? created.error : "No se pudo abrir la conversación.");
@@ -180,7 +264,10 @@ export function RoomAssistant({
       });
       if (!res.ok || !res.data) throw new Error(!res.ok ? res.error : "Sin respuesta.");
       const data = res.data;
-      setMessages((m) => [...m.map((x) => (x.id === tempId ? { ...x, id: data.userMessage.id } : x)), { id: data.assistantMessage.id, from: "assistant", text: data.reply, failed: data.assistantMessage.status === "failed" }]);
+      setMessages((m) => [
+        ...m.map((x) => (x.id === tempId ? { ...x, id: data.userMessage.id } : x)),
+        { ...toMsg(data.assistantMessage), text: data.reply },
+      ]);
       setFollowUps(data.followUps ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo enviar.");
@@ -189,7 +276,7 @@ export function RoomAssistant({
     }
   };
 
-  const chips = messages.length ? followUps : SUGGESTIONS[mode];
+  const chips = messages.length ? followUps : (b2b ? B2B_SUGGESTIONS : SUGGESTIONS)[mode];
 
   return (
     <section aria-label="Asistente de RAX" className={cx("flex min-h-0 flex-col bg-white", className)}>
@@ -208,7 +295,9 @@ export function RoomAssistant({
       <div ref={list} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 && !sending && (
           <p className="rounded-2xl border border-dashed border-slate-200 px-3 py-3 text-xs leading-relaxed text-slate-500">
-            Preguntale lo que necesités durante la sesión o dictale una nota con el micrófono. La conversación queda en el asistente como «Sala · {sessionTitle}».
+            {b2b
+              ? "Pregúntale lo que necesites durante la sesión, pídele que resuma un documento o que arme material para tu cliente. Lo que genere queda solo para ti hasta que lo publiques. La conversación queda guardada en esta sesión."
+              : `Preguntale lo que necesités durante la sesión o dictale una nota con el micrófono. La conversación queda en el asistente como «Sala · ${sessionTitle}».`}
           </p>
         )}
         {messages.map((m) => (
@@ -220,6 +309,26 @@ export function RoomAssistant({
               )}
             >
               {m.from === "user" ? <p className="whitespace-pre-wrap">{m.text}</p> : <FormattedText content={m.text} />}
+              {b2b && m.documents?.map((doc) => (
+                <div key={doc.documentId} className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-xs font-semibold text-slate-900">{doc.title}</p>
+                  <p className="text-[11px] text-slate-500">Guardado en los documentos del proyecto · solo tú lo ves</p>
+                  <PublishControls documentId={doc.documentId} audience={b2b} sessionId={sessionId} compact />
+                </div>
+              ))}
+              {b2b && m.publishCards?.map((card) => (
+                <div key={`${card.documentId}-${card.audienceClientId ?? "all"}`} className="mt-2 rounded-xl border border-blue-200 bg-blue-50/60 px-3 py-2">
+                  <p className="text-xs font-semibold text-slate-900">{card.title}</p>
+                  {card.description && <p className="text-[11px] text-slate-600">{card.description}</p>}
+                  <PublishControls
+                    documentId={card.documentId}
+                    audience={b2b}
+                    sessionId={card.sessionId}
+                    defaultAudienceClientId={card.audienceClientId}
+                    compact
+                  />
+                </div>
+              ))}
             </div>
           </div>
         ))}

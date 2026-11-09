@@ -51,6 +51,105 @@ function pickMime(): string | undefined {
   return undefined;
 }
 
+/**
+ * Graba el micrófono propio en trozos de ~15 s y los manda a transcribir (/api/llamadas/<id>/audio);
+ * los trozos casi en silencio no se envían. Lo usan la llamada 1:1 y la malla (use-mesh-call.ts).
+ * Devuelve null si no hay micrófono, el navegador no graba o la transcripción está apagada.
+ */
+export function startTranscriptRecorder(opts: {
+  stream: MediaStream;
+  call: SessionCall;
+  /** Se consulta antes de cada trozo: false detiene la grabación. */
+  isEnabled: () => boolean;
+  /** Sin transcripción (falta configurarla o se agotó el cupo del día). */
+  onUnavailable: () => void;
+  onError: (message: string) => void;
+  onSegment: (segment: LiveSegment) => void;
+}): { stop: () => Promise<void> } | null {
+  const track = opts.stream.getAudioTracks()[0];
+  const mime = pickMime();
+  if (!track || !mime || !opts.isEnabled()) return null;
+  const audioOnly = new MediaStream([track]);
+  let speechFrames = 0;
+  let stopped = false;
+  let uploads: Promise<void>[] = [];
+
+  // Detector simple de voz para no mandar trozos en silencio.
+  const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const ctx = new AudioCtx();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  ctx.createMediaStreamSource(audioOnly).connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  const meter = window.setInterval(() => {
+    if (!track.enabled) return;
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (const v of buf) sum += v * v;
+    if (Math.sqrt(sum / buf.length) > SPEECH_RMS) speechFrames++;
+  }, 200);
+
+  const upload = async (blob: Blob, offsetMs: number) => {
+    const form = new FormData();
+    form.append("audio", blob, "fragmento");
+    form.append("offsetMs", String(offsetMs));
+    try {
+      const res = await fetch(`/api/llamadas/${opts.call.id}/audio`, { method: "POST", body: form });
+      const json = (await res.json().catch(() => ({}))) as { segment?: LiveSegment | null; error?: string; code?: string };
+      if (!res.ok) {
+        if (json.code === "transcription_unavailable" || json.code === "rate_limited") opts.onUnavailable();
+        if (json.error) opts.onError(json.error);
+        return;
+      }
+      if (json.segment) opts.onSegment(json.segment);
+    } catch {
+      opts.onError("Se perdió un fragmento de la transcripción por la conexión.");
+    }
+  };
+
+  let recorder: MediaRecorder | null = null;
+  let timer = 0;
+  const cycle = () => {
+    if (stopped || !opts.isEnabled()) return;
+    const startedAt = Date.now();
+    const offsetMs = Math.max(0, startedAt - Date.parse(opts.call.startedAt));
+    const parts: Blob[] = [];
+    speechFrames = 0;
+    recorder = new MediaRecorder(audioOnly, { mimeType: mime, audioBitsPerSecond: 32_000 });
+    recorder.ondataavailable = (e) => e.data.size && parts.push(e.data);
+    recorder.onstop = () => {
+      const blob = new Blob(parts, { type: mime });
+      if (speechFrames >= MIN_SPEECH_FRAMES && blob.size > 0) uploads.push(upload(blob, offsetMs));
+      if (!stopped) cycle();
+    };
+    recorder.start();
+    timer = window.setTimeout(() => recorder?.state === "recording" && recorder.stop(), CHUNK_MS);
+  };
+  cycle();
+
+  return {
+    stop: async () => {
+      stopped = true;
+      window.clearTimeout(timer);
+      window.clearInterval(meter);
+      if (recorder?.state === "recording") {
+        await new Promise<void>((resolve) => {
+          const prev = recorder!.onstop;
+          recorder!.onstop = (e) => {
+            prev?.call(recorder!, e);
+            resolve();
+          };
+          recorder!.stop();
+        });
+      }
+      const pending = uploads;
+      uploads = [];
+      await Promise.allSettled(pending);
+      ctx.close().catch(() => {});
+    },
+  };
+}
+
 export function useSessionCall(opts: {
   sessionId: string;
   projectId: string;
@@ -149,94 +248,21 @@ export function useSessionCall(opts: {
   /* ── Transcripción: trozos del propio micrófono ── */
 
   const startRecorder = useCallback((stream: MediaStream, current: SessionCall) => {
-    const track = stream.getAudioTracks()[0];
-    const mime = pickMime();
-    if (!track || !mime || !transcribingRef.current) return;
-    const audioOnly = new MediaStream([track]);
-    let speechFrames = 0;
-    let stopped = false;
-    let uploads: Promise<void>[] = [];
-
-    // Detector simple de voz para no mandar trozos en silencio.
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new AudioCtx();
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
-    ctx.createMediaStreamSource(audioOnly).connect(analyser);
-    const buf = new Float32Array(analyser.fftSize);
-    const meter = window.setInterval(() => {
-      if (!track.enabled) return;
-      analyser.getFloatTimeDomainData(buf);
-      let sum = 0;
-      for (const v of buf) sum += v * v;
-      if (Math.sqrt(sum / buf.length) > SPEECH_RMS) speechFrames++;
-    }, 200);
-
-    const upload = async (blob: Blob, offsetMs: number) => {
-      const form = new FormData();
-      form.append("audio", blob, "fragmento");
-      form.append("offsetMs", String(offsetMs));
-      try {
-        const res = await fetch(`/api/llamadas/${current.id}/audio`, { method: "POST", body: form });
-        const json = (await res.json().catch(() => ({}))) as { segment?: LiveSegment | null; error?: string; code?: string };
-        if (!res.ok) {
-          if (json.code === "transcription_unavailable" || json.code === "rate_limited") {
-            transcribingRef.current = false;
-            setTranscribing(false);
-          }
-          if (json.error) setError(json.error);
-          return;
-        }
-        if (json.segment) {
-          addSegment(json.segment);
-          send("segment", { segment: json.segment });
-        }
-      } catch {
-        setError("Se perdió un fragmento de la transcripción por la conexión.");
-      }
-    };
-
-    let recorder: MediaRecorder | null = null;
-    let timer = 0;
-    const cycle = () => {
-      if (stopped || !transcribingRef.current) return;
-      const startedAt = Date.now();
-      const offsetMs = Math.max(0, startedAt - Date.parse(current.startedAt));
-      const parts: Blob[] = [];
-      speechFrames = 0;
-      recorder = new MediaRecorder(audioOnly, { mimeType: mime, audioBitsPerSecond: 32_000 });
-      recorder.ondataavailable = (e) => e.data.size && parts.push(e.data);
-      recorder.onstop = () => {
-        const blob = new Blob(parts, { type: mime });
-        if (speechFrames >= MIN_SPEECH_FRAMES && blob.size > 0) uploads.push(upload(blob, offsetMs));
-        if (!stopped) cycle();
-      };
-      recorder.start();
-      timer = window.setTimeout(() => recorder?.state === "recording" && recorder.stop(), CHUNK_MS);
-    };
-    cycle();
-
-    recorderRef.current = {
-      stop: async () => {
-        stopped = true;
-        window.clearTimeout(timer);
-        window.clearInterval(meter);
-        if (recorder?.state === "recording") {
-          await new Promise<void>((resolve) => {
-            const prev = recorder!.onstop;
-            recorder!.onstop = (e) => {
-              prev?.call(recorder!, e);
-              resolve();
-            };
-            recorder!.stop();
-          });
-        }
-        const pending = uploads;
-        uploads = [];
-        await Promise.allSettled(pending);
-        ctx.close().catch(() => {});
+    if (!transcribingRef.current) return;
+    recorderRef.current = startTranscriptRecorder({
+      stream,
+      call: current,
+      isEnabled: () => transcribingRef.current,
+      onUnavailable: () => {
+        transcribingRef.current = false;
+        setTranscribing(false);
       },
-    };
+      onError: setError,
+      onSegment: (segment) => {
+        addSegment(segment);
+        send("segment", { segment });
+      },
+    });
   }, [addSegment, send]);
 
   /* ── Ciclo de vida ── */

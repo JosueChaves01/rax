@@ -44,6 +44,7 @@ const KIND_TITLE: Record<MentorSessionKind, string> = {
   exploratory: "Sesión exploratoria",
   follow_up: "Sesión de seguimiento",
   evaluation: "Evaluación de ciclo",
+  kickoff: "Sesión 1: acuerdos",
 };
 
 const STATUS_TAG = {

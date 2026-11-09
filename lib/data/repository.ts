@@ -33,6 +33,16 @@ import type {
   ProjectKnowledgeDocument,
   ProjectDocumentChunk,
 } from "@/types/domain";
+import type {
+  Assessment,
+  AssessmentSubmission,
+  IntakeBriefRecord,
+  MentorDocument,
+  MentorDocumentChunk,
+  MentorProfile,
+  Notification,
+  ProjectInvitation,
+} from "@/types/b2b";
 
 /**
  * Puerto de persistencia. Los servicios de dominio solo conocen esta interfaz:
@@ -69,6 +79,20 @@ export type AiUsageKind = "agent_message" | "audio_chunk" | "web_search";
 
 /** Tablas con clave compuesta se exponen con un id sintético. */
 export type ProjectMemberRow = ProjectMember & { id: string };
+/** `mentor_profiles` tiene como clave el id del mentor: `id` = `mentorId`. */
+export type MentorProfileRow = MentorProfile & { id: string };
+/**
+ * Notas en vivo del mentor en la sala (`session_live_notes`, migración 20261109000103). La clave es
+ * la sesión: `id` = `session_id`. `version` sube en cada guardado (actualización condicional).
+ */
+export interface SessionLiveNotesRow {
+  id: string;
+  projectId: string;
+  text: string;
+  version: number;
+  updatedAt: string;
+  updatedBy?: string;
+}
 
 export interface Repository {
   agentSessions: Table<AgentSession>;
@@ -104,5 +128,16 @@ export interface Repository {
   cycleEvaluations: Table<CycleEvaluation>;
   projectDocuments: Table<ProjectKnowledgeDocument>;
   projectDocumentChunks: Table<ProjectDocumentChunk>;
+  /* Pivot B2B (types/b2b.ts). */
+  mentorProfiles: Table<MentorProfileRow>;
+  mentorDocuments: Table<MentorDocument>;
+  mentorDocumentChunks: Table<MentorDocumentChunk>;
+  projectInvitations: Table<ProjectInvitation>;
+  notifications: Table<Notification>;
+  intakeBriefs: Table<IntakeBriefRecord>;
+  assessments: Table<Assessment>;
+  assessmentSubmissions: Table<AssessmentSubmission>;
+  /** Solo el mentor de la sesión (RLS); los clientes nunca la leen. */
+  sessionLiveNotes: Table<SessionLiveNotesRow>;
   fn: RepositoryFunctions;
 }

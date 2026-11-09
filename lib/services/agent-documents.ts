@@ -1,5 +1,6 @@
 import "server-only";
 import type { AgentArtifact, AgentDocumentPlacement, AgentMessage } from "@/types/domain";
+import type { DocKind } from "@/types/b2b";
 import { can } from "@/lib/authz";
 import { notFound, validation } from "@/lib/errors";
 import { documentSlug, isDocumentFormat, type DocumentFormat, type DocumentSource } from "@/lib/documents/types";
@@ -21,6 +22,11 @@ export interface CreateAgentDocumentInput {
   format: DocumentFormat;
   content: string;
   addToProject: boolean;
+  /**
+   * Pivot B2B (material que redacta el mentor en la sala): tipo y sesión del documento guardado.
+   * Siempre queda solo para el mentor (`mentor_only`) hasta que lo publique.
+   */
+  b2b?: { docKind?: DocKind; mentorSessionId?: string };
 }
 
 /**
@@ -60,6 +66,13 @@ export async function createAgentDocument(
       fileType: "markdown",
       source: "chat_extracted",
     });
+    if (input.b2b) {
+      await sysRepo(d).projectDocuments.update(doc.id, {
+        visibility: "mentor_only",
+        docKind: input.b2b.docKind ?? "material",
+        ...(input.b2b.mentorSessionId ? { mentorSessionId: input.b2b.mentorSessionId } : {}),
+      });
+    }
     return { artifact: { ...artifact, documentId: doc.id }, savedToProject: true };
   } catch (e) {
     console.warn("[agent] No se pudo agregar el documento al proyecto:", e instanceof Error ? e.message : e);

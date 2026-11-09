@@ -1,5 +1,7 @@
 import type { Workspace } from "@/lib/services/projects";
 import { isCurrent } from "@/features/diagnosis/rules";
+import { usesB2BStages } from "@/features/projects/stages";
+import { isB2BFlow } from "@/lib/flags";
 
 /**
  * Recorrido completo de un proyecto, del paso cero a la conclusión, tal como lo puede llevar el
@@ -28,12 +30,114 @@ export interface Journey {
   /** Índice del primer paso obligatorio pendiente; igual a steps.length si el ciclo terminó. */
   currentIndex: number;
   finished: boolean;
+  /** Recorrido del flujo B2B (Entrevista → Sesión 1 → Ciclo → Cierre). Sin valor = flujo viejo. */
+  flow?: "b2b";
 }
 
 const LIVE = (s: string) => s !== "discarded" && s !== "reformulated";
 const PAST_APPROVAL = ["approved", "testing", "supported", "weakened", "inconclusive"];
 
+/** Proyecto del flujo B2B: con mentor dueño (mentor_id) y la bandera encendida. */
+export const isB2BWorkspace = (w: Pick<Workspace, "project">, b2bFlow: boolean = isB2BFlow()): boolean => usesB2BStages(w.project, b2bFlow);
+
+/** El recorrido que corresponde al proyecto: el B2B si es del flujo nuevo, el de siempre si no. */
 export function buildJourney(w: Workspace): Journey {
+  return isB2BWorkspace(w) ? buildB2BJourney(w) : buildLegacyJourney(w);
+}
+
+/**
+ * Recorrido B2B: el cliente responde la entrevista, el mentor agenda y conduce la Sesión 1 (acuerdo y
+ * objetivos), después las sesiones del ciclo con su agenda y compromisos, y el cierre. La etapa sale de
+ * `projects.cycle_stage`; los pasos, de las sesiones y el acuerdo reales.
+ */
+export function buildB2BJourney(w: Workspace): Journey {
+  const stage = w.project.cycleStage ?? "intake";
+  const reached = (s: typeof stage) => ["intake", "kickoff", "cycle", "closed"].indexOf(stage) >= ["intake", "kickoff", "cycle", "closed"].indexOf(s);
+  const kickoff = w.sessions.filter((s) => s.kind === "kickoff");
+  const followUps = w.sessions.filter((s) => s.kind === "follow_up");
+  const agreement = [...w.mentorshipAgreements].sort((a, b) => b.version - a.version)[0];
+  const kickoffDone = kickoff.some((s) => s.status === "completed");
+  const steps: JourneyStep[] = [
+    {
+      id: "intake",
+      label: "Responder la entrevista de intake (cada persona cliente)",
+      owner: "entrepreneur",
+      done: reached("kickoff") || kickoff.length > 0,
+      how: "En la pestaña Entrevista del proyecto (/intake): el asistente pregunta lo que necesita el mentor y al final se envía",
+    },
+    {
+      id: "review_brief",
+      label: "Leer el brief del intake y completar el contexto que falta",
+      owner: "mentor",
+      optional: true,
+      done: Boolean(w.project.clientContext?.trim()),
+      how: "En la pestaña Brief del proyecto (/brief), con «Marcar revisado»",
+    },
+    {
+      id: "schedule_kickoff",
+      label: "Agendar la Sesión 1 (acuerdos)",
+      owner: "mentor",
+      done: kickoffDone || kickoff.some((s) => Boolean(s.scheduledAt)),
+      how: "En el inicio del proyecto o en Sesiones: elegir fecha y hora; el cliente confirma su asistencia",
+    },
+    {
+      id: "kickoff",
+      label: "Sesión 1: conocer el caso, acordar la forma de trabajo y los objetivos",
+      owner: "mentor",
+      done: kickoffDone,
+      how: "Desde la sala de la llamada (/app/llamada/<sesión>): notas en vivo, acuerdo y objetivos; al cerrar la sesión el proyecto pasa a «Ciclo»",
+    },
+    {
+      id: "agreement",
+      label: "Confirmar el acuerdo de trabajo",
+      owner: "both",
+      optional: true,
+      done: agreement?.status === "active",
+      how: "En la sala de la Sesión 1; después se ve en Sesiones (solo lectura para el cliente)",
+    },
+    {
+      id: "goals",
+      label: "Definir los objetivos del ciclo",
+      owner: "mentor",
+      optional: true,
+      done: w.mentorshipGoals.length > 0,
+      how: "En la sala de la Sesión 1",
+    },
+    {
+      id: "schedule_follow_up",
+      label: "Agendar la siguiente sesión del ciclo (queda sugerida con los temas pendientes)",
+      owner: "mentor",
+      done: followUps.some((s) => Boolean(s.scheduledAt)),
+      how: "En Sesiones: ponerle fecha a la sesión sugerida y ajustar su agenda de temas",
+    },
+    {
+      id: "commitments",
+      label: "Avanzar con los compromisos entre sesiones",
+      owner: "entrepreneur",
+      optional: true,
+      done: w.tasks.length > 0 && w.tasks.every((t) => t.status === "done"),
+      how: "Los compromisos salen de cada sesión; se ven en el inicio del proyecto",
+    },
+    {
+      id: "follow_up",
+      label: "Sesiones del ciclo: revisar avances y los temas de la agenda",
+      owner: "mentor",
+      done: followUps.some((s) => s.status === "completed"),
+      how: "En la sala de cada sesión; al cerrarla, lo que no se cubrió pasa a la siguiente",
+    },
+    {
+      id: "close_cycle",
+      label: "Cerrar el ciclo",
+      owner: "mentor",
+      done: stage === "closed",
+      how: "Lo decide el mentor cuando se cumplieron los objetivos",
+    },
+  ];
+  const currentIndex = steps.findIndex((s) => !s.done && !s.optional);
+  return { steps, currentIndex: currentIndex === -1 ? steps.length : currentIndex, finished: currentIndex === -1, flow: "b2b" };
+}
+
+function buildLegacyJourney(w: Workspace): Journey {
   const items = w.items.filter(isCurrent);
   const sessions = (kind: string) => w.sessions.filter((s) => s.kind === kind);
   const first = sessions("first_review");
@@ -170,15 +274,23 @@ export function buildJourney(w: Workspace): Journey {
   return { steps, currentIndex: currentIndex === -1 ? steps.length : currentIndex, finished: currentIndex === -1 };
 }
 
-const OWNER_LABEL: Record<JourneyOwner, string> = {
+const LEGACY_OWNER_LABEL: Record<JourneyOwner, string> = {
   entrepreneur: "emprendedor/a",
   mentor: "mentor",
   admin: "administración",
   both: "emprendedor/a o mentor",
 };
 
+const B2B_OWNER_LABEL: Record<JourneyOwner, string> = {
+  entrepreneur: "cliente",
+  mentor: "mentor",
+  admin: "administración",
+  both: "cliente o mentor",
+};
+
 /** Lista compacta para el prompt: ✓ hecho, → paso actual, · pendiente. */
 export function renderJourney(j: Journey, viewerIsMentor: boolean): string {
+  const OWNER_LABEL = j.flow === "b2b" ? B2B_OWNER_LABEL : LEGACY_OWNER_LABEL;
   const viewer = viewerIsMentor ? "mentor" : "entrepreneur";
   const required = j.steps.filter((s) => !s.optional);
   const doneRequired = required.filter((s) => s.done).length;

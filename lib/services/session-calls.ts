@@ -8,6 +8,9 @@ import { audit, guard, sysRepo, type ServiceDeps } from "./base";
 import { touch } from "./projects";
 import { bySpeech, names, transcriptLines } from "./session-transcript";
 import { enforceAiQuota } from "./ai-quota";
+import { isB2BFlow } from "@/lib/flags";
+import { b2bSessionViewer, type RoomViewer } from "./session-room";
+import { loadSessionForAccessCheck } from "./session-visibility";
 
 /**
  * Llamadas entre el mentor de una sesión y la persona emprendedora (dueña o colaboradora del
@@ -15,7 +18,20 @@ import { enforceAiQuota } from "./ai-quota";
  * su propio micrófono para transcribir, así que cada fragmento ya sabe quién habló. Al colgar, la
  * transcripción queda como documento del proyecto (contexto del agente) y genera la síntesis
  * pos-sesión con compromisos que se pueden adoptar como tareas.
+ *
+ * Pivot B2B (RAX_B2B_FLOW, proyectos con mentor_id): también entran los clientes del proyecto y la
+ * llamada es una malla P2P de hasta `MESH_MAX_PARTICIPANTS` personas (el navegador aplica el límite
+ * con la presencia del canal, ver use-mesh-call.ts). Solo el mentor de la sesión cierra la llamada
+ * para todos; un cliente solo sale de ella.
  */
+
+/** Tope de la malla P2P (proyectos grupales): más personas requieren un SFU (plan §6.1). */
+export const MESH_MAX_PARTICIPANTS = 4;
+
+/** Con la bandera B2B: el papel de quien mira en una sesión de un proyecto B2B (o null). */
+async function b2bViewer(d: ServiceDeps, session: MentorSession): Promise<RoomViewer | null> {
+  return isB2BFlow() ? b2bSessionViewer(d, session) : null;
+}
 
 export interface IceServer {
   urls: string | string[];
@@ -32,7 +48,8 @@ export function iceServers(env: NodeJS.ProcessEnv = process.env): IceServer[] {
 }
 
 async function loadSession(d: ServiceDeps, sessionId: string) {
-  const s = await d.repo.mentorSessions.get(sessionId);
+  // Cada llamador verifica después que sea su mentor, del equipo o cliente B2B (assertParticipant).
+  const s = await loadSessionForAccessCheck(d, sessionId);
   if (!s) throw notFound("Sesión no encontrada.");
   return s;
 }
@@ -43,20 +60,26 @@ async function loadCall(d: ServiceDeps, callId: string) {
   return c;
 }
 
-/** Pueden llamar el mentor de la sesión y quienes llevan el proyecto (dueña o colaboradores). */
+/** Pueden llamar el mentor de la sesión y quienes llevan el proyecto (dueña o colaboradores); en B2B, sus clientes. */
 async function assertParticipant(d: ServiceDeps, session: MentorSession) {
+  if ((await b2bViewer(d, session)) === "client") return { isSessionMentor: false, isB2BClient: true };
   const { project, rel } = await guard(d, session.projectId, "project.read");
   const isSessionMentor = session.mentorId === d.actor.id;
   const isTeam = rel.isOwner || rel.isCollaborator;
   if (!isSessionMentor && !isTeam) throw forbidden("Solo el mentor de la sesión y el equipo del proyecto pueden unirse a la llamada.");
-  return { project, rel, isSessionMentor };
+  return { project, rel, isSessionMentor, isB2BClient: false };
 }
 
 /** Estado de la llamada de una sesión para quien mira: llamada abierta, anteriores y permisos. */
 export async function getSessionCallState(d: ServiceDeps, sessionId: string, transcriber: Transcriber = getTranscriber()) {
   const s = await loadSession(d, sessionId);
-  const { rel } = await guard(d, s.projectId, "project.read");
-  const canCall = (s.mentorId === d.actor.id || rel.isOwner || rel.isCollaborator) && s.status !== "completed";
+  const viewer = await b2bViewer(d, s);
+  let canJoin = viewer === "client";
+  if (!canJoin) {
+    const { rel } = await guard(d, s.projectId, "project.read");
+    canJoin = s.mentorId === d.actor.id || rel.isOwner || rel.isCollaborator;
+  }
+  const canCall = canJoin && s.status !== "completed";
   let calls: SessionCall[] = [];
   let ready = true;
   try {
@@ -77,6 +100,11 @@ export async function getSessionCallState(d: ServiceDeps, sessionId: string, tra
     iceServers: canCall ? iceServers() : [],
     activeCall: active,
     pastCalls: calls.filter((c) => c.status === "ended"),
+    /** Mentor de la sesión: en la malla es quien termina la llamada para todos. */
+    hostId: s.mentorId,
+    /** Malla P2P (B2B) en vez de la llamada 1:1 de siempre. */
+    mesh: viewer !== null,
+    maxParticipants: viewer !== null ? MESH_MAX_PARTICIPANTS : 2,
   };
 }
 
@@ -105,8 +133,8 @@ export async function startCall(d: ServiceDeps, sessionId: string): Promise<Sess
 async function activeCallFor(d: ServiceDeps, callId: string) {
   const call = await loadCall(d, callId);
   const s = await loadSession(d, call.sessionId);
-  await assertParticipant(d, s);
-  return { call, session: s };
+  const { isB2BClient } = await assertParticipant(d, s);
+  return { call, session: s, isB2BClient };
 }
 
 /** Guarda un fragmento ya transcrito de la voz de quien llama. */
@@ -148,7 +176,8 @@ export async function transcribeCallAudio(
 /** Fragmentos de una llamada con el nombre de quien habló (para ver la transcripción en vivo o después). */
 export async function getCallTranscript(d: ServiceDeps, callId: string) {
   const call = await loadCall(d, callId);
-  await guard(d, call.projectId, "project.read");
+  const session = isB2BFlow() ? await loadSessionForAccessCheck(d, call.sessionId) : undefined;
+  if (!session || (await b2bViewer(d, session)) !== "client") await guard(d, call.projectId, "project.read");
   const segments = (await d.repo.sessionCallSegments.list({ callId })).sort(bySpeech);
   const people = await names(d, segments.map((s) => s.speakerId));
   return {
@@ -173,7 +202,9 @@ export interface EndCallResult {
  */
 export async function endCall(d: ServiceDeps, callId: string, opts: { synthesize?: boolean } = {}): Promise<EndCallResult> {
   const synthesize = opts.synthesize ?? true;
-  const { call, session } = await activeCallFor(d, callId);
+  const { call, session, isB2BClient } = await activeCallFor(d, callId);
+  // En B2B la transcripción es material del mentor (mentor_only): el cliente sale, no cierra.
+  if (isB2BClient) throw forbidden("Solo el mentor termina la llamada para todos. Puedes salir cuando quieras.");
   if (call.status === "ended") {
     return { call, documentId: call.transcriptDocumentId, synthesis: session.postSessionSynthesis, segments: 0 };
   }
@@ -238,7 +269,8 @@ export async function endCall(d: ServiceDeps, callId: string, opts: { synthesize
  * que colgar no espere a la IA: la pantalla muestra «generando síntesis» mientras tanto.
  */
 export async function synthesizeEndedCall(d: ServiceDeps, callId: string): Promise<PostSessionSynthesis> {
-  const { call, session } = await activeCallFor(d, callId);
+  const { call, session, isB2BClient } = await activeCallFor(d, callId);
+  if (isB2BClient) throw forbidden("La síntesis la prepara el mentor de la sesión.");
   if (call.status !== "ended") throw validation("La llamada todavía no terminó.");
   if (!call.transcriptDocumentId) throw validation("Esta llamada no tiene transcripción para sintetizar.");
   return generatePostSessionSynthesis(d, session.id);

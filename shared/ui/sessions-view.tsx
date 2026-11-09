@@ -8,6 +8,7 @@ const KIND_LABEL: Record<MentorSessionKind, string> = {
   follow_up: "Seguimiento",
   exploratory: "Sesión exploratoria",
   evaluation: "Evaluación de ciclo",
+  kickoff: "Sesión 1: acuerdos",
 };
 
 /** Página del proyecto donde se trabaja la sesión (briefing, llamada, notas, síntesis y cierre). */

@@ -32,9 +32,18 @@ import type {
   ProjectKnowledgeDocument,
   ProjectDocumentChunk,
 } from "@/types/domain";
+import type {
+  Assessment,
+  AssessmentSubmission,
+  IntakeBriefRecord,
+  MentorDocument,
+  MentorDocumentChunk,
+  Notification,
+  ProjectInvitation,
+} from "@/types/b2b";
 import { conflict, notFound } from "@/lib/errors";
 import type { Db, Row } from "./db";
-import type { ProjectMemberRow, Repository, RepositoryFunctions, Table } from "./repository";
+import type { MentorProfileRow, ProjectMemberRow, Repository, RepositoryFunctions, SessionLiveNotesRow, Table } from "./repository";
 
 /**
  * Repositorio sobre Postgres/Supabase. Traduce el modelo de dominio (camelCase, campos compuestos,
@@ -54,6 +63,10 @@ const num: Conv = { to: (v) => (v === undefined ? null : v), from: (v) => (v ===
 /** Autor "ai" (o "system") ↔ null. */
 const actor: Conv = { to: (v) => (v === "ai" || v === "system" || v === undefined ? null : v), from: (v) => (v === null ? "ai" : v) };
 const arr: Conv = { to: (v) => v ?? [], from: (v) => (v as unknown[] | null) ?? [] };
+/** Número opcional: null ↔ sin valor (a diferencia de `num`, que devuelve null). */
+const optNum: Conv = { to: (v) => (v === undefined ? null : v), from: (v) => (v === null || v === undefined ? undefined : Number(v)) };
+/** Objeto jsonb que nunca es null en la base (`{}` por defecto). */
+const obj: Conv = { to: (v) => v ?? {}, from: (v) => (v as Record<string, unknown> | null) ?? {} };
 
 interface Spec<T> {
   table: string;
@@ -183,6 +196,11 @@ const project: Spec<Project> = {
     createdAt: ["created_at", tsReq],
     updatedAt: ["updated_at", tsReq],
     deletedAt: ["deleted_at", ts],
+    // Pivot B2B: sin la migración 20261107000001 las columnas no existen y quedan sin valor.
+    mentorId: ["mentor_id", nul],
+    mode: ["mode", same],
+    cycleStage: ["cycle_stage", same],
+    clientContext: ["client_context", same],
   },
   hidden: (row) => row.deleted_at !== null && row.deleted_at !== undefined,
 };
@@ -226,6 +244,7 @@ const message: Spec<Message> = {
     content: ["content", same],
     provider: ["provider", nul],
     dimension: ["dimension", nul],
+    intakeClientId: ["intake_client_id", nul],
     createdAt: ["created_at", tsReq],
   },
 };
@@ -350,6 +369,11 @@ const session: Spec<MentorSession> = {
     postSessionSynthesis: ["post_session_synthesis", nul],
     createdAt: ["created_at", tsReq],
     completedAt: ["completed_at", ts],
+    // Pivot B2B.
+    sessionNumber: ["session_number", optNum],
+    agenda: ["agenda", same],
+    liveNotes: ["live_notes", same],
+    liveNotesUpdatedAt: ["live_notes_updated_at", ts],
   },
   toExtra: (e, row) => {
     if ("decision" in e) {
@@ -697,6 +721,8 @@ const agentThreadSpec: Spec<AgentThread> = {
     memory: ["memory", nul],
     // Solo se escribe cuando el hilo tiene sesión: sin la migración de sesiones la columna no existe.
     sessionId: ["session_id", nul],
+    // Pivot B2B.
+    scope: ["scope", same], mentorSessionId: ["mentor_session_id", nul],
     createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
   },
 };
@@ -745,7 +771,99 @@ const projectDocumentSpec: Spec<ProjectKnowledgeDocument> = {
     content: ["content", same], fileType: ["file_type", same], tokenCount: ["token_count", same],
     source: ["source", same], sourceMessageId: ["source_message_id", nul], createdBy: ["created_by", same],
     createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
+    // Pivot B2B.
+    visibility: ["visibility", same], publishedAt: ["published_at", ts], mentorSessionId: ["mentor_session_id", nul],
+    docKind: ["doc_kind", same], audienceClientId: ["audience_client_id", nul],
   },
+};
+
+/* ───────────── Pivot B2B (types/b2b.ts) ───────────── */
+
+const mentorProfileSpec: Spec<MentorProfileRow> = {
+  table: "mentor_profiles",
+  fields: {
+    // La clave es el id del mentor: `id` y `mentorId` son la misma columna.
+    id: ["mentor_id", same], mentorId: ["mentor_id", same], headline: ["headline", same], bio: ["bio", same], methodology: ["methodology", same],
+    focusAreas: ["focus_areas", arr], interviewGuide: ["interview_guide", arr], assistantTone: ["assistant_tone", same],
+    updatedAt: ["updated_at", tsReq],
+  },
+  readOnly: ["updatedAt"],
+  key: (id) => ({ mentor_id: id }),
+};
+
+const mentorDocumentSpec: Spec<MentorDocument> = {
+  table: "mentor_documents",
+  fields: {
+    id: ["id", same], mentorId: ["mentor_id", same], title: ["title", same], filename: ["filename", same],
+    content: ["content", same], fileType: ["file_type", same], tokenCount: ["token_count", same], kind: ["kind", same],
+    createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
+  },
+  readOnly: ["updatedAt"],
+};
+
+const mentorDocumentChunkSpec: Spec<MentorDocumentChunk> = {
+  table: "mentor_document_chunks",
+  fields: {
+    id: ["id", same], mentorId: ["mentor_id", same], documentId: ["document_id", same], chunkIndex: ["chunk_index", same],
+    content: ["content", same], tokenCount: ["token_count", same], createdAt: ["created_at", tsReq],
+  },
+};
+
+const projectInvitationSpec: Spec<ProjectInvitation> = {
+  table: "project_invitations",
+  fields: {
+    id: ["id", same], projectId: ["project_id", same], email: ["email", same], invitedBy: ["invited_by", same],
+    status: ["status", same], respondedBy: ["responded_by", nul], respondedAt: ["responded_at", ts],
+    createdAt: ["created_at", tsReq],
+  },
+};
+
+const notificationSpec: Spec<Notification> = {
+  table: "notifications",
+  fields: {
+    id: ["id", same], profileId: ["profile_id", same], kind: ["kind", same], payload: ["payload", obj],
+    readAt: ["read_at", ts], createdAt: ["created_at", tsReq],
+  },
+};
+
+const intakeBriefSpec: Spec<IntakeBriefRecord> = {
+  table: "intake_briefs",
+  fields: {
+    id: ["id", same], projectId: ["project_id", same], clientId: ["client_id", nul], status: ["status", same],
+    guideSnapshot: ["guide_snapshot", arr], coverage: ["coverage", obj], brief: ["brief", nul],
+    submittedAt: ["submitted_at", ts], reviewedAt: ["reviewed_at", ts],
+    createdAt: ["created_at", tsReq], updatedAt: ["updated_at", tsReq],
+  },
+  readOnly: ["updatedAt"],
+};
+
+const assessmentSpec: Spec<Assessment> = {
+  table: "assessments",
+  fields: {
+    id: ["id", same], projectId: ["project_id", same], sessionId: ["session_id", nul], createdBy: ["created_by", same],
+    title: ["title", same], instructions: ["instructions", same], questions: ["questions", arr], status: ["status", same],
+    dueAt: ["due_at", ts], createdAt: ["created_at", tsReq], publishedAt: ["published_at", ts],
+  },
+};
+
+const assessmentSubmissionSpec: Spec<AssessmentSubmission> = {
+  table: "assessment_submissions",
+  fields: {
+    id: ["id", same], assessmentId: ["assessment_id", same], clientId: ["client_id", same], answers: ["answers", arr],
+    status: ["status", same], score: ["score", optNum],
+    mentorFeedback: ["mentor_feedback", nul], createdAt: ["created_at", tsReq],
+    submittedAt: ["submitted_at", ts], reviewedAt: ["reviewed_at", ts],
+  },
+};
+
+const sessionLiveNotesSpec: Spec<SessionLiveNotesRow> = {
+  table: "session_live_notes",
+  fields: {
+    // La clave es la sesión: `id` es la columna session_id.
+    id: ["session_id", same], projectId: ["project_id", same], text: ["text", same], version: ["version", same],
+    updatedAt: ["updated_at", tsReq], updatedBy: ["updated_by", nul],
+  },
+  key: (id) => ({ session_id: id }),
 };
 
 const projectDocumentChunkSpec: Spec<ProjectDocumentChunk> = {
@@ -824,5 +942,14 @@ export function createPgRepository(db: Db): Repository {
     cycleEvaluations: new PgTable(db, cycleEvaluationSpec),
     projectDocuments: new PgTable(db, projectDocumentSpec),
     projectDocumentChunks: new PgTable(db, projectDocumentChunkSpec),
+    mentorProfiles: new PgTable(db, mentorProfileSpec),
+    mentorDocuments: new PgTable(db, mentorDocumentSpec),
+    mentorDocumentChunks: new PgTable(db, mentorDocumentChunkSpec),
+    projectInvitations: new PgTable(db, projectInvitationSpec),
+    notifications: new PgTable(db, notificationSpec),
+    intakeBriefs: new PgTable(db, intakeBriefSpec),
+    assessments: new PgTable(db, assessmentSpec),
+    assessmentSubmissions: new PgTable(db, assessmentSubmissionSpec),
+    sessionLiveNotes: new PgTable(db, sessionLiveNotesSpec),
   };
 }

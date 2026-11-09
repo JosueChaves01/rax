@@ -3,16 +3,51 @@ import type { Repository } from "@/lib/data/repository";
 import type { KnowledgeCitation, ProjectDocumentChunk, ProjectKnowledgeDocument } from "@/types/domain";
 import { DEFAULT_IN_CONTEXT_TOKEN_LIMIT, evaluateKnowledgeMode, type KnowledgeMode } from "./token-counter";
 
-export interface KnowledgeContextResult {
+/** Lo mínimo que el motor necesita de un documento (del proyecto o del mentor). */
+export interface KnowledgeDocumentLike {
+  id: string;
+  title: string;
+  filename: string;
+  content: string;
+  tokenCount: number;
+}
+
+/** Lo mínimo que el motor necesita de un fragmento indexado. */
+export interface KnowledgeChunkLike {
+  documentId: string;
+  chunkIndex: number;
+  content: string;
+}
+
+export interface KnowledgeContextResult<
+  D extends KnowledgeDocumentLike = ProjectKnowledgeDocument,
+  C extends KnowledgeChunkLike = ProjectDocumentChunk,
+> {
   mode: KnowledgeMode;
   totalTokens: number;
-  inContextDocs?: ProjectKnowledgeDocument[];
+  inContextDocs?: D[];
   retrievedChunks?: Array<{
-    chunk: ProjectDocumentChunk;
-    document: ProjectKnowledgeDocument;
+    chunk: C;
+    document: D;
     score: number;
   }>;
   citations: KnowledgeCitation[];
+}
+
+export interface KnowledgeOptions {
+  threshold?: number;
+  maxRagChunks?: number;
+}
+
+/**
+ * De dónde sale el conocimiento: los documentos, sus fragmentos y, si la base la ofrece, una búsqueda
+ * de texto completo. `search` devuelve `null` cuando no está disponible (se usa el ranking en memoria).
+ */
+export interface KnowledgeSource<D extends KnowledgeDocumentLike, C extends KnowledgeChunkLike> {
+  documents(): Promise<D[]>;
+  chunks(): Promise<C[]>;
+  latestChunks(limit: number): Promise<C[]>;
+  search?(query: string, limit: number): Promise<Array<{ chunk: C; score: number }> | null>;
 }
 
 /**
@@ -24,13 +59,33 @@ export async function getProjectKnowledgeContext(
   repo: Repository,
   projectId: string,
   userQuery: string,
-  options: { threshold?: number; maxRagChunks?: number } = {},
+  options: KnowledgeOptions = {},
 ): Promise<KnowledgeContextResult> {
+  return getKnowledgeContext(
+    {
+      documents: () => repo.projectDocuments.list({ projectId }),
+      chunks: () => repo.projectDocumentChunks.list({ projectId }),
+      latestChunks: (limit) => repo.projectDocumentChunks.latest({ projectId }, limit),
+      search: async (query, limit) => (repo.fn.searchChunks ? repo.fn.searchChunks(projectId, query, limit) : null),
+    },
+    userQuery,
+    options,
+  );
+}
+
+/**
+ * Núcleo genérico del motor (proyecto o mentor). Un documento eliminado queda con contenido vacío:
+ * no se usa como contexto.
+ */
+export async function getKnowledgeContext<D extends KnowledgeDocumentLike, C extends KnowledgeChunkLike>(
+  source: KnowledgeSource<D, C>,
+  userQuery: string,
+  options: KnowledgeOptions = {},
+): Promise<KnowledgeContextResult<D, C>> {
   const threshold = options.threshold ?? DEFAULT_IN_CONTEXT_TOKEN_LIMIT;
   const maxRagChunks = options.maxRagChunks ?? 8;
 
-  // Un documento eliminado queda con contenido vacío: no se usa como contexto.
-  const documents = (await repo.projectDocuments.list({ projectId })).filter((doc) => doc.content !== "");
+  const documents = (await source.documents()).filter((doc) => doc.content !== "");
   if (documents.length === 0) {
     return {
       mode: "in_context",
@@ -62,14 +117,14 @@ export async function getProjectKnowledgeContext(
   // Modo RAG: primero la búsqueda de texto completo en Postgres (índice tsv). Si no encuentra nada,
   // van los fragmentos más recientes (p. ej. la última transcripción). Si la base todavía no tiene la
   // función, el ranking por palabras en memoria de siempre.
-  const docsById = new Map<string, ProjectKnowledgeDocument>(documents.map((d) => [d.id, d]));
-  const found = await searchInDatabase(repo, projectId, userQuery, maxRagChunks, docsById);
+  const docsById = new Map<string, D>(documents.map((d) => [d.id, d]));
+  const found = await searchInDatabase(source, userQuery, maxRagChunks, docsById);
   const selected =
     found === null
-      ? await rankInMemory(repo, projectId, userQuery, maxRagChunks, docsById)
+      ? await rankInMemory(source, userQuery, maxRagChunks, docsById)
       : found.length > 0
         ? found
-        : (await repo.projectDocumentChunks.latest({ projectId }, maxRagChunks * 2))
+        : (await source.latestChunks(maxRagChunks * 2))
             .filter((chunk) => docsById.has(chunk.documentId))
             .slice(0, maxRagChunks)
             .map((chunk) => ({ chunk, document: docsById.get(chunk.documentId)!, score: 0 }));
@@ -90,18 +145,19 @@ export async function getProjectKnowledgeContext(
   };
 }
 
-type RetrievedChunk = NonNullable<KnowledgeContextResult["retrievedChunks"]>[number];
+type Retrieved<D, C> = { chunk: C; document: D; score: number };
 
-async function searchInDatabase(
-  repo: Repository,
-  projectId: string,
+async function searchInDatabase<D extends KnowledgeDocumentLike, C extends KnowledgeChunkLike>(
+  source: KnowledgeSource<D, C>,
   userQuery: string,
   limit: number,
-  docsById: Map<string, ProjectKnowledgeDocument>,
-): Promise<RetrievedChunk[] | null> {
-  if (!repo.fn.searchChunks) return null;
+  docsById: Map<string, D>,
+): Promise<Array<Retrieved<D, C>> | null> {
+  if (!source.search) return null;
   try {
-    const found = (await repo.fn.searchChunks(projectId, userQuery, limit)).filter((r) => docsById.has(r.chunk.documentId));
+    const results = await source.search(userQuery, limit);
+    if (results === null) return null;
+    const found = results.filter((r) => docsById.has(r.chunk.documentId));
     return found.map((r) => ({ chunk: r.chunk, document: docsById.get(r.chunk.documentId)!, score: r.score }));
   } catch (e) {
     console.warn("[knowledge] Búsqueda en la base no disponible; se usa la búsqueda en memoria:", e instanceof Error ? e.message : e);
@@ -109,14 +165,13 @@ async function searchInDatabase(
   }
 }
 
-async function rankInMemory(
-  repo: Repository,
-  projectId: string,
+async function rankInMemory<D extends KnowledgeDocumentLike, C extends KnowledgeChunkLike>(
+  source: KnowledgeSource<D, C>,
   userQuery: string,
   maxRagChunks: number,
-  docsById: Map<string, ProjectKnowledgeDocument>,
-): Promise<RetrievedChunk[]> {
-  const allChunks = (await repo.projectDocumentChunks.list({ projectId })).filter((chunk) => docsById.has(chunk.documentId));
+  docsById: Map<string, D>,
+): Promise<Array<Retrieved<D, C>>> {
+  const allChunks = (await source.chunks()).filter((chunk) => docsById.has(chunk.documentId));
 
   // Tokenizar términos de consulta para ranking híbrido
   const queryTerms = userQuery

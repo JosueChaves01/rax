@@ -24,7 +24,12 @@ export const sysRepo = (d: ServiceDeps): Repository => d.sys ?? d.repo;
 export const defaultClock = () => new Date().toISOString();
 export const randomId = (prefix: string) => `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
-/** Resuelve la relación del actor con el proyecto desde la base de datos, nunca desde el cliente. */
+/**
+ * Resuelve la relación del actor con el proyecto desde la base de datos, nunca desde el cliente.
+ * Pivot B2B: además marca `isProjectMentor` (mentor dueño operativo por `projects.mentor_id`, o con
+ * asignación activa) e `isClient` (miembro con rol `client`, alta por invitación). En proyectos del
+ * flujo viejo esos campos quedan como antes (no hay `mentor_id` ni miembros `client`).
+ */
 export async function relationOf(d: ServiceDeps, projectId: Id): Promise<ProjectRelation> {
   const project = await d.repo.projects.get(projectId);
   if (!project) return { isOwner: false, isCollaborator: false, isAssignedMentor: false };
@@ -32,12 +37,24 @@ export async function relationOf(d: ServiceDeps, projectId: Id): Promise<Project
     d.repo.projectMembers.list({ projectId, profileId: d.actor.id }),
     d.repo.mentorAssignments.list({ projectId, mentorId: d.actor.id, status: "active" }),
   ]);
-  return {
+  const isAssignedMentor = assignments.length > 0;
+  const rel: ProjectRelation = {
     isOwner: project.ownerId === d.actor.id,
     isCollaborator: members.some((m) => m.role === "collaborator"),
-    isAssignedMentor: assignments.length > 0,
+    isAssignedMentor,
   };
+  if (d.actor.role === "mentor" && (isAssignedMentor || (!!project.mentorId && project.mentorId === d.actor.id))) rel.isProjectMentor = true;
+  if (members.some((m) => m.role === "client")) rel.isClient = true;
+  return rel;
 }
+
+/** Si la relación da acceso de lectura a algo del proyecto (flujo viejo o B2B). */
+export const hasAnyRelation = (rel: ProjectRelation): boolean =>
+  rel.isOwner || rel.isCollaborator || rel.isAssignedMentor || rel.isProjectMentor === true || rel.isClient === true;
+
+/** Cliente B2B sin otra relación con el proyecto: no hereda permisos del flujo viejo. */
+export const isOnlyClient = (rel: ProjectRelation): boolean =>
+  rel.isClient === true && !rel.isOwner && !rel.isCollaborator && !rel.isAssignedMentor && rel.isProjectMentor !== true;
 
 /**
  * Carga el proyecto y verifica el permiso. Un proyecto ajeno responde igual que uno inexistente
@@ -46,8 +63,7 @@ export async function relationOf(d: ServiceDeps, projectId: Id): Promise<Project
 export async function guard(d: ServiceDeps, projectId: Id, action: Action): Promise<{ project: Project; rel: ProjectRelation }> {
   const project = await d.repo.projects.get(projectId);
   const rel = await relationOf(d, projectId);
-  const canRead = rel.isOwner || rel.isCollaborator || rel.isAssignedMentor;
-  if (!project || !canRead) {
+  if (!project || !hasAnyRelation(rel)) {
     if (project) await audit(d, "access.denied", { projectId, meta: { action } });
     throw notFound("Este proyecto no existe o no tenés acceso.");
   }
@@ -58,6 +74,16 @@ export async function guard(d: ServiceDeps, projectId: Id, action: Action): Prom
     throw e;
   }
   return { project, rel };
+}
+
+/**
+ * Guarda del espacio de trabajo (`getWorkspace`): la persona cliente de un proyecto B2B lo abre con
+ * `resource.read` (su permiso de lectura), no con `project.read`, que sigue siendo del flujo viejo
+ * y la mayoría de los servicios exige. Lo que la persona ve lo filtra RLS (solo lo publicado).
+ */
+export async function guardWorkspace(d: ServiceDeps, projectId: Id): Promise<{ project: Project; rel: ProjectRelation }> {
+  const rel = await relationOf(d, projectId);
+  return guard(d, projectId, isOnlyClient(rel) ? "resource.read" : "project.read");
 }
 
 export async function audit(

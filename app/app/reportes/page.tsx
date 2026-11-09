@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getDeps } from "@/lib/runtime";
+import { isB2BFlow } from "@/lib/flags";
 import { ReportsView, type ReportMetricsData } from "@/shared/ui/reports-view";
 
 export const metadata = { title: "Métricas y Reportes · RAX" };
@@ -14,6 +15,8 @@ export default async function ReportsPage() {
   if (!d) redirect("/entrar");
   // Alcance: los reportes son de administración; emprendedor y mentor leen su avance en cada proyecto.
   if (d.actor.role !== "admin") redirect("/app");
+  // Flujo B2B (§6.3): sin administración, sin reportes globales. Se borra en la Fase 5.
+  if (isB2BFlow()) redirect("/app/admin");
 
   const [tasks, audits, sessions, evaluations, interventions] = await Promise.all([
     d.repo.tasks.list().catch(() => []),

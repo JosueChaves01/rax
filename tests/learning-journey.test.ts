@@ -8,6 +8,9 @@ vi.mock("next/headers", () => ({ headers: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 import * as A from "@/app/actions";
+import { assignMentor } from "@/lib/services/admin";
+import { ensureMentorshipRelation } from "@/lib/services/mentorship-relation";
+import { createProject, setConversationSharing } from "@/lib/services/projects";
 
 afterAll(closeWorlds);
 afterEach(() => {
@@ -22,17 +25,15 @@ describe("recorrido de aprendizaje con agentes", () => {
     const student = w.as("ent1");
     const mentor = w.as("men1");
     getDepsMock.mockResolvedValue(student);
-    const created = await A.completeExplorationAndCreateProjectAction({
-      initiativeName: "Aprender React",
-      sector: "Educación",
-      summary: "Aprender React desde cero con acompañamiento de un mentor",
-      motivation: "skills",
-      description: "Quiero dominar componentes, estado y hooks",
-      mentorId: w.id("men1"),
-      agreement: { frequency: "weekly", cycleGoals: "Construir una app de tareas en React" },
+    const project = await createProject(student, {
+      name: "Aprender React",
+      description: "Aprender React desde cero con acompañamiento de un mentor",
+      nature: "exploring_idea",
     });
-    if (!created.ok) throw new Error(created.error);
-    return { w, student, mentor, pid: created.projectId, relationId: created.relationId };
+    await setConversationSharing(student, project.id, true);
+    await assignMentor(w.as("adm"), project.id, w.id("men1"));
+    const relation = await ensureMentorshipRelation(mentor, project.id);
+    return { w, student, mentor, pid: project.id, relationId: relation.id };
   }
 
   const chat = async (pid: string, message: string) => {

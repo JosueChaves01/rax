@@ -34,20 +34,55 @@ export type Action =
   | "task.diagnose_delay"
   | "cycle.evaluate"
   | "resource.manage"
-  | "admin.manage";
+  | "admin.manage"
+  /* Pivot B2B (plan técnico §2 y §6). Sin efecto en el flujo actual hasta que los servicios nuevos las usen. */
+  | GlobalB2BAction
+  | "invitation.send"
+  | "session.live_notes"
+  | "document.publish"
+  | "intake.run"
+  | "intake.review"
+  | "cycle.schedule"
+  | "assessment.manage"
+  | "assessment.submit"
+  | "resource.read"
+  | "resource.comment";
+
+/** Acciones B2B que no dependen de un proyecto: se deciden por el rol de la persona. */
+export type GlobalB2BAction =
+  | "mentor.profile"
+  | "mentor.knowledge"
+  | "project.create_as_mentor"
+  | "invitation.respond"
+  | "notification.read";
 
 /** Relación del actor con el proyecto, resuelta desde la base de datos (nunca desde el cliente). */
 export interface ProjectRelation {
   isOwner: boolean;
   isCollaborator: boolean;
   isAssignedMentor: boolean;
+  /** Pivot B2B: mentor dueño operativo (projects.mentor_id) o con asignación activa. */
+  isProjectMentor?: boolean;
+  /** Pivot B2B: persona invitada que aceptó (project_members.role = client). */
+  isClient?: boolean;
 }
 
 export const NO_RELATION: ProjectRelation = { isOwner: false, isCollaborator: false, isAssignedMentor: false };
 
-type Who = "owner" | "collaborator" | "mentor";
+type Who = "owner" | "collaborator" | "mentor" | "client";
 
-const MATRIX: Record<Exclude<Action, "admin.manage">, Who[]> = {
+const GLOBAL_B2B: Record<GlobalB2BAction, (actor: Profile) => boolean> = {
+  "mentor.profile": (a) => a.role === "mentor",
+  "mentor.knowledge": (a) => a.role === "mentor",
+  "project.create_as_mentor": (a) => a.role === "mentor",
+  // Cualquier persona con sesión responde sus invitaciones y lee sus notificaciones (el servicio filtra por correo e id).
+  "invitation.respond": () => true,
+  "notification.read": () => true,
+};
+
+const isGlobalB2B = (action: Action): action is GlobalB2BAction => action in GLOBAL_B2B;
+
+const MATRIX: Record<Exclude<Action, "admin.manage" | GlobalB2BAction>, Who[]> = {
   "project.read": ["owner", "collaborator", "mentor"],
   "project.update": ["owner"],
   "project.delete": ["owner"],
@@ -76,16 +111,28 @@ const MATRIX: Record<Exclude<Action, "admin.manage">, Who[]> = {
   "task.diagnose_delay": ["owner", "mentor"],
   "cycle.evaluate": ["owner", "mentor"],
   "resource.manage": ["owner", "mentor"],
+  "invitation.send": ["mentor"],
+  "session.live_notes": ["mentor"],
+  "document.publish": ["mentor"],
+  "intake.run": ["client"],
+  "intake.review": ["mentor"],
+  "cycle.schedule": ["mentor"],
+  "assessment.manage": ["mentor"],
+  "assessment.submit": ["client"],
+  "resource.read": ["mentor", "client"],
+  "resource.comment": ["mentor", "client"],
 };
 
 export function can(actor: Profile, action: Action, rel: ProjectRelation = NO_RELATION): boolean {
   if (action === "admin.manage") return actor.role === "admin";
+  if (isGlobalB2B(action)) return GLOBAL_B2B[action](actor);
   // El administrador gestiona usuarios y asignaciones, pero no lee el contenido de proyectos ajenos.
   const allowed = MATRIX[action];
   return (
     (rel.isOwner && actor.role === "entrepreneur" && allowed.includes("owner")) ||
     (rel.isCollaborator && actor.role === "entrepreneur" && allowed.includes("collaborator")) ||
-    (rel.isAssignedMentor && actor.role === "mentor" && allowed.includes("mentor"))
+    ((rel.isAssignedMentor || rel.isProjectMentor === true) && actor.role === "mentor" && allowed.includes("mentor")) ||
+    (rel.isClient === true && actor.role !== "mentor" && allowed.includes("client"))
   );
 }
 

@@ -18,6 +18,11 @@ export interface CallState {
   iceServers: IceServer[];
   activeCall: SessionCall | null;
   pastCalls: SessionCall[];
+  /** Mentor de la sesión (en la malla B2B, quien termina la llamada para todos). */
+  hostId?: string;
+  /** Malla P2P del flujo B2B en vez de la llamada 1:1. */
+  mesh?: boolean;
+  maxParticipants?: number;
 }
 
 export const clock = (ms: number) => {

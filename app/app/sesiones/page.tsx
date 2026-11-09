@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDeps } from "@/lib/runtime";
 import { listMyProjects } from "@/lib/services/projects";
+import { listSessionsForViewer } from "@/lib/services/session-visibility";
 import { SessionsView } from "@/shared/ui/sessions-view";
 
 export const metadata = { title: "Sesiones de mentoría · RAX" };
@@ -12,7 +13,7 @@ export default async function SessionsPage() {
   if (!d) redirect("/entrar");
 
   const projects = await listMyProjects(d);
-  const sessions = (await Promise.all(projects.map((p) => d.repo.mentorSessions.list({ projectId: p.id })))).flat();
+  const sessions = (await Promise.all(projects.map((p) => listSessionsForViewer(d, p.id)))).flat();
 
   return (
     <div className="space-y-4">

@@ -42,6 +42,43 @@ export function mentorInbox(
   return items.sort((a, b) => a.since.localeCompare(b.since));
 }
 
+/** Pivot B2B: intake enviado que espera la revisión del mentor. Lleva al brief del proyecto. */
+export interface IntakeInboxItem {
+  kind: "intake_ready";
+  projectId: string;
+  projectName: string;
+  tab: "brief";
+  detail: string;
+  since: string;
+}
+
+/**
+ * «Intake listo para revisar» (flujo B2B): un ítem por proyecto con entrevistas enviadas y sin revisar.
+ * En grupal cuenta cuántas personas enviaron la suya; el consolidado (sin persona) no suma.
+ */
+export function intakeInbox(
+  projects: Array<{
+    id: string;
+    name: string;
+    mode: "individual" | "group";
+    intakes: Array<{ clientId?: string; clientName?: string; status: string; submittedAt?: string; updatedAt: string }>;
+  }>,
+): IntakeInboxItem[] {
+  const items: IntakeInboxItem[] = [];
+  for (const p of projects) {
+    const submitted = p.intakes.filter((i) => i.status === "submitted");
+    if (!submitted.length) continue;
+    const people = submitted.filter((i) => i.clientId);
+    const since = submitted.map((i) => i.submittedAt ?? i.updatedAt).sort()[0];
+    const detail =
+      p.mode === "group"
+        ? `${people.length} de ${p.intakes.filter((i) => i.clientId).length} ${people.length === 1 ? "persona envió" : "personas enviaron"} su entrevista. Revisa el brief antes de la Sesión 1.`
+        : `${people[0]?.clientName ?? "Tu cliente"} terminó la entrevista. El brief está listo para la Sesión 1.`;
+    items.push({ kind: "intake_ready", projectId: p.id, projectName: p.name, tab: "brief", detail, since });
+  }
+  return items.sort((a, b) => a.since.localeCompare(b.since));
+}
+
 const words = (s: string) =>
   s
     .toLowerCase()
