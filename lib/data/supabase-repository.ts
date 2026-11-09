@@ -244,6 +244,7 @@ const message: Spec<Message> = {
     content: ["content", same],
     provider: ["provider", nul],
     dimension: ["dimension", nul],
+    intakeClientId: ["intake_client_id", nul],
     createdAt: ["created_at", tsReq],
   },
 };

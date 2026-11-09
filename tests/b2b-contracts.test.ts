@@ -15,7 +15,6 @@ import * as mentorProjects from "@/lib/services/mentor-projects";
 import * as sessionRoom from "@/lib/services/session-room";
 import * as publishing from "@/lib/services/publishing";
 import * as invitations from "@/lib/services/invitations";
-import * as intake from "@/lib/services/intake";
 import * as cycle from "@/lib/services/cycle";
 import * as assessments from "@/lib/services/assessments";
 import * as clientPortal from "@/lib/services/client-portal";
@@ -30,7 +29,6 @@ const STUB_MODULES = {
   sessionRoom,
   publishing,
   invitations,
-  intake,
   cycle,
   assessments,
   clientPortal,
@@ -69,7 +67,8 @@ describe("contratos del pivot B2B (Fase 0)", () => {
         expect((err as Error).message).toContain(name);
       }
     }
-    expect(count).toBe(36 - IMPLEMENTED.size);
+    // intake.ts (4 contratos) ya no está en STUB_MODULES; IMPLEMENTED lista lo de Dev A.
+    expect(count).toBe(32 - IMPLEMENTED.size);
   });
 
   it("el repositorio en memoria tiene las tablas nuevas", async () => {
@@ -158,6 +157,8 @@ describe("contratos del pivot B2B (Fase 0)", () => {
     expect(names("entrepreneur", { ...plain, session: true, siblings: true }).slice(0, 3)).toEqual(["update_session_notes", "read_session_thread", "generate_document"]);
     expect(names("mentor", { ...plain, b2b: true })).toEqual(names("mentor", plain));
     expect(MENTOR_TOOLS).toEqual([]);
-    expect(CLIENT_TOOLS).toEqual([]);
+    expect(CLIENT_TOOLS.map((t) => t.definition.name)).toEqual(["record_intake_answer", "finish_intake"]);
+    expect(names("entrepreneur", plain)).not.toContain("record_intake_answer");
+    expect(names("entrepreneur", { ...plain, b2b: true })).toContain("record_intake_answer");
   });
 });
