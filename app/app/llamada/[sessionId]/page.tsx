@@ -9,6 +9,10 @@ import type { ProjectKnowledgeDocument, SessionNoteReply } from "@/types/domain"
 import { buildContextSections } from "./context-panel";
 import { CallRoom } from "./room";
 import { CloseStep } from "@/app/app/p/[id]/mentoria/sessions";
+import { isB2BFlow } from "@/lib/flags";
+import { getSessionRoomState, type SessionRoomState } from "@/lib/services/session-room";
+import { AgreementPanel, ConfirmedAgreementView, LiveNotesPanel } from "./b2b-panels";
+import type { RoomSection } from "./room";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sala de mentoría · RAX" };
@@ -24,6 +28,11 @@ export default async function CallRoomPage({ params, searchParams }: { params: P
 
   const raw = await d.repo.mentorSessions.get(sessionId);
   if (!raw) notFound();
+
+  // Flujo B2B: la sala sabe si mira el mentor de la sesión o un cliente del proyecto.
+  const room: SessionRoomState | null = isB2BFlow() ? await getSessionRoomState(d, sessionId).catch(() => null) : null;
+  if (room?.viewer === "client") return <ClientRoom room={room} backHref={`/app/p/${raw.projectId}`} initialClosed={raw.status === "completed"} />;
+
   // loadWorkspace valida que quien mira pueda ver el proyecto (si no, 404).
   const { w, actor } = await loadWorkspace(raw.projectId);
   const session = w.sessions.find((s) => s.id === sessionId);
@@ -71,7 +80,70 @@ export default async function CallRoomPage({ params, searchParams }: { params: P
       title={`${SESSION_KIND_LABEL[session.kind]} · ${w.project.name}`}
       subtitle={subtitle}
       backHref={sessionHref(session)}
-      sections={buildContextSections({ w, session, documents, replies })}
+      sections={room ? mentorB2BSections(room, buildContextSections({ w, session, documents, replies, b2b: { briefs: room.briefs ?? [], clientContext: room.clientContext ?? "", agenda: room.session.agenda } })) : buildContextSections({ w, session, documents, replies })}
+      b2b={room ? { viewer: "mentor" } : undefined}
+    />
+  );
+}
+
+/** Mentor en B2B: «Notas en vivo» después de la agenda y, en la Sesión 1, el panel del acuerdo. */
+function mentorB2BSections(room: SessionRoomState, base: RoomSection[]): RoomSection[] {
+  const closed = room.session.status === "completed";
+  const extra: RoomSection[] = [
+    {
+      id: "vivo",
+      title: "Notas en vivo",
+      short: "Notas en vivo",
+      node: <LiveNotesPanel sessionId={room.session.id} initialText={room.liveNotes?.text ?? ""} initialUpdatedAt={room.liveNotes?.updatedAt} closed={closed} />,
+    },
+  ];
+  if (room.session.kind === "kickoff") {
+    extra.push({
+      id: "acuerdo",
+      title: room.project.mode === "group" ? "Acuerdo del grupo" : "Acuerdo de la Sesión 1",
+      short: "Acuerdo",
+      node: (
+        <AgreementPanel
+          sessionId={room.session.id}
+          mode={room.project.mode}
+          clients={room.clients}
+          agreement={room.agreement}
+          goals={room.goals}
+          commitments={room.commitments}
+          closed={closed}
+        />
+      ),
+    });
+  }
+  const at = base.findIndex((s) => s.id === "sesion") + 1;
+  return [...base.slice(0, at), ...extra, ...base.slice(at)];
+}
+
+/** Cliente en B2B: solo la llamada y el acuerdo confirmado (sin notas en vivo, brief ni asistente). */
+function ClientRoom({ room, backHref, initialClosed }: { room: SessionRoomState; backHref: string; initialClosed: boolean }) {
+  const when = room.session.scheduledAt;
+  const title = `${room.session.kind === "kickoff" ? "Sesión 1" : room.session.sessionNumber ? `Sesión ${room.session.sessionNumber}` : SESSION_KIND_LABEL[room.session.kind]} · ${room.project.name}`;
+  return (
+    <CallRoom
+      projectId={room.project.id}
+      sessionTitle={title}
+      isMentor={false}
+      initialMode="reunion"
+      closed={false}
+      close={null}
+      sessionId={room.session.id}
+      title={title}
+      subtitle={`Con ${room.mentorName}${when ? ` · ${formatDate(when)}` : ""} · ${initialClosed ? "Sesión cerrada" : room.session.status === "in_progress" ? "En curso" : "Pendiente"}`}
+      backHref={backHref}
+      sections={[
+        {
+          id: "acuerdo",
+          title: "Acuerdo",
+          short: "Acuerdo",
+          node: <ConfirmedAgreementView agreement={room.agreement} goals={room.goals} commitments={room.commitments} mode={room.project.mode} />,
+        },
+      ]}
+      b2b={{ viewer: "client" }}
     />
   );
 }

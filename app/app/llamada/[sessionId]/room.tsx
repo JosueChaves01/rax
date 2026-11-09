@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { getSessionCallStateAction } from "@/app/actions";
 import { CallErrorBoundary, PastCall, Result, TranscriptList, clock, type CallState } from "@/shared/ui/session-call";
 import { useSessionCall } from "@/shared/ui/use-session-call";
+import { useMeshCall, type MeshRemote } from "@/shared/ui/use-mesh-call";
 import { Notice, cx } from "@/shared/ui/primitives";
 import { RoomAssistant, type RoomMode } from "./assistant";
 
@@ -39,6 +40,9 @@ const ICON: Record<string, string> = {
   grid: "M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z",
   x: "M6 6l12 12M18 6L6 18",
   back: "M15 18l-6-6 6-6",
+  brief: "M7 3h7l5 5v13H7zM14 3v5h5M10 12h6M10 16h6",
+  vivo: "M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4M3 3h7",
+  acuerdo: "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9",
 };
 
 function Icon({ name, off, className }: { name: string; off?: boolean; className?: string }) {
@@ -209,6 +213,11 @@ export interface RoomExtras {
   close: ReactNode;
   /** La sesión ya está cerrada: la sala abre directo en el cierre. */
   closed: boolean;
+  /**
+   * Pivot B2B (solo con RAX_B2B_FLOW): quién mira la sala. El cliente ve solo la llamada y el
+   * acuerdo confirmado (sin asistente, sin cierre). Sin valor, la sala es la de siempre.
+   */
+  b2b?: { viewer: "mentor" | "client" };
 }
 
 type RoomProps = { sessionId: string; title: string; subtitle: string; backHref: string; sections: RoomSection[] } & RoomExtras;
@@ -255,6 +264,7 @@ function Room({
   initialMode,
   close,
   closed,
+  b2b,
 }: RoomProps & {
   state: CallState | null;
   error: string | null;
@@ -293,8 +303,9 @@ function Room({
   useEffect(() => {
     if (opened.current || !stage.current) return;
     opened.current = true;
-    if (stage.current.clientWidth >= 1024) openWin("sesion");
-  }, [openWin]);
+    if (stage.current.clientWidth >= 1024) openWin(sections.some((s) => s.id === "sesion") ? "sesion" : (sections[0]?.id ?? "sesion"));
+  }, [openWin, sections]);
+  const isClient = b2b?.viewer === "client";
 
   const content: Record<string, { title: string; short: string; count?: number; node: ReactNode }> = Object.fromEntries(sections.map((s) => [s.id, s]));
 
@@ -312,7 +323,7 @@ function Room({
           <p className="truncate text-sm font-bold text-slate-900">{title}</p>
           <p className="truncate text-[11px] text-slate-500">{subtitle}</p>
         </div>
-        <div role="group" aria-label="Momento de la sesión" className="order-last flex w-full rounded-full bg-slate-100 p-1 sm:order-none sm:w-auto">
+        {!isClient && <div role="group" aria-label="Momento de la sesión" className="order-last flex w-full rounded-full bg-slate-100 p-1 sm:order-none sm:w-auto">
           {(
             [
               ["reunion", "Reunión"],
@@ -333,8 +344,8 @@ function Room({
               {label}
             </button>
           ))}
-        </div>
-        <button
+        </div>}
+        {!isClient && <button
           type="button"
           onClick={() => setAssistant((a) => (a === "hidden" ? (window.matchMedia("(min-width: 1024px)").matches ? "docked" : "sheet") : "hidden"))}
           aria-pressed={assistant !== "hidden"}
@@ -345,7 +356,7 @@ function Room({
         >
           <Icon name="mic" className="h-4 w-4" />
           RAX
-        </button>
+        </button>}
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -379,10 +390,10 @@ function Room({
           )}
         </div>
 
-        {assistant === "docked" && <div className="hidden w-[380px] shrink-0 flex-col border-l border-slate-200 lg:flex">{assistantPanel("flex-1")}</div>}
+        {assistant === "docked" && !isClient && <div className="hidden w-[380px] shrink-0 flex-col border-l border-slate-200 lg:flex">{assistantPanel("flex-1")}</div>}
       </div>
 
-      {assistant === "sheet" && (
+      {assistant === "sheet" && !isClient && (
         <div className="fixed inset-0 z-[90] flex flex-col justify-end bg-slate-900/30 lg:hidden" onClick={() => setAssistant("hidden")}>
           <div className="h-[75vh] overflow-hidden rounded-t-3xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {assistantPanel("h-full pb-[env(safe-area-inset-bottom)]", () => setAssistant("hidden"))}
@@ -393,17 +404,7 @@ function Room({
   );
 }
 
-function Live({
-  state,
-  reload,
-  stage,
-  compact,
-  windows: w,
-  content,
-  sections,
-  menuOpen,
-  setMenuOpen,
-}: {
+type LiveProps = {
   state: CallState;
   reload: () => Promise<void>;
   stage: React.RefObject<HTMLDivElement | null>;
@@ -413,8 +414,18 @@ function Live({
   sections: RoomSection[];
   menuOpen: boolean;
   setMenuOpen: (v: boolean) => void;
-}) {
-  const router = useRouter();
+};
+
+/** Lo que la vista usa de la llamada: la 1:1 de siempre o la malla B2B (con varias personas). */
+type CallApi = ReturnType<typeof useSessionCall> & { remotes?: MeshRemote[]; isHost?: boolean; left?: null | "left" | "full" };
+
+/** La llamada 1:1 de siempre, o la malla P2P cuando el servidor la pide (flujo B2B). */
+function Live(props: LiveProps) {
+  return props.state.mesh ? <LiveMesh {...props} /> : <LiveClassic {...props} />;
+}
+
+function LiveClassic(props: LiveProps) {
+  const { state } = props;
   const c = useSessionCall({
     sessionId: state.sessionId,
     projectId: state.projectId,
@@ -422,6 +433,27 @@ function Live({
     iceServers: state.iceServers,
     transcriptionAvailable: state.transcriptionAvailable,
   });
+  return <LiveView {...props} c={c} />;
+}
+
+function LiveMesh(props: LiveProps) {
+  const { state } = props;
+  const c: CallApi = useMeshCall({
+    sessionId: state.sessionId,
+    projectId: state.projectId,
+    me: state.me,
+    hostId: state.hostId ?? "",
+    maxParticipants: state.maxParticipants ?? 4,
+    iceServers: state.iceServers,
+    transcriptionAvailable: state.transcriptionAvailable,
+  });
+  return <LiveView {...props} c={c} />;
+}
+
+function LiveView({ state, reload, stage, compact, windows: w, content, sections, menuOpen, setMenuOpen, c }: LiveProps & { c: CallApi }) {
+  const router = useRouter();
+  const remotes = c.remotes ?? [];
+  const isGroup = remotes.length > 1;
   const live = c.phase === "in_call" || c.phase === "joining" || c.phase === "ending";
   const [elapsed, setElapsed] = useState(0);
 
@@ -497,7 +529,8 @@ function Live({
     : c.phase === "ending" ? "Guardando la transcripción…"
     : c.phase === "ended" ? "Llamada terminada"
     : !live ? (state.activeCall ? "La otra persona ya está en la llamada" : state.canCall ? "Sin iniciar" : "Sesión cerrada")
-    : !c.peer ? "Esperando a la otra persona…"
+    : !c.peer ? (c.remotes ? "Esperando a las demás personas…" : "Esperando a la otra persona…")
+    : isGroup ? `En llamada con ${remotes.map((r) => r.name).join(", ")}`
     : c.connection === "connected" ? `En llamada con ${c.peer.name}`
     : c.connection === "failed" ? "No se pudo conectar el audio y video"
     : `Conectando con ${c.peer.name}…`;
@@ -510,7 +543,15 @@ function Live({
         {/* Escenario */}
         {live ? (
           <div className="relative h-full w-full">
-            <StageVideo stream={c.remoteStream} label={c.peer?.name ?? "Otra persona"} className="h-full w-full rounded-2xl" />
+            {isGroup ? (
+              <div className="grid h-full w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                {remotes.map((r) => (
+                  <StageVideo key={r.id} stream={r.stream} label={r.connection === "failed" ? `${r.name} · sin conexión` : r.name} className="h-full min-h-0 w-full rounded-2xl" />
+                ))}
+              </div>
+            ) : (
+              <StageVideo stream={c.remoteStream} label={c.peer?.name ?? "Otra persona"} className="h-full w-full rounded-2xl" />
+            )}
             <StageVideo
               stream={c.localStream}
               muted
@@ -525,7 +566,13 @@ function Live({
         ) : c.phase === "ended" ? (
           <div className="flex h-full items-center justify-center">
             <div className="max-h-full w-full max-w-xl space-y-3 overflow-y-auto">
-              {c.result ? (
+              {c.left ? (
+                <Notice tone={c.left === "full" ? "warn" : "info"}>
+                  {c.left === "full"
+                    ? `La llamada ya tiene ${state.maxParticipants ?? 4} personas, el máximo por ahora. Vuelve a intentarlo cuando alguien salga.`
+                    : "Saliste de la llamada. Sigue abierta para las demás personas hasta que el mentor la termine."}
+                </Notice>
+              ) : c.result ? (
                 <Result projectId={state.projectId} sessionId={state.sessionId} result={c.result} />
               ) : (
                 <Notice tone="info">La llamada terminó. La transcripción y la síntesis se guardan en la sesión en unos segundos.</Notice>
@@ -701,7 +748,7 @@ function Live({
               className="flex h-11 cursor-pointer items-center gap-2 rounded-full bg-rose-600 px-4 text-xs font-semibold text-white shadow-xs hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60 sm:px-5"
             >
               <Icon name="llamadas" className="h-4 w-4 rotate-[135deg]" />
-              <span className="hidden sm:inline">{c.phase === "ending" ? "Guardando…" : "Colgar y guardar"}</span>
+              <span className="hidden sm:inline">{c.phase === "ending" ? "Guardando…" : c.isHost === false ? "Salir" : c.isHost ? "Terminar para todos" : "Colgar y guardar"}</span>
             </button>
           ) : (
             state.canCall &&

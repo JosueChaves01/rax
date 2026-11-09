@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { isB2BFlow } from "@/lib/flags";
 import { forbidden, validation } from "@/lib/errors";
 import type { Id } from "@/types/domain";
+import type { MentorshipAgreement, MentorshipGoal, Task } from "@/types/domain";
 import type { MentorProfile, ProjectInvitation } from "@/types/b2b";
 import {
   createProjectAsMentor,
@@ -31,6 +32,18 @@ import {
   type MentorDocumentInput,
   type MentorDocumentSummary,
 } from "@/lib/services/mentor-knowledge";
+import {
+  addClientCommitment,
+  addKickoffGoal,
+  confirmKickoffAgreement,
+  getSessionRoomState,
+  saveKickoffAgreement,
+  saveLiveNotes,
+  type ClientCommitmentInput,
+  type KickoffAgreementInput,
+  type KickoffGoalInput,
+  type SessionRoomState,
+} from "@/lib/services/session-room";
 import { read, run, type ActionResult } from "./_run";
 
 const PROFILE_PATH = "/app/mentor/perfil";
@@ -171,4 +184,90 @@ export async function completeB2BOnboardingAction(input: OnboardingInput): Promi
   });
   if (res.ok && res.data) redirect(res.data.home);
   return res;
+}
+
+/* ───────────── Sala de la sesión (Fase 3) ───────────── */
+
+/** Lo que la sala necesita además de la llamada, según quién mira (mentor o cliente). */
+export async function getSessionRoomStateAction(sessionId: string): Promise<ActionResult<SessionRoomState>> {
+  return read(async (d) => {
+    requireFlow();
+    return getSessionRoomState(d, idOf(sessionId));
+  });
+}
+
+/**
+ * Autosave de las notas en vivo (cada ~3 s desde la sala). Sin revalidar: no cambia la página.
+ * `expectedUpdatedAt` = la última marca que conoce la pestaña ("" si nunca se guardaron); si otra
+ * pestaña guardó después responde `{ ok: false, code: "conflict" }`.
+ */
+export async function saveLiveNotesAction(sessionId: string, text: string, expectedUpdatedAt?: string): Promise<ActionResult<{ updatedAt: string }>> {
+  return run(
+    null,
+    async (d) => {
+      requireFlow();
+      return saveLiveNotes(d, idOf(sessionId), String(text ?? ""), typeof expectedUpdatedAt === "string" ? expectedUpdatedAt : undefined);
+    },
+    { revalidate: false },
+  );
+}
+
+function roomPath(sessionId: Id) {
+  revalidatePath(`/app/llamada/${sessionId}`);
+}
+
+export async function saveKickoffAgreementAction(sessionId: string, input: KickoffAgreementInput): Promise<ActionResult<MentorshipAgreement>> {
+  const id = idOf(sessionId);
+  return run(null, async (d) => {
+    requireFlow();
+    const saved = await saveKickoffAgreement(d, id, {
+      scope: String(input?.scope ?? ""),
+      clientCommitments: String(input?.clientCommitments ?? ""),
+      mentorCommitments: String(input?.mentorCommitments ?? ""),
+      frequency: input?.frequency,
+      sessionDurationMinutes: Number(input?.sessionDurationMinutes),
+      expectedDurationWeeks: Number(input?.expectedDurationWeeks),
+      confidentialityTerms: input?.confidentialityTerms ? String(input.confidentialityTerms) : undefined,
+    });
+    roomPath(id);
+    return saved;
+  });
+}
+
+export async function confirmKickoffAgreementAction(sessionId: string): Promise<ActionResult<MentorshipAgreement>> {
+  const id = idOf(sessionId);
+  return run(null, async (d) => {
+    requireFlow();
+    const confirmed = await confirmKickoffAgreement(d, id);
+    roomPath(id);
+    return confirmed;
+  });
+}
+
+export async function addKickoffGoalAction(sessionId: string, input: KickoffGoalInput): Promise<ActionResult<MentorshipGoal>> {
+  const id = idOf(sessionId);
+  return run(null, async (d) => {
+    requireFlow();
+    const goal = await addKickoffGoal(d, id, {
+      title: String(input?.title ?? ""),
+      targetResult: String(input?.targetResult ?? ""),
+      whyItMatters: input?.whyItMatters ? String(input.whyItMatters) : undefined,
+    });
+    roomPath(id);
+    return goal;
+  });
+}
+
+export async function addClientCommitmentAction(sessionId: string, input: ClientCommitmentInput): Promise<ActionResult<Task>> {
+  const id = idOf(sessionId);
+  return run(null, async (d) => {
+    requireFlow();
+    const task = await addClientCommitment(d, id, {
+      clientId: input?.clientId ? idOf(input.clientId) : undefined,
+      title: String(input?.title ?? ""),
+      dueDate: input?.dueDate ? String(input.dueDate) : undefined,
+    });
+    roomPath(id);
+    return task;
+  });
 }

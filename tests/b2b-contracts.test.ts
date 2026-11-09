@@ -51,6 +51,8 @@ const IMPLEMENTED = new Set([
   "revokeInvitation",
   "setClientContext",
   "markIntakeReviewed",
+  // Dev A · Fase 3
+  "saveLiveNotes",
   // Dev B · Fase 2
   "notify",
   "listNotifications",
@@ -72,6 +74,14 @@ const EXTRA_EXPORTS = new Set([
   "normalizeEmail",
   "getIntakeBriefsForMentor",
   "listMentorProjects",
+  // Dev A · Fase 3 (session-room.ts)
+  "b2bSessionViewer",
+  "sessionAccess",
+  "getSessionRoomState",
+  "saveKickoffAgreement",
+  "confirmKickoffAgreement",
+  "addKickoffGoal",
+  "addClientCommitment",
   // Dev B · Fase 2
   "markNotificationsReadWhere",
   "onIntakeSubmitted",

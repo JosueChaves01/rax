@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { MentorSession, ProjectKnowledgeDocument, SessionNoteReply, Task } from "@/types/domain";
 import type { Workspace } from "@/lib/services/projects";
+import type { MentorBriefEntry } from "@/lib/services/mentor-projects";
+import type { SessionTopic } from "@/types/b2b";
 import {
   DIAGNOSIS_STATUS_LABEL,
   EXPERIMENT_STATUS_LABEL,
@@ -63,11 +65,17 @@ export function buildContextSections({
   session,
   documents,
   replies,
+  b2b,
 }: {
   w: Workspace;
   session: MentorSession;
   documents: ProjectKnowledgeDocument[];
   replies: SessionNoteReply[];
+  /**
+   * Flujo B2B (solo para el mentor): agrega «Brief» con el intake, el contexto que completó el
+   * mentor y la agenda de la sesión; quita diagnóstico e hipótesis (congelados en el pivot).
+   */
+  b2b?: { briefs: MentorBriefEntry[]; clientContext: string; agenda: SessionTopic[] };
 }): ContextSection[] {
   const name = (id: string) => (id === "ai" ? "Agente" : (w.people[id]?.name ?? "Equipo del proyecto"));
   const stage = stageOf(w.phase);
@@ -214,7 +222,9 @@ export function buildContextSections({
     ),
   });
 
-  sections.push({
+  if (b2b) sections.push(briefSection(b2b));
+
+  if (!b2b) sections.push({
     id: "diagnostico",
     title: "Diagnóstico",
     short: "Diagnóstico",
@@ -261,7 +271,7 @@ export function buildContextSections({
     ),
   });
 
-  sections.push({
+  if (!b2b) sections.push({
     id: "hipotesis",
     title: "Hipótesis y experimentos",
     short: "Hipótesis",
@@ -478,4 +488,76 @@ export function buildContextSections({
   });
 
   return sections;
+}
+
+const TOPIC_STATUS: Record<SessionTopic["status"], string> = { planned: "Planeado", covered: "Tratado", carried_over: "Pasa a la próxima" };
+
+/** «Brief» del intake para el mentor: agenda de la sesión, contexto faltante y cada brief (consolidado primero). */
+function briefSection(b2b: { briefs: MentorBriefEntry[]; clientContext: string; agenda: SessionTopic[] }): ContextSection {
+  const withBrief = b2b.briefs.filter((b) => b.brief);
+  return {
+    id: "brief",
+    title: "Brief del intake",
+    short: "Brief",
+    count: withBrief.length || undefined,
+    node: (
+      <Body>
+        {b2b.agenda.length > 0 && (
+          <div className="space-y-1">
+            <Label>Agenda de la sesión</Label>
+            <ol className="list-decimal space-y-1 pl-4 marker:text-slate-400">
+              {b2b.agenda.map((t) => (
+                <li key={t.id}>
+                  <span className="font-semibold text-slate-900">{t.title}</span>
+                  {t.goal && <span className="text-slate-500"> · {t.goal}</span>}
+                  {t.status !== "planned" && <span className="text-slate-400"> ({TOPIC_STATUS[t.status]})</span>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+        {b2b.clientContext && (
+          <div className="space-y-1">
+            <Label>Contexto que agregaste</Label>
+            <p className="whitespace-pre-wrap">{b2b.clientContext}</p>
+          </div>
+        )}
+        {withBrief.length ? (
+          withBrief.map((entry) => (
+            <div key={entry.id} className="space-y-2 border-t border-slate-100 pt-3">
+              <p className="font-bold text-slate-900">{entry.clientName ? `Brief de ${entry.clientName}` : "Brief del grupo"}</p>
+              <p className="whitespace-pre-wrap">{entry.brief!.summary}</p>
+              {entry.brief!.gaps.length > 0 && (
+                <div className="space-y-1">
+                  <Label>Lo que falta saber</Label>
+                  <Bullets items={entry.brief!.gaps} />
+                </div>
+              )}
+              {entry.brief!.risks.length > 0 && (
+                <div className="space-y-1">
+                  <Label>Riesgos</Label>
+                  <Bullets items={entry.brief!.risks} />
+                </div>
+              )}
+              {entry.brief!.answers.length > 0 && (
+                <div className="space-y-1">
+                  <Label>Respuestas</Label>
+                  <ul className="space-y-1">
+                    {entry.brief!.answers.map((a) => (
+                      <li key={a.questionId}>
+                        <span className="font-semibold text-slate-900">{a.topic}:</span> {a.answer}
+                        {a.confidence === "low" && <span className="text-amber-600"> (poco seguro)</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <Empty>Todavía no hay un brief del intake para este proyecto.</Empty>
+        )}
+      </Body>
+    ),
+  };
 }

@@ -35,6 +35,8 @@ import { isFiller, plainText } from "@/lib/ai/plain-text";
 import { inBackground } from "./background";
 import { buildBriefingHistory } from "./briefing-history";
 import { changeItem } from "./diagnosis";
+import { isB2BFlow } from "@/lib/flags";
+import { onSessionClosed } from "./cycle";
 
 /**
  * El emprendedor solicita una revisión. La primera requiere el resumen confirmado;
@@ -682,6 +684,9 @@ async function savePreSessionBriefing(d: ServiceDeps, s: MentorSession, project:
   return briefing;
 }
 
+/** Las notas en vivo entran a la síntesis como una nota más (observación del mentor). */
+const LIVE_NOTE_BASE = { kind: "observation", isPrivate: false } satisfies Pick<SessionNote, "kind" | "isPrivate">;
+
 export async function generatePostSessionSynthesis(
   d: ServiceDeps,
   sessionId: string,
@@ -704,6 +709,10 @@ export async function generatePostSessionSynthesis(
 
   if (!project) throw notFound("Proyecto no encontrado.");
   const sharedNotes = sessionNotes.filter((n) => !n.isPrivate);
+  // Pivot B2B: las notas en vivo del mentor (sala) entran a la síntesis junto con la transcripción.
+  // La síntesis la revisa el mentor antes de cerrar; las notas en sí nunca se muestran al cliente.
+  const liveNotes = isB2BFlow() ? (s.liveNotes ?? "").trim() : "";
+  if (liveNotes) sharedNotes.push({ ...LIVE_NOTE_BASE, id: `live_${s.id}`, sessionId: s.id, projectId: s.projectId, authorId: s.mentorId, body: `Notas en vivo del mentor durante la sesión:\n${liveNotes.slice(0, 20_000)}`, createdAt: s.liveNotesUpdatedAt ?? d.now() });
   // La síntesis sale de la transcripción de la llamada; sin llamada, de las notas compartidas.
   if (!callTranscript && sharedNotes.length === 0) {
     throw validation("Todavía no hay transcripción de la llamada ni notas compartidas para sintetizar. Haz la llamada desde la sesión o escribe la síntesis a mano.");
@@ -977,7 +986,23 @@ export async function closeSession(d: ServiceDeps, sessionId: string, input: Clo
     if (!input.decision) throw validation("Elegí la decisión y la hipótesis sobre la que se toma.");
     await completeSecondReview(d, sessionId, input.decision.value, input.decision.justification, input.decision.hypothesisId);
   } else {
+    if (isB2BFlow() && !s.postSessionSynthesis && ((s.liveNotes ?? "").trim() || (await sessionTranscriptForAi(d, sessionId)))) {
+      // Pivot B2B: si nadie generó la síntesis, se arma al cerrar con la transcripción y las notas en vivo.
+      await generatePostSessionSynthesis(d, sessionId).catch((err) =>
+        console.warn("[mentoring] No se pudo generar la síntesis al cerrar:", err instanceof Error ? err.message : err),
+      );
+    }
     await completeSession(d, sessionId, input.summary);
   }
-  return loadSession(d, sessionId);
+  const closed = await loadSession(d, sessionId);
+  if (isB2BFlow()) {
+    // Motor del ciclo (cycle.ts, Dev B): avanza la etapa y sugiere la próxima sesión. Si falla (o
+    // todavía es un stub), la sesión ya quedó cerrada: no se revierte el cierre.
+    try {
+      await onSessionClosed(d, closed);
+    } catch (err) {
+      console.warn("[mentoring] onSessionClosed falló:", err instanceof Error ? err.message : err);
+    }
+  }
+  return closed;
 }
