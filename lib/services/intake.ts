@@ -15,7 +15,7 @@ import {
   type TranscriptLine,
 } from "@/lib/ai/intake-interviewer";
 import { audit, sysRepo, type ServiceDeps } from "./base";
-import { advanceCycleStage, scheduleCycleSession } from "./cycle";
+import { onIntakeSubmitted } from "./cycle";
 
 /**
  * Entrevista de intake guiada por la guía del mentor y brief para la Sesión 1.
@@ -350,10 +350,9 @@ async function allClientsSubmitted(d: ServiceDeps, projectId: Id): Promise<boole
 
 /**
  * Después del envío: en proyectos grupales, cuando ya enviaron todos, se arma el consolidado; luego
- * se crea la sesión kickoff pendiente (sin fecha) y el proyecto pasa a `kickoff`.
- *
- * FASE 2 · PENDIENTE (lib/services/cycle.ts): `scheduleCycleSession` y `advanceCycleStage` siguen
- * siendo stubs. Mientras tanto, un fallo acá NO hace fallar el envío del intake: se registra y listo.
+ * el motor del ciclo crea la sesión kickoff pendiente (sin fecha: scheduled_at vacío) con la agenda
+ * sugerida y pasa el proyecto a `kickoff` (cycle.ts → onIntakeSubmitted, que vuelve a verificar).
+ * Un fallo acá NO hace fallar el envío del intake (el brief ya quedó guardado): se registra y listo.
  */
 async function afterIntakeSubmitted(d: ServiceDeps, project: Project, brief: IntakeBrief): Promise<void> {
   let agendaFrom = brief;
@@ -366,11 +365,9 @@ async function afterIntakeSubmitted(d: ServiceDeps, project: Project, brief: Int
     }
   }
   try {
-    // Kickoff pendiente sin fecha: el mentor la agenda después (cycle.ts decide cómo guardar «sin fecha»).
-    await scheduleCycleSession(d, project.id, { kind: "kickoff", scheduledAt: "", agenda: agendaFrom.suggestedAgenda });
-    await advanceCycleStage(d, project.id, "kickoff");
+    await onIntakeSubmitted(d, project.id, agendaFrom.suggestedAgenda);
   } catch (e) {
-    console.warn("[intake] kickoff pendiente (cycle.ts):", e instanceof Error ? e.message : e);
+    console.warn("[intake] no se pudo abrir la Sesión 1 pendiente:", e instanceof Error ? e.message : e);
   }
 }
 

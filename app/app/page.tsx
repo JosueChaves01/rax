@@ -8,6 +8,9 @@ import type { MentorOnboarding } from "@/types/domain";
 import { Empty, Heading, Notice, Tag, formatDate } from "@/shared/ui/primitives";
 import { NewProjectForm } from "./new-project-form";
 import { ProjectCard } from "./project-card";
+import { isB2BFlow } from "@/lib/flags";
+import { getClientHome } from "@/lib/services/client-portal";
+import { ClientHomeView } from "./client-home";
 
 export const metadata = { title: "Inicio · RAX" };
 
@@ -119,6 +122,13 @@ export default async function ProjectsPage({ searchParams }: { searchParams?: Pr
         )}
       </div>
     );
+  }
+
+  // Flujo B2B: inicio de la persona cliente (invitaciones, entrevista, sesiones, material).
+  if (isB2BFlow()) {
+    const home = await getClientHome(d);
+    const legacy = workspaces.filter((w) => !w.project.mentorId && w.relation.isClient !== true);
+    return <ClientHomeView firstName={firstName} email={d.actor.email} home={home} legacy={legacy} />;
   }
 
   // Emprendedor

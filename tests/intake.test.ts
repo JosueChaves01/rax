@@ -8,15 +8,8 @@ import { isDomainError } from "@/lib/errors";
 import { B2B_PEOPLE, fakeBuildMentorContext, sampleMentorProfile } from "./fixtures/b2b";
 
 vi.mock("@/lib/ai/mentor-context", () => ({ buildMentorContext: vi.fn(fakeBuildMentorContext) }));
-vi.mock("@/lib/services/cycle", () => ({
-  scheduleCycleSession: vi.fn(async () => {
-    throw new Error("stub de Fase 0");
-  }),
-  advanceCycleStage: vi.fn(async () => undefined),
-}));
 
 const { buildGroupBrief, getIntakeState, getIntakeView, runIntakeTurn, submitIntake, recordIntakeAnswer } = await import("@/lib/services/intake");
-const cycle = await import("@/lib/services/cycle");
 const { CLIENT_TOOLS } = await import("@/lib/ai/tools/client");
 
 const AT = "2026-11-09T10:00:00.000Z";
@@ -69,9 +62,10 @@ const code = async (p: Promise<unknown>) => p.then(() => null, (e: unknown) => (
 
 beforeEach(() => {
   tick = 0;
-  vi.mocked(cycle.scheduleCycleSession).mockClear();
-  vi.mocked(cycle.advanceCycleStage).mockClear();
 });
+
+const kickoffs = async () => (await repo.mentorSessions.list({ projectId: "prj_panaderia" })).filter((s) => s.kind === "kickoff");
+const stage = async () => (await repo.projects.get("prj_panaderia"))?.cycleStage;
 
 describe("entrevista de intake (simulada)", () => {
   it("abre con saludo y una sola pregunta, y guarda la transcripción marcada por persona", async () => {
@@ -125,8 +119,13 @@ describe("entrevista de intake (simulada)", () => {
     expect(asMentor).toMatchObject({ status: "submitted", clientId: "u_cami" });
     expect(asMentor.brief?.summary).toContain("Cami Brenes");
 
-    // Fase 2: el ciclo es un stub que falla; el envío no se cae por eso.
-    expect(cycle.scheduleCycleSession).toHaveBeenCalledWith(expect.anything(), "prj_panaderia", expect.objectContaining({ kind: "kickoff" }));
+    // Fase 2: queda la Sesión 1 pendiente, sin fecha, con la agenda sugerida, y el proyecto en kickoff.
+    const [kickoff] = await kickoffs();
+    expect(kickoff).toMatchObject({ status: "pending", mentorId: MARA.id, sessionNumber: 1 });
+    expect(kickoff.scheduledAt).toBeUndefined();
+    expect(kickoff.confirmedAt).toBeUndefined();
+    expect(kickoff.agenda?.map((t) => t.title)).toEqual(brief.suggestedAgenda.map((t) => t.title));
+    expect(await stage()).toBe("kickoff");
 
     // Doble clic: devuelve el mismo brief; después ya no se puede seguir conversando.
     expect(await submitIntake(as(CAMI), "prj_panaderia")).toEqual(brief);
@@ -163,7 +162,8 @@ describe("entrevista de intake (simulada)", () => {
 
     await submitIntake(as(CAMI), "prj_panaderia");
     expect((await repo.intakeBriefs.list({ projectId: "prj_panaderia" })).some((r) => !r.clientId)).toBe(false);
-    expect(cycle.scheduleCycleSession).not.toHaveBeenCalled();
+    expect(await kickoffs()).toHaveLength(0);
+    expect(await stage()).toBe("intake");
 
     await submitIntake(as(BETO), "prj_panaderia");
     const rows = await repo.intakeBriefs.list({ projectId: "prj_panaderia" });
@@ -173,7 +173,9 @@ describe("entrevista de intake (simulada)", () => {
     expect(group?.brief?.answers.find((a) => a.questionId === "q_negocio")?.answer).toMatch(/Cami: .*Beto: /);
     expect(group?.coverage.q_negocio).toBe("answered");
     expect(group?.coverage.q_dolor).toBe("partial");
-    expect(cycle.scheduleCycleSession).toHaveBeenCalledTimes(1);
+    expect(await kickoffs()).toHaveLength(1);
+    expect((await kickoffs())[0].agenda?.length).toBeGreaterThan(0);
+    expect(await stage()).toBe("kickoff");
 
     // El mentor ve el consolidado por defecto y lo puede rehacer.
     const asMentor = await getIntakeState(as(MARA), "prj_panaderia");

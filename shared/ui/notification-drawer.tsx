@@ -2,14 +2,20 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { markNotificationReadAction } from "@/app/actions/client";
+import { InvitationActions } from "./invitation-actions";
 
 export interface NotificationItem {
   id: string;
   title: string;
   detail: string;
   timeAgo: string;
-  kind: "material" | "review" | "task" | "session" | "ai";
+  kind: "material" | "review" | "task" | "session" | "ai" | "invitation";
   href: string;
+  /** Flujo B2B: invitación pendiente; se acepta o rechaza aquí mismo. */
+  invitationId?: string;
+  /** Flujo B2B: notificación guardada (tabla notifications); al abrirla queda leída. */
+  notificationId?: string;
 }
 
 export const DEFAULT_NOTIFICATIONS: NotificationItem[] = [];
@@ -41,6 +47,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
     task: "⏳",
     session: "📅",
     ai: "💡",
+    invitation: "✉️",
   };
 
   const KIND_COLOR = {
@@ -49,6 +56,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
     task: "bg-amber-50 text-amber-800 border-amber-200",
     session: "bg-emerald-50 text-emerald-600 border-emerald-200",
     ai: "bg-indigo-50 text-indigo-600 border-indigo-200",
+    invitation: "bg-sky-50 text-sky-700 border-sky-200",
   };
 
   return (
@@ -92,11 +100,31 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
                 Nada te espera ahora. Cuando alguien te pida algo o te toque mover un proyecto, aparece aquí.
               </div>
             ) : (
-              items.map((n) => (
+              items.map((n) =>
+                n.invitationId ? (
+                  <div key={n.id} className="p-4 sm:p-5 flex items-start gap-3 bg-sky-50/40">
+                    <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 text-base ${KIND_COLOR.invitation}`}>
+                      {KIND_ICON.invitation}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-slate-900">{n.title}</p>
+                        <span className="text-[10px] text-slate-500 shrink-0 font-mono">{n.timeAgo}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-600">{n.detail}</p>
+                      <div className="mt-3">
+                        <InvitationActions invitationId={n.invitationId} onDone={(accepted) => accepted && onClose()} />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
                 <Link
                   key={n.id}
                   href={n.href}
-                  onClick={onClose}
+                  onClick={() => {
+                    if (n.notificationId) void markNotificationReadAction(n.notificationId);
+                    onClose();
+                  }}
                   className="p-4 sm:p-5 flex items-start gap-3 hover:bg-slate-50 transition-colors group block"
                 >
                   <div
@@ -118,7 +146,8 @@ export function NotificationDrawer({ isOpen, onClose, notifications }: Notificat
                     </p>
                   </div>
                 </Link>
-              ))
+                ),
+              )
             )}
           </div>
 

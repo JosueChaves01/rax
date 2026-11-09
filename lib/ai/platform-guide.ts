@@ -1,5 +1,6 @@
 import type { Role } from "@/types/domain";
 import { STAGES } from "@/features/projects/stages";
+import { isB2BFlow } from "@/lib/flags";
 
 /**
  * Mapa de la plataforma que el agente necesita para orientar a las personas: qué es RAX, cómo se
@@ -15,6 +16,8 @@ export interface PlatformPage {
   label: string;
   what: string;
   roles: Role[];
+  /** Solo existe en el flujo B2B (RAX_B2B_FLOW): con la bandera apagada no se nombra al agente. */
+  flow?: "b2b";
 }
 
 /** Páginas generales (fuera de un proyecto). */
@@ -26,6 +29,7 @@ export const PLATFORM_PAGES: PlatformPage[] = [
   { path: "/app/sesiones", label: "Sesiones", what: "Agenda de las sesiones de mentoría de todos los proyectos (próximas, abiertas y cerradas, con su fecha pedida o confirmada por el mentor), con vista de calendario (/app/calendario). Es un índice: cada sesión se trabaja dentro de su proyecto, en Orientar (primera revisión y seguimientos) o Decidir (segunda revisión). Ahí está el briefing (se prepara solo al pedir la revisión), la videollamada con transcripción, las notas con sus respuestas, la síntesis (se arma sola al colgar y se puede editar) y el cierre del mentor: acuerdo y problema prioritario, o decisión formal. Al cerrar, los compromisos del emprendedor se vuelven tareas.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/documentos", label: "Documentos", what: "Apoyo: biblioteca con los documentos de todos tus proyectos (los que compartió el mentor, los que generó el asistente y las transcripciones), filtrables por proyecto o «solo del mentor», más la biblioteca metodológica de guías y plantillas. Todo se descarga en PDF o Word.", roles: ["entrepreneur", "mentor"] },
   { path: "/app/aprendizaje", label: "Aprendizaje", what: "Apoyo: tutor de ejercicios; el agente propone ejercicios según el objetivo del proyecto y los evalúa con puntaje y retroalimentación.", roles: ["entrepreneur", "mentor"] },
+  { path: "/app/mentor/perfil", label: "Mi perfil", what: "Perfil del mentor: presentación, metodología, guía de la entrevista de intake (preguntas con tema, para qué sirven y si son obligatorias), tono del asistente y su biblioteca de documentos (metodología, plantillas, referencias), que el asistente usa para entrevistar y responder a sus clientes.", roles: ["mentor"], flow: "b2b" },
   { path: "/app/mentor/recursos", label: "Recursos", what: "Apoyo: biblioteca de recursos y plantillas metodológicas del mentor.", roles: ["mentor"] },
   { path: "/app/admin", label: "Operaciones", what: "Panel de administración: proyectos sin mentor, solicitudes de mentores, cupos, personas y auditoría.", roles: ["admin"] },
   { path: "/app/reportes", label: "Reportes", what: "Indicadores agregados de la plataforma.", roles: ["admin"] },
@@ -65,7 +69,8 @@ No tiene acceso al contenido de los proyectos por ser admin: no inventes datos d
 /** Guía de la plataforma adaptada al rol de quien conversa. */
 export function renderPlatformGuide(role: Role): string {
   const stages = STAGES.map((s) => `${s.n}. «${s.label}» — ${s.question}`).join("\n");
-  const pages = PLATFORM_PAGES.filter((p) => p.roles.includes(role))
+  const b2b = isB2BFlow();
+  const pages = PLATFORM_PAGES.filter((p) => p.roles.includes(role) && (!p.flow || b2b))
     .map((p) => `- ${p.label} (${p.path}): ${p.what}`)
     .join("\n");
   const projectPages = role === "admin"

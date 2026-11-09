@@ -45,9 +45,31 @@ const IMPLEMENTED = new Set([
   "deleteMentorDocument",
   "getMentorKnowledgeContext",
   "buildMentorContext",
+  // Dev B · Fase 2
+  "notify",
+  "listNotifications",
+  "markNotificationRead",
+  "listMyInvitations",
+  "respondInvitation",
+  "syncPendingInvitations",
+  "getClientHome",
+  "scheduleCycleSession",
+  "advanceCycleStage",
 ]);
 /** Exportaciones nuevas, fuera del contrato de Fase 0 (ayudantes de los servicios ya implementados). */
-const EXTRA_EXPORTS = new Set(["defaultMentorProfile", "loadMentorProfile", "listMentorDocuments", "importMentorResourcesToKnowledge"]);
+const EXTRA_EXPORTS = new Set([
+  "defaultMentorProfile",
+  "loadMentorProfile",
+  "listMentorDocuments",
+  "importMentorResourcesToKnowledge",
+  // Dev B · Fase 2
+  "markNotificationsReadWhere",
+  "onIntakeSubmitted",
+  "canAdvance",
+  "stageOfProject",
+  "cleanAgenda",
+  "nextSessionOf",
+]);
 
 const deps = { repo: createMemoryRepository(), actor: B2B_PEOPLE[0] } as unknown as ServiceDeps;
 
