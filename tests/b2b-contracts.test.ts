@@ -38,6 +38,19 @@ const STUB_MODULES = {
   mentorContext,
 };
 
+/** Funciones de contrato que ya tienen implementación real (Fase 1 en adelante): no se cuentan como stubs. */
+const IMPLEMENTED = new Set([
+  // Dev A · Fase 1
+  "getMentorProfile",
+  "saveMentorProfile",
+  "addMentorDocument",
+  "deleteMentorDocument",
+  "getMentorKnowledgeContext",
+  "buildMentorContext",
+]);
+/** Exportaciones nuevas, fuera del contrato de Fase 0 (ayudantes de los servicios ya implementados). */
+const EXTRA_EXPORTS = new Set(["defaultMentorProfile", "loadMentorProfile", "listMentorDocuments", "importMentorResourcesToKnowledge"]);
+
 const deps = { repo: createMemoryRepository(), actor: B2B_PEOPLE[0] } as unknown as ServiceDeps;
 
 describe("contratos del pivot B2B (Fase 0)", () => {
@@ -45,7 +58,7 @@ describe("contratos del pivot B2B (Fase 0)", () => {
     let count = 0;
     for (const [mod, exports] of Object.entries(STUB_MODULES)) {
       for (const [name, fn] of Object.entries(exports)) {
-        if (typeof fn !== "function") continue;
+        if (typeof fn !== "function" || IMPLEMENTED.has(name) || EXTRA_EXPORTS.has(name)) continue;
         count++;
         const err = await (fn as (...a: unknown[]) => Promise<unknown>)(deps, "x", "y").then(
           () => null,
@@ -56,7 +69,7 @@ describe("contratos del pivot B2B (Fase 0)", () => {
         expect((err as Error).message).toContain(name);
       }
     }
-    expect(count).toBe(36);
+    expect(count).toBe(36 - IMPLEMENTED.size);
   });
 
   it("el repositorio en memoria tiene las tablas nuevas", async () => {
