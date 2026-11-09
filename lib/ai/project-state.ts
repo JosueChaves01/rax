@@ -1,7 +1,7 @@
 import type { Workspace } from "@/lib/services/projects";
 import { localIsoWithOffset, longLocalDateTime } from "@/lib/dates";
 import type { Role } from "@/types/domain";
-import { stageOf } from "@/features/projects/stages";
+import { b2bStageOf, stageOf } from "@/features/projects/stages";
 import { isCurrent } from "@/features/diagnosis/rules";
 import {
   AGREEMENT_FREQUENCY_LABEL,
@@ -62,6 +62,10 @@ export interface ProjectStateSnapshot {
   tasks: { total: number; done: number; open: string[]; blocked: string[]; overdue: string[] };
   evidenceCount: number;
   permissions: string[];
+  /** Proyecto del flujo B2B (Entrevista → Sesión 1 → Ciclo → Cierre). Sin valor = flujo viejo. */
+  flow?: "b2b";
+  /** B2B: sesiones numeradas con los temas de su agenda. */
+  cycleSessions?: string[];
 }
 
 const LIMITS = { highlights: 12, goals: 8, hypotheses: 6, experiments: 6, openTasks: 10, blockedTasks: 6, upcoming: 3, sessionNotes: 8, problems: 8, pendingReview: 8 } as const;
@@ -83,9 +87,54 @@ const clip = (s: string | undefined | null, n: number) => {
 
 const day = (iso?: string) => (iso ? iso.slice(0, 10) : "sin fecha");
 
+const B2B_PAGE: Record<string, string> = {
+  intake: "intake",
+  review_brief: "brief",
+  schedule_kickoff: "sesiones",
+  kickoff: "sesiones",
+  agreement: "sesiones",
+  goals: "sesiones",
+  schedule_follow_up: "sesiones",
+  commitments: "",
+  follow_up: "sesiones",
+  close_cycle: "sesiones",
+};
+
+/** Etapa, fase y siguiente paso de un proyecto B2B: salen de cycle_stage y del recorrido B2B. */
+function b2bHeadline(w: Workspace, journey: Journey) {
+  const stage = b2bStageOf(w.project.cycleStage);
+  const step = journey.steps[journey.currentIndex];
+  return {
+    stage: { id: stage.id, label: stage.label, question: stage.question },
+    phase: { id: stage.id, label: `${stage.label} (etapa ${stage.n} de 4)` },
+    next: step
+      ? { text: step.label, page: B2B_PAGE[step.id] ?? "", turn: step.owner === "entrepreneur" ? "client" : step.owner }
+      : { text: "El ciclo está cerrado.", page: "", turn: "none" },
+  };
+}
+
+/** Sesiones de un proyecto B2B con número y temas de la agenda (lo que el agente necesita para preparar). */
+function b2bSessionLines(w: Workspace): string[] {
+  return [...w.sessions]
+    .filter((s) => s.kind === "kickoff" || s.kind === "follow_up")
+    .sort((a, b) => (a.sessionNumber ?? 99) - (b.sessionNumber ?? 99) || a.createdAt.localeCompare(b.createdAt))
+    .slice(-6)
+    .map((s) => {
+      const when = s.status === "completed" ? `realizada ${day(s.completedAt)}` : s.status === "in_progress" ? "en curso" : s.scheduledAt ? `agendada ${longLocalDateTime(s.scheduledAt)}` : "por agendar";
+      const topics = (s.agenda ?? []).slice(0, 8).map((t) => `${clip(t.title, 80)}${t.status === "covered" ? " ✓" : t.status === "carried_over" ? " (pasa a la próxima)" : ""}`);
+      return `[${s.id}] Sesión ${s.sessionNumber ?? "?"} · ${SESSION_KIND_LABEL[s.kind]} (${when})${topics.length ? ` · temas: ${topics.join("; ")}` : ""}`;
+    });
+}
+
 export function buildProjectState(w: Workspace, viewerRole: Role, today: string): ProjectStateSnapshot {
+  const journey = buildJourney(w);
+  if (journey.flow === "b2b") return { ...buildBaseState(w, viewerRole, today, journey), ...b2bHeadline(w, journey), flow: "b2b", cycleSessions: b2bSessionLines(w) };
+  return buildBaseState(w, viewerRole, today, journey);
+}
+
+function buildBaseState(w: Workspace, viewerRole: Role, today: string, journey: Journey): ProjectStateSnapshot {
   const stage = stageOf(w.phase);
-  const next = nextAction(w);
+  const next = journey.flow === "b2b" ? { text: "", tab: "", turn: "none" } : nextAction(w);
   const current = w.items.filter(isCurrent);
   const problem = current
     .filter((i) => i.category === "problem" && i.priority)
@@ -151,7 +200,7 @@ export function buildProjectState(w: Workspace, viewerRole: Role, today: string)
         .slice(0, LIMITS.pendingReview)
         .map((i) => `[${i.id}] ${CATEGORY_LABEL[i.category]}: ${clip(i.title, 120)} (${REVIEW_LABEL[i.reviewStatus]})`),
     },
-    journey: buildJourney(w),
+    journey,
     relation: w.mentorshipRelation ? `[${w.mentorshipRelation.id}] etapa ${w.mentorshipRelation.stage}` : null,
     evaluations: w.cycleEvaluations.map((e) => `Ciclo ${e.cycleNumber}: decisión ${e.decision}`),
     mentors: w.mentors.map(name),
@@ -210,8 +259,37 @@ function lastSynthesisLine(sessions: Workspace["sessions"]): string | null {
 
 const list = (xs: string[], empty: string) => (xs.length ? xs.map((x) => `  - ${x}`).join("\n") : `  ${empty}`);
 
+/** Estado de un proyecto B2B: sin diagnóstico ni hipótesis (el contexto es el brief y las sesiones). */
+function renderB2BProjectState(s: ProjectStateSnapshot): string {
+  const turn = { client: "a la persona cliente", mentor: "al mentor", both: "al cliente o al mentor", none: "a nadie: el ciclo está cerrado" }[s.next.turn] ?? s.next.turn;
+  return `<project_state flow="b2b">
+Proyecto: «${s.projectName}»${s.description ? `\nDescripción: ${s.description}` : ""}
+Mentor: ${s.mentors.length ? s.mentors.join(", ") : "—"}
+Quien conversa: ${s.viewerIsMentor ? "el mentor del proyecto" : "una persona cliente del mentor"}
+Etapa del ciclo: ${s.stage.label} — «${s.stage.question}» (Entrevista → Sesión 1 → Ciclo → Cierre)
+Siguiente paso (le toca ${turn}): ${s.next.text}${s.next.page ? ` [pantalla /${s.next.page}]` : ""}
+${renderJourney(s.journey, s.viewerIsMentor)}
+
+Sesiones (número, estado y temas de la agenda):
+${list(s.cycleSessions ?? [], "ninguna todavía")}
+Última síntesis pos-sesión:
+  ${s.sessions.lastSynthesis ?? "ninguna"}
+Notas recientes visibles para quien conversa:
+${list(s.sessions.recentNotes ?? [], "ninguna")}
+Acuerdo de trabajo: ${s.agreement ?? "sin acuerdo todavía (se arma en la Sesión 1)"}
+Objetivos del ciclo:
+${list(s.goals, "sin objetivos")}
+Compromisos: ${s.tasks.done}/${s.tasks.total} hechos
+${list(s.tasks.open, "sin compromisos abiertos")}
+Vencidos:
+${list(s.tasks.overdue, "ninguno")}
+Los textos entre corchetes son ids: úsalos tal cual en las herramientas.
+</project_state>`;
+}
+
 /** Representación compacta para el prompt. Todo lo que está aquí es dato del proyecto, no instrucciones. */
 export function renderProjectState(s: ProjectStateSnapshot): string {
+  if (s.flow === "b2b") return renderB2BProjectState(s);
   const turn = { entrepreneur: "a la persona emprendedora", mentor: "al mentor", admin: "a administración (asignar mentor)", none: "a nadie: el ciclo está cerrado" }[s.next.turn] ?? s.next.turn;
   const c = s.diagnosis.counts;
   return `<project_state>

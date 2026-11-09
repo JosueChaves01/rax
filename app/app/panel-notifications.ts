@@ -67,6 +67,26 @@ function describe(n: Notification): NotificationItem | null {
         href: projectId ? `/app/p/${projectId}` : "/app/sesiones",
       };
     }
+    case "session_closed": {
+      const n = typeof p.sessionNumber === "number" ? p.sessionNumber : undefined;
+      return {
+        ...base,
+        kind: "session",
+        title: `${n ? `Sesión ${n} cerrada` : "Sesión cerrada"}${project ? ` · ${project}` : ""}`,
+        detail: "Tu mentor cerró la sesión. Revisa el resumen, tus compromisos y los temas de la próxima.",
+        href: projectId ? `/app/p/${projectId}/sesiones` : "/app/sesiones",
+      };
+    }
+    case "session_confirmed": {
+      const at = str(p.scheduledAt);
+      return {
+        ...base,
+        kind: "session",
+        title: `Asistencia confirmada${project ? ` · ${project}` : ""}`,
+        detail: `${str(p.clientName) || "Tu cliente"} confirmó que asistirá${at ? ` el ${formatDate(at)}` : ""}.`,
+        href: projectId ? `/app/p/${projectId}/sesiones` : "/app/sesiones",
+      };
+    }
     case "resource_published":
       return {
         ...base,

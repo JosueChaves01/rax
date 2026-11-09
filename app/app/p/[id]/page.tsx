@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { PHASE_LABEL } from "@/features/labels";
-import { STAGES, phasesDone, stageOf, stageState, type Turn } from "@/features/projects/stages";
+import { STAGES, phasesDone, stageOf, stageState, usesB2BStages, type Turn } from "@/features/projects/stages";
+import { isB2BFlow } from "@/lib/flags";
+import { B2BProjectHome } from "./b2b-home";
+import { loadCycleOverview } from "./cycle-data";
 import { openQuestions, pendingReview } from "@/features/diagnosis/rules";
 import { cx, formatDate } from "@/shared/ui/primitives";
 import { loadWorkspace } from "./data";
@@ -20,6 +23,8 @@ const CTA: Record<string, string> = {
 export default async function ProjectHome({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { w, actor } = await loadWorkspace(id);
+  // Flujo B2B: inicio con la línea Entrevista → Sesión 1 → Ciclo → Cierre (projects.cycle_stage).
+  if (usesB2BStages(w.project, isB2BFlow())) return <B2BProjectHome o={await loadCycleOverview(id)} />;
   const stage = stageOf(w.phase);
   const { text, tab, turn } = nextAction(w);
   const hypPending = w.hypotheses.filter((h) => h.status === "pending_approval").length;

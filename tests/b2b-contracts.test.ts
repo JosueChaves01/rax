@@ -63,6 +63,10 @@ const IMPLEMENTED = new Set([
   "getClientHome",
   "scheduleCycleSession",
   "advanceCycleStage",
+  // Dev B · Fase 3
+  "updateSessionAgenda",
+  "onSessionClosed",
+  "cycleSignalsForBriefing",
 ]);
 /** Exportaciones nuevas, fuera del contrato de Fase 0 (ayudantes de los servicios ya implementados). */
 const EXTRA_EXPORTS = new Set([
@@ -89,6 +93,10 @@ const EXTRA_EXPORTS = new Set([
   "stageOfProject",
   "cleanAgenda",
   "nextSessionOf",
+  // Dev B · Fase 3 (cycle.ts)
+  "validateAgenda",
+  "confirmAttendance",
+  "getCycleOverview",
 ]);
 
 const deps = { repo: createMemoryRepository(), actor: B2B_PEOPLE[0] } as unknown as ServiceDeps;
