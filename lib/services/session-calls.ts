@@ -39,13 +39,50 @@ export interface IceServer {
   credential?: string;
 }
 
-/** STUN público y, si se configuró, un TURN (TURN_URLS, TURN_USERNAME, TURN_CREDENTIAL). */
+/** STUN público y, si se configuró, un TURN fijo (TURN_URLS, TURN_USERNAME, TURN_CREDENTIAL). */
 export function iceServers(env: NodeJS.ProcessEnv = process.env): IceServer[] {
   const servers: IceServer[] = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
   const turn = (env.TURN_URLS ?? "").split(",").map((u) => u.trim()).filter(Boolean);
   if (turn.length) servers.push({ urls: turn, username: env.TURN_USERNAME, credential: env.TURN_CREDENTIAL });
   return servers;
 }
+
+/** Los navegadores bloquean el puerto 53 en TURN y la conexión se queda esperando: se descartan. */
+const usablePort = (url: string) => !/:53(\?|$)/.test(url);
+
+/**
+ * Servidores ICE para una llamada. Sin TURN, dos personas en redes distintas (datos móviles, Wi-Fi
+ * de oficina o de universidad) muchas veces no logran conectarse: el audio y el video nunca llegan.
+ * Con CLOUDFLARE_TURN_KEY_ID y CLOUDFLARE_TURN_API_TOKEN (TURN gratuito de Cloudflare) se piden
+ * credenciales temporales en cada llamada; si falla, se usa lo fijo de iceServers().
+ */
+export async function resolveIceServers(env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch): Promise<IceServer[]> {
+  const base = iceServers(env);
+  const keyId = env.CLOUDFLARE_TURN_KEY_ID?.trim();
+  const token = env.CLOUDFLARE_TURN_API_TOKEN?.trim();
+  if (!keyId || !token) return base;
+  try {
+    const res = await fetchImpl(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/generate-ice-servers`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ttl: 6 * 60 * 60 }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) throw new Error(`Cloudflare TURN respondió ${res.status}`);
+    const json = (await res.json()) as { iceServers?: IceServer | IceServer[] };
+    const list = Array.isArray(json.iceServers) ? json.iceServers : json.iceServers ? [json.iceServers] : [];
+    const turn = list
+      .map((s) => ({ ...s, urls: (Array.isArray(s.urls) ? s.urls : [s.urls]).filter(usablePort) }))
+      .filter((s) => s.urls.length && s.urls.some((u) => u.startsWith("turn")));
+    return [...base, ...turn];
+  } catch (err) {
+    console.warn("[session-calls] No se pudieron obtener credenciales TURN:", err instanceof Error ? err.message : err);
+    return base;
+  }
+}
+
+/** Una llamada que sigue «abierta» tras tantas horas quedó colgada (alguien cerró la pestaña). */
+const STALE_CALL_MS = 4 * 60 * 60 * 1000;
 
 async function loadSession(d: ServiceDeps, sessionId: string) {
   // Cada llamador verifica después que sea su mentor, del equipo o cliente B2B (assertParticipant).
@@ -97,7 +134,7 @@ export async function getSessionCallState(d: ServiceDeps, sessionId: string, tra
     ready,
     canCall: canCall && ready,
     transcriptionAvailable: transcriber.available,
-    iceServers: canCall ? iceServers() : [],
+    iceServers: canCall && ready ? await resolveIceServers() : [],
     activeCall: active,
     pastCalls: calls.filter((c) => c.status === "ended"),
     /** Mentor de la sesión: en la malla es quien termina la llamada para todos. */
@@ -113,9 +150,15 @@ export async function startCall(d: ServiceDeps, sessionId: string): Promise<Sess
   const s = await loadSession(d, sessionId);
   await assertParticipant(d, s);
   if (s.status === "completed") throw validation("La sesión ya terminó: agenda una nueva para volver a llamar.");
-  const [open] = await d.repo.sessionCalls.list({ sessionId, status: "active" });
-  if (open) return open;
+  const oldestFirst = (a: SessionCall, b: SessionCall) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id);
   const now = d.now();
+  const open: SessionCall[] = [];
+  for (const c of (await d.repo.sessionCalls.list({ sessionId, status: "active" })).sort(oldestFirst)) {
+    // Una llamada vieja que nadie colgó se cierra (guardando lo transcrito) en vez de reabrirla.
+    if (Date.parse(now) - Date.parse(c.startedAt) > STALE_CALL_MS) await endCall(d, c.id, { synthesize: false }).catch(() => {});
+    else open.push(c);
+  }
+  if (open[0]) return open[0];
   const call: SessionCall = {
     id: d.newId("call"),
     sessionId,
@@ -125,7 +168,22 @@ export async function startCall(d: ServiceDeps, sessionId: string): Promise<Sess
     startedAt: now,
     createdAt: now,
   };
-  const saved = await sysRepo(d).sessionCalls.insert(call);
+  let saved: SessionCall;
+  try {
+    saved = await sysRepo(d).sessionCalls.insert(call);
+  } catch (err) {
+    // Con el índice único (migración 20261109000301) la otra persona pudo abrirla primero.
+    const [winner] = (await d.repo.sessionCalls.list({ sessionId, status: "active" })).sort(oldestFirst);
+    if (winner) return winner;
+    throw err;
+  }
+  // Si las dos personas tocaron «Iniciar» casi a la vez, cada una abría su propia llamada y quedaban
+  // en canales distintos esperándose para siempre. Gana la más antigua y la otra se descarta.
+  const [winner] = (await d.repo.sessionCalls.list({ sessionId, status: "active" })).sort(oldestFirst);
+  if (winner && winner.id !== saved.id) {
+    await sysRepo(d).sessionCalls.update(saved.id, { status: "ended", endedAt: now, endedBy: d.actor.id }).catch(() => {});
+    return winner;
+  }
   await audit(d, "session.call_started", { projectId: s.projectId, targetId: saved.id, meta: { sessionId } });
   return saved;
 }

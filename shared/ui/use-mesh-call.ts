@@ -310,7 +310,8 @@ export function useMeshCall(opts: {
         if (status === "SUBSCRIBED") {
           await channel.track({ name: me.name, joinedAt: joinedAt.current, host: isHost } satisfies PresenceMeta);
           setPhase((p) => (p === "joining" ? "in_call" : p));
-          if (transcribingRef.current && phaseRef.current !== "ended") {
+          // Al reconectarse el socket vuelve a llegar SUBSCRIBED: no se arranca una segunda grabadora.
+          if (transcribingRef.current && !recorderRef.current && phaseRef.current !== "ended") {
             recorderRef.current = startTranscriptRecorder({
               stream,
               call: current,

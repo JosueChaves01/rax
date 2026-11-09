@@ -77,6 +77,9 @@ export function startTranscriptRecorder(opts: {
   // Detector simple de voz para no mandar trozos en silencio.
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new AudioCtx();
+  // Safari crea el contexto suspendido fuera del clic: sin reanudarlo el medidor lee silencio y
+  // nunca se enviaba nada a transcribir. Si no arranca, se transcribe sin filtro de silencio.
+  ctx.resume().catch(() => {});
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
   ctx.createMediaStreamSource(audioOnly).connect(analyser);
@@ -119,7 +122,8 @@ export function startTranscriptRecorder(opts: {
     recorder.ondataavailable = (e) => e.data.size && parts.push(e.data);
     recorder.onstop = () => {
       const blob = new Blob(parts, { type: mime });
-      if (speechFrames >= MIN_SPEECH_FRAMES && blob.size > 0) uploads.push(upload(blob, offsetMs));
+      const gated = ctx.state === "running";
+      if ((!gated || speechFrames >= MIN_SPEECH_FRAMES) && blob.size > 0) uploads.push(upload(blob, offsetMs));
       if (!stopped) cycle();
     };
     recorder.start();
@@ -182,6 +186,8 @@ export function useSessionCall(opts: {
   const flushedRef = useRef<() => void>(() => {});
   const phaseRef = useRef<CallPhase>("idle");
   const transcribingRef = useRef(opts.transcriptionAvailable);
+  const retriesRef = useRef(0);
+  const reofferRef = useRef<() => void>(() => {});
   phaseRef.current = phase;
 
   const addSegment = useCallback((s: LiveSegment) => {
@@ -210,7 +216,12 @@ export function useSessionCall(opts: {
     pc.onicecandidate = (e) => {
       if (e.candidate && peerIdRef.current) send("signal", { type: "ice", to: peerIdRef.current, candidate: e.candidate.toJSON() });
     };
-    pc.onconnectionstatechange = () => setConnection(pc.connectionState);
+    pc.onconnectionstatechange = () => {
+      if (pcRef.current !== pc) return;
+      setConnection(pc.connectionState);
+      if (pc.connectionState === "connected") retriesRef.current = 0;
+      if (pc.connectionState === "failed") reofferRef.current();
+    };
     return pc;
   }, [iceServers, send]);
 
@@ -221,6 +232,20 @@ export function useSessionCall(opts: {
     await pc.setLocalDescription(offer);
     send("signal", { type: "offer", to: peerIdRef.current, sdp: pc.localDescription!.toJSON() });
   }, [newPeerConnection, send]);
+
+  // Si la conexión falla (cambio de red, NAT estricto), quien negocia vuelve a intentar un par de veces.
+  reofferRef.current = () => {
+    const peerId = peerIdRef.current;
+    if (!peerId || phaseRef.current !== "in_call") return;
+    if (retriesRef.current >= 2) {
+      setError(
+        "No se pudo conectar el audio y video con la otra persona. Suele pasar cuando están en redes distintas (datos móviles, Wi-Fi de oficina): prueben otra red o pidan configurar el servidor TURN.",
+      );
+      return;
+    }
+    retriesRef.current++;
+    if (me.id < peerId) makeOffer().catch(() => setError("No se pudo reintentar la conexión."));
+  };
 
   const onSignal = useCallback(async (msg: Signal) => {
     if (msg.to !== me.id) return;
@@ -288,11 +313,13 @@ export function useSessionCall(opts: {
   const join = useCallback(async () => {
     setError(null);
     setResult(null);
+    retriesRef.current = 0;
     const sb = browserSupabase();
     if (!sb) return setError("Falta configurar Supabase en el navegador para conectar la llamada.");
     if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === "undefined") {
       return setError("Este navegador no permite videollamadas. Prueba con Chrome, Edge, Firefox o Safari actualizados.");
     }
+    phaseRef.current = "joining";
     setPhase("joining");
 
     let stream: MediaStream;
@@ -375,12 +402,26 @@ export function useSessionCall(opts: {
         if (changed && me.id < otherId) makeOffer().catch(() => setError("No se pudo iniciar la conexión."));
       })
       .subscribe(async (status) => {
+        if (channelRef.current !== channel) return;
         if (status === "SUBSCRIBED") {
-          await channel.track({ name: me.name });
+          // Al reconectarse el socket (celular, cambio de pestaña) vuelve a llegar SUBSCRIBED: solo se
+          // anuncia de nuevo la presencia; antes se arrancaba otra grabadora y se duplicaba el audio.
+          await channel.track({ name: me.name }).catch(() => {});
+          if (phaseRef.current !== "joining") {
+            setError((prev) => (prev?.startsWith("Se cortó la conexión") ? null : prev));
+            return;
+          }
+          phaseRef.current = "in_call";
           setPhase("in_call");
           startRecorder(stream, current);
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          setError("No se pudo conectar el canal de la llamada. ¿Se aplicó la migración de llamadas?");
+          if (phaseRef.current === "joining") {
+            safely(cleanup);
+            setPhase("idle");
+            setError("No se pudo conectar el canal de la llamada (Supabase Realtime). Revisa tu conexión y vuelve a intentar.");
+          } else if (phaseRef.current === "in_call") {
+            setError("Se cortó la conexión con el servidor de la llamada; reintentando…");
+          }
         }
       });
   }, [sessionId, me.id, me.name, onSignal, addSegment, send, cleanup, makeOffer, startRecorder]);
