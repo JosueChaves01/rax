@@ -1,4 +1,5 @@
 import type {
+  AgentThread,
   AgreementFrequency,
   Id,
   MentorSession,
@@ -8,8 +9,8 @@ import type {
   Task,
 } from "@/types/domain";
 import type { CycleStage, ProjectMode, SessionTopic } from "@/types/b2b";
-import { conflict, forbidden, notFound, validation } from "@/lib/errors";
-import { audit, sysRepo, type ServiceDeps } from "./base";
+import { conflict, forbidden, isDomainError, notFound, validation } from "@/lib/errors";
+import { audit, guard, sysRepo, type ServiceDeps } from "./base";
 import { getIntakeBriefsForMentor, type MentorBriefEntry } from "./mentor-projects";
 import {
   confirmMentorshipAgreement,
@@ -35,7 +36,7 @@ import { createTask } from "./validation";
  * la política de actualización de `mentor_sessions`.
  */
 
-/** Tope de las notas en vivo (igual que el check de la columna live_notes). */
+/** Tope de las notas en vivo (igual que el check de session_live_notes.text). */
 export const LIVE_NOTES_MAX = 50_000;
 
 /** Quién mira la sala: el mentor de la sesión o un cliente del proyecto. */
@@ -96,12 +97,27 @@ async function mentorAccess(d: ServiceDeps, sessionId: Id, opts: { open?: boolea
 /* ───────────── Notas en vivo ───────────── */
 
 /**
+ * Notas en vivo de una sesión, leídas como sistema (tabla `session_live_notes`, solo del mentor).
+ * Quien llama ya verificó que es el mentor de la sesión, o las usa en el servidor (síntesis).
+ */
+export async function readLiveNotes(d: ServiceDeps, sessionId: Id): Promise<{ text: string; updatedAt?: string }> {
+  const row = await sysRepo(d).sessionLiveNotes.get(sessionId);
+  return row ? { text: row.text, updatedAt: row.updatedAt } : { text: "" };
+}
+
+/**
  * Guarda las notas en vivo (autosave de la sala). Solo el mentor de la sesión.
  *
- * Control de concurrencia optimista por `live_notes_updated_at`: con `expectedUpdatedAt`, si la
- * sesión tiene otra marca (otra pestaña guardó después) lanza `DomainError` con código **`conflict`**
- * y no escribe. `expectedUpdatedAt = ""` significa «nunca se guardaron». Sin `expectedUpdatedAt` se
- * sobrescribe sin comprobar. Las notas no se guardan en una sesión cerrada (`validation`).
+ * Se guardan en `session_live_notes` (migración 20261109000103), no en `mentor_sessions`: los
+ * clientes pueden leer su fila de la sesión por RLS y las notas son privadas del mentor.
+ *
+ * Control de concurrencia optimista por la marca `updatedAt`: con `expectedUpdatedAt`, si la fila
+ * tiene otra marca (otra pestaña guardó después) lanza `DomainError` con código **`conflict`** y no
+ * escribe. `expectedUpdatedAt = ""` significa «nunca se guardaron». Sin `expectedUpdatedAt` se
+ * sobrescribe sin comprobar. La escritura es atómica: se actualiza con `version = <la leída>`
+ * (o se inserta la fila, con la sesión como clave primaria), así que dos guardados que leyeron la
+ * misma versión no se pisan: el segundo recibe `conflict`. Las notas no se guardan en una sesión
+ * cerrada (`validation`).
  */
 export async function saveLiveNotes(
   d: ServiceDeps,
@@ -113,15 +129,29 @@ export async function saveLiveNotes(
   if (session.status === "completed") throw validation("La sesión ya terminó: las notas en vivo quedaron cerradas.");
   const value = String(text ?? "");
   if (value.length > LIVE_NOTES_MAX) throw validation(`Las notas en vivo admiten hasta ${LIVE_NOTES_MAX.toLocaleString("es")} caracteres.`);
-  if (expectedUpdatedAt !== undefined && (session.liveNotesUpdatedAt ?? "") !== expectedUpdatedAt) {
+  const sys = sysRepo(d);
+  const current = await sys.sessionLiveNotes.get(sessionId);
+  if (expectedUpdatedAt !== undefined && (current?.updatedAt ?? "") !== expectedUpdatedAt) {
     throw conflict("Las notas cambiaron en otra pestaña o dispositivo mientras escribías.");
   }
   let updatedAt = d.now();
   // La marca debe cambiar en cada guardado para que el control de concurrencia funcione.
-  if (session.liveNotesUpdatedAt && updatedAt <= session.liveNotesUpdatedAt) {
-    updatedAt = new Date(Date.parse(session.liveNotesUpdatedAt) + 1).toISOString();
+  if (current?.updatedAt && updatedAt <= current.updatedAt) {
+    updatedAt = new Date(Date.parse(current.updatedAt) + 1).toISOString();
   }
-  await sysRepo(d).mentorSessions.update(sessionId, { liveNotes: value, liveNotesUpdatedAt: updatedAt });
+  try {
+    if (current) {
+      // Actualización condicional: si otro guardado ganó entre la lectura y esta escritura, la
+      // versión ya no coincide y el repositorio lanza `conflict` sin escribir.
+      await sys.sessionLiveNotes.update(sessionId, { text: value, updatedAt, updatedBy: d.actor.id, version: current.version + 1 }, current.version);
+    } else {
+      await sys.sessionLiveNotes.insert({ id: sessionId, projectId: session.projectId, text: value, version: 1, updatedAt, updatedBy: d.actor.id });
+    }
+  } catch (e) {
+    // Dos primeros guardados a la vez: la clave primaria rechaza el segundo (también es un conflicto).
+    if (isDomainError(e) && e.code === "conflict") throw conflict("Las notas cambiaron en otra pestaña o dispositivo mientras escribías.");
+    throw e;
+  }
   return { updatedAt };
 }
 
@@ -228,7 +258,7 @@ export async function getSessionRoomState(d: ServiceDeps, sessionId: Id): Promis
   };
   if (viewer === "mentor") {
     const view = await getIntakeBriefsForMentor(d, project.id);
-    state.liveNotes = { text: session.liveNotes ?? "", updatedAt: session.liveNotesUpdatedAt };
+    state.liveNotes = await readLiveNotes(d, session.id);
     state.briefs = view.briefs;
     state.clientContext = view.project.clientContext;
   }
@@ -336,4 +366,35 @@ export async function addClientCommitment(d: ServiceDeps, sessionId: Id, input: 
   const dueDate = input?.dueDate ? String(input.dueDate).slice(0, 10) : undefined;
   if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw validation("La fecha del compromiso no es válida.");
   return createTask(d, project.id, { title, assigneeId: clientId, dueDate, actionType: "operational_task" });
+}
+
+/* ───────────── Asistente de la sala (Fase 4) ───────────── */
+
+/**
+ * Hilo del asistente del mentor en la sala: uno por mentor y sesión (`agent_threads.scope =
+ * 'session_room'`, `mentor_session_id`), guardado en el servidor en vez del navegador. Lo encuentra
+ * o lo crea. Solo el mentor de la sesión; un cliente recibe `forbidden`.
+ */
+export async function getOrCreateRoomThread(d: ServiceDeps, sessionId: Id): Promise<AgentThread> {
+  const { session, project } = await mentorAccess(d, sessionId);
+  await guard(d, project.id, "agent.chat");
+  const mine = await d.repo.agentThreads.list({ projectId: project.id, creatorId: d.actor.id, mentorSessionId: session.id });
+  const existing = mine
+    .filter((t) => t.scope === "session_room" && t.mentorSessionId === session.id && t.status !== "closed")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  if (existing) return existing;
+  const label = session.kind === "kickoff" ? "Sesión 1" : session.sessionNumber ? `Sesión ${session.sessionNumber}` : "Sesión";
+  const now = d.now();
+  return d.repo.agentThreads.insert({
+    id: d.newId("agt"),
+    projectId: project.id,
+    creatorId: d.actor.id,
+    title: `Sala · ${label} · ${project.name}`.slice(0, 200),
+    isPinned: false,
+    status: "active",
+    scope: "session_room",
+    mentorSessionId: session.id,
+    createdAt: now,
+    updatedAt: now,
+  });
 }

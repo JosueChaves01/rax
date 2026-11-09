@@ -9,6 +9,11 @@ import type { ProjectDocRow } from "./data";
 import type { ProjectDocumentFileType } from "@/types/domain";
 import { ACCEPTED_UPLOADS, uploadForText } from "@/lib/documents/uploads";
 import { ViewDocumentButton, documentKindLabel } from "@/shared/ui/document-viewer";
+import type { DocKind } from "@/types/b2b";
+import { PublishControls, type PublicationState, type PublishAudience } from "./documentos/publish-controls";
+
+/** Pivot B2B (solo el mentor del proyecto, con RAX_B2B_FLOW): estado de publicación de cada documento. */
+export type DocumentsPublishing = PublishAudience & { documents: Record<string, PublicationState & { docKind: DocKind }> };
 
 const SOURCE_LABEL: Record<ProjectDocRow["source"], string> = {
   upload: "Compartido",
@@ -31,9 +36,12 @@ export function DocumentsPanel({
   title,
   subtitle,
   compact,
+  publishing,
 }: {
   projectId: string;
   docs: ProjectDocRow[];
+  /** Con valor, cada documento muestra «Publicar al cliente» (o para quién está publicado). */
+  publishing?: DocumentsPublishing;
   canShare: boolean;
   viewerIsMentor: boolean;
   /** "mentor": solo los documentos que compartió el mentor. */
@@ -93,7 +101,7 @@ export function DocumentsPanel({
       {list.length ? (
         <ul className="mt-4 divide-y divide-slate-100">
           {list.map((doc) => (
-            <DocRow key={doc.id} projectId={projectId} doc={doc} />
+            <DocRow key={doc.id} projectId={projectId} doc={doc} publishing={publishing} />
           ))}
         </ul>
       ) : (
@@ -115,7 +123,8 @@ export function DocumentsPanel({
   );
 }
 
-function DocRow({ projectId, doc }: { projectId: string; doc: ProjectDocRow }) {
+function DocRow({ projectId, doc, publishing }: { projectId: string; doc: ProjectDocRow; publishing?: DocumentsPublishing }) {
+  const publication = publishing?.documents[doc.id];
   const { run, pending, error } = useAction();
   const [confirming, setConfirming] = useState(false);
   return (
@@ -135,6 +144,11 @@ function DocRow({ projectId, doc }: { projectId: string; doc: ProjectDocRow }) {
           </span>
         </p>
         {error && <p className="mt-1 text-xs text-rose-700">{error}</p>}
+        {publishing && publication && publication.docKind !== "intake" && (
+          <div className="mt-2">
+            <PublishControls documentId={doc.id} state={publication} audience={publishing} docKind={publication.docKind} />
+          </div>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs font-semibold">
         <ViewDocumentButton docRef={{ proyecto: projectId, documento: doc.id }} title={doc.title} />

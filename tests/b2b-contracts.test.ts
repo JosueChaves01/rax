@@ -53,6 +53,9 @@ const IMPLEMENTED = new Set([
   "markIntakeReviewed",
   // Dev A · Fase 3
   "saveLiveNotes",
+  // Dev A · Fase 4
+  "publishDocument",
+  "unpublishDocument",
   // Dev B · Fase 2
   "notify",
   "listNotifications",
@@ -78,6 +81,14 @@ const EXTRA_EXPORTS = new Set([
   "b2bSessionViewer",
   "sessionAccess",
   "getSessionRoomState",
+  // Dev A · Fase 4 (session-room.ts y publishing.ts)
+  "readLiveNotes",
+  "getOrCreateRoomThread",
+  "publishSessionSynthesis",
+  "renderSynthesisDocument",
+  "sessionLabel",
+  "getProjectPublishing",
+  "getSessionPublishables",
   "saveKickoffAgreement",
   "confirmKickoffAgreement",
   "addKickoffGoal",
@@ -197,8 +208,13 @@ describe("contratos del pivot B2B (Fase 0)", () => {
     expect(names("entrepreneur", plain)).not.toContain("save_mentor_note");
     expect(names("mentor", plain)).toContain("save_mentor_note");
     expect(names("entrepreneur", { ...plain, session: true, siblings: true }).slice(0, 3)).toEqual(["update_session_notes", "read_session_thread", "generate_document"]);
-    expect(names("mentor", { ...plain, b2b: true })).toEqual(names("mentor", plain));
-    expect(MENTOR_TOOLS).toEqual([]);
+    // Con la bandera, el mentor suma sus herramientas (Fase 4) sin perder ninguna de las de siempre.
+    const mentorB2B = names("mentor", { ...plain, b2b: true });
+    for (const name of names("mentor", plain)) expect(mentorB2B).toContain(name);
+    expect(MENTOR_TOOLS.map((t) => t.definition.name)).toEqual(["search_mentor_knowledge", "summarize_document", "draft_material", "propose_publish"]);
+    expect(mentorB2B).toEqual(expect.arrayContaining(MENTOR_TOOLS.map((t) => t.definition.name)));
+    expect(names("mentor", plain)).not.toContain("draft_material");
+    expect(names("entrepreneur", { ...plain, b2b: true })).not.toContain("draft_material");
     expect(CLIENT_TOOLS.map((t) => t.definition.name)).toEqual(["record_intake_answer", "finish_intake"]);
     expect(names("entrepreneur", plain)).not.toContain("record_intake_answer");
     expect(names("entrepreneur", { ...plain, b2b: true })).toContain("record_intake_answer");

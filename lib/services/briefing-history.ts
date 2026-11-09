@@ -2,8 +2,10 @@ import type { MentorSession, ProjectKnowledgeDocument, SessionNote, SessionNoteR
 import type { BriefingNote, BriefingPreviousSession, BriefingQuestion } from "@/lib/ai/provider";
 import { SESSION_KIND_LABEL } from "@/features/labels";
 import { plainText } from "@/lib/ai/plain-text";
-import type { ServiceDeps } from "./base";
+import { isB2BFlow } from "@/lib/flags";
+import { sysRepo, type ServiceDeps } from "./base";
 import { sessionTranscriptForAi } from "./session-transcript";
+import { cycleSignalsForBriefing } from "./cycle";
 
 /** Los documentos eliminados quedan vacíos (ver project-knowledge.ts). */
 const isActiveDocument = (doc: Pick<ProjectKnowledgeDocument, "content">) => doc.content !== "";
@@ -21,6 +23,7 @@ const MAX_NOTES_PER_SESSION = 15;
 const MAX_REPLIES_PER_NOTE = 4;
 const MAX_TRANSCRIPT = 5_000;
 const MAX_DOCUMENTS = 6;
+const MAX_CYCLE_SIGNALS = 10;
 
 export interface BriefingHistory {
   /** Notas (con respuestas) de la sesión anterior más reciente. */
@@ -146,6 +149,11 @@ export async function buildBriefingHistory(
       ].slice(0, 8)
     : [];
 
+  // Pivot B2B: lo que pasó en el ciclo desde la última sesión (comentarios del cliente al material
+  // y resultados de evaluaciones), del proveedor de Dev B (cycle.ts).
+  const cycleSignals = isB2BFlow() ? await cycleSignalLines(d, current, previous, documents) : [];
+  const pending = [...previousSessionPending, ...cycleSignals];
+
   const currentNotes = notesOf(current.id).map(toNote);
   const docs = documents
     .filter(isActiveDocument)
@@ -158,7 +166,38 @@ export async function buildBriefingHistory(
     previousSessions: previousSessions.length ? previousSessions : undefined,
     questionsFromNotes: questionsFromNotes.length ? questionsFromNotes : undefined,
     currentSessionNotes: currentNotes.length ? currentNotes : undefined,
-    previousSessionPending: previousSessionPending.length ? previousSessionPending : undefined,
+    previousSessionPending: pending.length ? pending : undefined,
     documents: docs.length ? docs : undefined,
   };
+}
+
+/**
+ * Señales del ciclo para el briefing en texto plano: comentarios nuevos del cliente (sobre material
+ * publicado o sobre una sesión) y resultados de evaluaciones, desde la última sesión cerrada. Si el
+ * proveedor falla o todavía no existe, el briefing sigue sin ellas.
+ */
+async function cycleSignalLines(d: ServiceDeps, current: MentorSession, previous: MentorSession[], documents: ProjectKnowledgeDocument[]): Promise<string[]> {
+  const since = previous.map((s) => s.completedAt).filter((x): x is string => !!x).sort().pop();
+  let signals;
+  try {
+    signals = await cycleSignalsForBriefing(d, current.projectId, since ? { since } : {});
+  } catch (e) {
+    console.warn("[briefing] sin señales del ciclo:", e instanceof Error ? e.message : e);
+    return [];
+  }
+  const ids = [...new Set([...(signals.newComments ?? []).map((c) => c.authorId), ...(signals.assessmentResults ?? []).map((r) => r.clientId)])];
+  const people = await Promise.all(ids.map((id) => sysRepo(d).profiles.get(id).catch(() => undefined)));
+  const name = (id: string) => people.find((p) => p?.id === id)?.name ?? "El cliente";
+  const docTitle = new Map(documents.map((doc) => [doc.id, doc.title || doc.filename]));
+  const lines = [
+    ...(signals.newComments ?? []).map((c) => {
+      const on = c.targetType === "document" ? `el material «${docTitle.get(c.targetId) ?? "publicado"}»` : "una sesión";
+      return `Comentario de ${name(c.authorId)} sobre ${on} (${day(c.createdAt) ?? ""}): ${plainText(c.body, 240)}`;
+    }),
+    ...(signals.assessmentResults ?? []).map((r) => {
+      const state = r.status === "reviewed" ? "revisada" : r.status === "submitted" ? "entregada, sin revisar" : "sin entregar";
+      return `Evaluación «${plainText(r.title, 120)}» de ${name(r.clientId)}: ${state}${typeof r.score === "number" ? `, puntaje ${r.score}` : ""}`;
+    }),
+  ];
+  return lines.slice(0, MAX_CYCLE_SIGNALS);
 }

@@ -12,8 +12,8 @@ import { redirect } from "next/navigation";
 import { isB2BFlow } from "@/lib/flags";
 import { forbidden, validation } from "@/lib/errors";
 import type { Id } from "@/types/domain";
-import type { MentorshipAgreement, MentorshipGoal, Task } from "@/types/domain";
-import type { MentorProfile, ProjectInvitation } from "@/types/b2b";
+import type { AgentMessage, MentorshipAgreement, MentorshipGoal, Task } from "@/types/domain";
+import type { DocKind, MentorProfile, ProjectInvitation, PublishedResource } from "@/types/b2b";
 import {
   createProjectAsMentor,
   inviteClient,
@@ -36,6 +36,7 @@ import {
   addClientCommitment,
   addKickoffGoal,
   confirmKickoffAgreement,
+  getOrCreateRoomThread,
   getSessionRoomState,
   saveKickoffAgreement,
   saveLiveNotes,
@@ -44,6 +45,15 @@ import {
   type KickoffGoalInput,
   type SessionRoomState,
 } from "@/lib/services/session-room";
+import {
+  getSessionPublishables,
+  publishDocument,
+  publishSessionSynthesis,
+  unpublishDocument,
+  type PublishOptions,
+  type SessionPublishables,
+} from "@/lib/services/publishing";
+import { listAgentMessages } from "@/lib/services/agent-chat";
 import { read, run, type ActionResult } from "./_run";
 
 const PROFILE_PATH = "/app/mentor/perfil";
@@ -269,5 +279,64 @@ export async function addClientCommitmentAction(sessionId: string, input: Client
     });
     roomPath(id);
     return task;
+  });
+}
+
+/* ───────────── Asistente de la sala y publicación (Fase 4) ───────────── */
+
+/**
+ * Hilo del asistente del mentor en la sala (uno por sesión, en el servidor) con sus mensajes.
+ * Los turnos se envían con `sendClaudeAgentMessageAction` (app/actions.ts) usando ese `threadId`.
+ */
+export async function openRoomAssistantAction(sessionId: string): Promise<ActionResult<{ threadId: Id; projectId: Id; messages: AgentMessage[] }>> {
+  return read(async (d) => {
+    requireFlow();
+    const thread = await getOrCreateRoomThread(d, idOf(sessionId));
+    return { threadId: thread.id, projectId: thread.projectId, messages: await listAgentMessages(d, thread.id) };
+  });
+}
+
+function publishOptions(input: unknown): PublishOptions {
+  const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const kinds: DocKind[] = ["material", "summary", "transcript", "agreement"];
+  return {
+    sessionId: o.sessionId ? idOf(o.sessionId) : undefined,
+    docKind: kinds.find((k) => k === o.docKind),
+    audienceClientId: o.audienceClientId ? idOf(o.audienceClientId) : undefined,
+  };
+}
+
+/** «Publicar al cliente» (o a una persona del grupo). Solo el mentor del proyecto. */
+export async function publishDocumentAction(documentId: string, opts?: PublishOptions): Promise<ActionResult<PublishedResource>> {
+  return run(null, async (d) => {
+    requireFlow();
+    return publishDocument(d, idOf(documentId), publishOptions(opts));
+  });
+}
+
+export async function unpublishDocumentAction(documentId: string): Promise<ActionResult> {
+  return run(null, async (d) => {
+    requireFlow();
+    await unpublishDocument(d, idOf(documentId));
+    return undefined;
+  });
+}
+
+/** Publica con un clic la síntesis de la sesión como documento `summary`. */
+export async function publishSessionSynthesisAction(sessionId: string, audienceClientId?: string): Promise<ActionResult<PublishedResource>> {
+  const id = idOf(sessionId);
+  return run(null, async (d) => {
+    requireFlow();
+    const res = await publishSessionSynthesis(d, id, { audienceClientId: audienceClientId ? idOf(audienceClientId) : undefined });
+    roomPath(id);
+    return res;
+  });
+}
+
+/** Síntesis, transcripciones y material de la sesión con su estado de publicación. */
+export async function getSessionPublishablesAction(sessionId: string): Promise<ActionResult<SessionPublishables>> {
+  return read(async (d) => {
+    requireFlow();
+    return getSessionPublishables(d, idOf(sessionId));
   });
 }
