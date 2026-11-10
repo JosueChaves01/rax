@@ -346,3 +346,38 @@ describe("señales para el briefing", () => {
     expect(await code(cycleSignalsForBriefing(as(CAMI), "prj_panaderia"))).toBe("forbidden");
   });
 });
+
+describe("arreglos de la prueba de inicio a fin", () => {
+  it("confirmar asistencia no filtra audit_events por actor (Postgres no lo soporta) y cada cliente confirma lo suyo", async () => {
+    await seed("group", [CAMI, BETO]);
+    // Igual que el repositorio de Supabase: un filtro por actorId revienta.
+    const list = repo.auditEvents.list.bind(repo.auditEvents);
+    repo.auditEvents.list = (where) => {
+      if (where && "actorId" in where) throw new Error("Filtro no soportado en audit_events: actorId");
+      return list(where);
+    };
+    const k = await scheduleCycleSession(as(MARA), "prj_panaderia", { kind: "kickoff", scheduledAt: FUTURE, agenda: [] });
+    const cami = await confirmAttendance(as(CAMI), k.id);
+    const beto = await confirmAttendance(as(BETO), k.id);
+    expect(beto.confirmedAt).not.toBe(cami.confirmedAt);
+    expect((await confirmAttendance(as(CAMI), k.id)).confirmedAt).toBe(cami.confirmedAt);
+    expect(await repo.auditEvents.list({ projectId: "prj_panaderia", action: "session.confirmed" })).toHaveLength(2);
+  });
+
+  it("con el flujo B2B, el asistente del mentor agenda la sesión en el ciclo", async () => {
+    const before = process.env.RAX_B2B_FLOW;
+    process.env.RAX_B2B_FLOW = "on";
+    try {
+      const { applyAgentProposal } = await import("@/lib/services/agent-actions");
+      const card = { type: "flow_action", title: "Agendar", needsHumanApproval: true, metadata: { action: "schedule_session", scheduledAt: "2026-11-20T10:00" } };
+      const res = await applyAgentProposal(as(MARA), "prj_panaderia", card as never);
+      expect(res).toMatchObject({ ok: true, notice: "Sesión 1 agendada." });
+      const [k] = await sessions();
+      expect(k).toMatchObject({ kind: "kickoff", mentorId: MARA.id, scheduledAt: "2026-11-20T16:00:00.000Z" });
+      expect((await project()).cycleStage).toBe("kickoff");
+    } finally {
+      if (before === undefined) delete process.env.RAX_B2B_FLOW;
+      else process.env.RAX_B2B_FLOW = before;
+    }
+  });
+});

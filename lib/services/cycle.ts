@@ -503,8 +503,9 @@ export async function confirmAttendance(d: ServiceDeps, sessionId: Id): Promise<
   const project = await asProjectClient(d, session.projectId);
   if (session.status === "completed") throw validation("La sesión ya terminó.");
   if (!session.scheduledAt) throw validation("Tu mentor todavía no le puso fecha a esta sesión.");
-  const previous = (await sys.auditEvents.list({ projectId: project.id, action: "session.confirmed", targetId: sessionId, actorId: d.actor.id })).find(
-    (e) => e.meta?.attendance === true,
+  // audit_events no se filtra por actor en la base (actor_kind + actor_id): se filtra aquí.
+  const previous = (await sys.auditEvents.list({ projectId: project.id, action: "session.confirmed", targetId: sessionId })).find(
+    (e) => e.actorId === d.actor.id && e.meta?.attendance === true,
   );
   if (previous) return { sessionId, confirmedAt: previous.createdAt };
   const confirmedAt = d.now();
