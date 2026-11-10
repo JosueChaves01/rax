@@ -27,6 +27,8 @@ import {
   saveMentorshipAgreement,
 } from "./mentorship-relation";
 import { recordCycleEvaluation } from "./evaluation";
+import { scheduleCycleSession, stageOfProject } from "./cycle";
+import { isB2BFlow } from "@/lib/flags";
 import {
   addEvidence,
   approveHypothesis,
@@ -382,6 +384,18 @@ async function runStepAction(d: ServiceDeps, projectId: string, p: StepActionPar
       return done(s.id, "Decisión registrada: el ciclo quedó cerrado.");
     }
     case "schedule_session": {
+      // Proyecto B2B del propio mentor: la sesión se agenda en el ciclo (Sesión 1 o seguimiento).
+      // La vía vieja (scheduleSession) exige asignación y la política de RLS solo deja insertar a la dueña.
+      const project = isB2BFlow() ? await d.repo.projects.get(projectId) : undefined;
+      if (project?.mentorId && project.mentorId === d.actor.id) {
+        const stage = stageOfProject(project);
+        const s = await scheduleCycleSession(d, projectId, {
+          kind: stage === "intake" || stage === "kickoff" ? "kickoff" : "follow_up",
+          scheduledAt: sessionDate(p.scheduledAt) ?? "",
+          agenda: [],
+        });
+        return done(s.id, s.kind === "kickoff" ? "Sesión 1 agendada." : "Sesión agendada.");
+      }
       const at = sessionDate(p.scheduledAt);
       const rel = (await d.repo.mentorshipRelations.list({ projectId })).find((r) => r.stage !== "closed");
       const s = await scheduleSession(d, projectId, { kind: "follow_up" as MentorSessionKind, scheduledAt: at, relationId: rel?.id });
