@@ -4,7 +4,7 @@ import { isB2BFlow } from "@/lib/flags";
 import { getDeps } from "@/lib/runtime";
 import { getProjectPublishing } from "@/lib/services/publishing";
 
-export const metadata = { title: "Documentos del proyecto · RAX" };
+export const metadata = { title: "Documentos del proyecto · AdvisorMind" };
 
 /** Pivot B2B: solo el mentor del proyecto ve los botones de publicar (null para los demás). */
 async function loadPublishing(projectId: string): Promise<DocumentsPublishing | undefined> {

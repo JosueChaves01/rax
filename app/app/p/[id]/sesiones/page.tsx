@@ -10,7 +10,7 @@ import { loadB2B } from "../evaluaciones/data";
 import { loadCycleOverview, sessionTitle, sessionWhen } from "../cycle-data";
 import { AgendaEditor, AgendaList, ConfirmAttendanceButton, ScheduleSessionForm } from "./session-controls";
 
-export const metadata = { title: "Sesiones · RAX" };
+export const metadata = { title: "Sesiones · AdvisorMind" };
 
 const STATUS_TAG: Record<CycleSessionView["status"], { label: string; color: string }> = {
   pending: { label: "Pendiente", color: "#d97706" },

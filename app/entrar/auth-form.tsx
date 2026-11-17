@@ -118,7 +118,7 @@ export function AuthForm({ initialMode, next, linkError }: { initialMode: Mode; 
 
         {showForgotNotice && (
           <div className="p-3 text-xs bg-blue-50 border border-blue-200 text-blue-800 rounded-xl">
-            Ingresa tu correo y contacta al administrador de RAX para restablecer el acceso temporal.
+            Ingresa tu correo y contacta al administrador de AdvisorMind para restablecer el acceso temporal.
           </div>
         )}
 

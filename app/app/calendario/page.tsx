@@ -5,7 +5,7 @@ import { listMyProjects } from "@/lib/services/projects";
 import { listSessionsForViewer } from "@/lib/services/session-visibility";
 import { formatDate } from "@/shared/ui/primitives";
 
-export const metadata = { title: "Calendario · RAX" };
+export const metadata = { title: "Calendario · AdvisorMind" };
 
 export default async function CalendarPage() {
   const d = await getDeps();

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { signOutAction } from "@/app/actions";
 import { ROLE_LABEL } from "@/features/labels";
 import type { Profile } from "@/types/domain";
@@ -15,8 +16,11 @@ export function AppHeader({ actor, onOpenNotifications, unreadCount = 0 }: AppHe
   return (
     <header className="h-16 border-b border-slate-200 bg-white sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 lg:px-8">
       {/* En celular no hay barra lateral: el logo lleva al inicio del rol. */}
-      <Link href={actor.role === "admin" ? "/app/admin" : "/app"} className="md:hidden text-xl font-black tracking-tight text-slate-900">
-        <span className="text-blue-600">R</span>AX
+      <Link href={actor.role === "admin" ? "/app/admin" : "/app"} className="md:hidden flex items-center gap-2">
+        <Image src="/advisormind-icon.png" alt="AdvisorMind" width={28} height={28} className="rounded-md shrink-0" priority />
+        <span className="text-lg font-bold tracking-tight text-slate-900 leading-none">
+          Advisor<span className="text-teal-600">Mind</span>
+        </span>
       </Link>
       <div className="hidden md:block" />
 

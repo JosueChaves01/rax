@@ -8,7 +8,7 @@ import { loadCycleOverview, sessionTitle } from "../cycle-data";
 import { ASSESSMENT_STATUS_TAG, loadB2B } from "./data";
 import { AssessmentEditor } from "./assessment-forms";
 
-export const metadata = { title: "Evaluaciones · RAX" };
+export const metadata = { title: "Evaluaciones · AdvisorMind" };
 
 const MINE_LABEL = { draft: "Borrador guardado", submitted: "Enviada", reviewed: "Revisada" } as const;
 

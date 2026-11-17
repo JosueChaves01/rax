@@ -3,7 +3,7 @@ import { getDeps } from "@/lib/runtime";
 import { isB2BFlow } from "@/lib/flags";
 import { ReportsView, type ReportMetricsData } from "@/shared/ui/reports-view";
 
-export const metadata = { title: "Métricas y Reportes · RAX" };
+export const metadata = { title: "Métricas y Reportes · AdvisorMind" };
 export const dynamic = "force-dynamic";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

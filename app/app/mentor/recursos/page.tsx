@@ -3,7 +3,7 @@ import { getDeps } from "@/lib/runtime";
 import { listResources } from "@/lib/services/resources";
 import { ResourcesView } from "./resources-view";
 
-export const metadata = { title: "Biblioteca de Recursos · RAX" };
+export const metadata = { title: "Biblioteca de Recursos · AdvisorMind" };
 
 export default async function MentorResourcesPage() {
   const d = await getDeps();

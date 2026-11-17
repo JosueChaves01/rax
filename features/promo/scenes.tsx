@@ -94,18 +94,14 @@ export function IntroScene() {
       >
         Diagnóstico · Mentoría · Validación
       </motion.p>
-      <div className="mt-8 flex text-[260px] font-black leading-none tracking-tight text-slate-900">
-        {["R", "A", "X"].map((c, i) => (
-          <motion.span
-            key={c}
-            className={i === 0 ? "text-blue-600" : ""}
-            initial={{ opacity: 0, y: 120, rotateX: -80 }}
-            animate={{ opacity: 1, y: 0, rotateX: 0 }}
-            transition={{ type: "spring", stiffness: 140, damping: 16, delay: 0.4 + i * 0.12 }}
-          >
-            {c}
-          </motion.span>
-        ))}
+      <div className="mt-8 flex items-center justify-center text-[110px] font-black leading-none tracking-tight text-slate-900">
+        <motion.span
+          initial={{ opacity: 0, y: 80 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 140, damping: 16, delay: 0.4 }}
+        >
+          <span>Advisor</span><span className="text-teal-600">Mind</span>
+        </motion.span>
       </div>
       <motion.h1
         className="display mt-6 text-[64px] text-slate-900"
@@ -122,7 +118,7 @@ export function IntroScene() {
         transition={{ duration: 0.6, delay: 2.1, ease: EASE }}
       >
         <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
-        Cómo usar RAX en un minuto
+        Cómo usar AdvisorMind en un minuto
       </motion.p>
     </div>
   );
@@ -136,7 +132,7 @@ export function ProjectScene() {
   return (
     <Split
       caption={
-        <Caption step={1} title="Crea tu" hi="proyecto." body="Cuéntale a RAX tu idea con tus palabras. Todo tu trabajo queda ordenado dentro de un proyecto." />
+        <Caption step={1} title="Crea tu" hi="proyecto." body="Cuéntale a AdvisorMind tu idea con tus palabras. Todo tu trabajo queda ordenado dentro de un proyecto." />
       }
     >
       <AppFrame active="Mis proyectos">
@@ -360,7 +356,7 @@ export function AssistantScene() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
             >
-              <Avatar initials="RAX" color="#1d4ed8" size={38} />
+              <Avatar initials="AM" color="#0d9488" size={38} />
               <div className="max-w-[600px] rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-5 py-3.5 text-[16px] text-slate-700 shadow-sm">
                 ¿A quién le quieres vender y qué problema le resuelves?
               </div>
@@ -376,7 +372,7 @@ export function AssistantScene() {
 
             {thinking && (
               <motion.div className="flex items-center gap-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <Avatar initials="RAX" color="#1d4ed8" size={38} />
+                <Avatar initials="AM" color="#0d9488" size={38} />
                 <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4">
                   <TypingDots />
                 </div>
@@ -385,7 +381,7 @@ export function AssistantScene() {
 
             {replied && (
               <motion.div className="flex gap-3" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-                <Avatar initials="RAX" color="#1d4ed8" size={38} />
+                <Avatar initials="AM" color="#0d9488" size={38} />
                 <div className="max-w-[640px] rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-5 py-4 text-[16px] text-slate-700 shadow-sm">
                   <p>Perfecto. Ordené lo que me contaste:</p>
                   <div className="mt-3 space-y-2">
@@ -506,7 +502,7 @@ export function MentorScene() {
                 </div>
                 <div>
                   <p className="text-[18px] font-bold text-slate-900">Sesión de orientación · 10:00</p>
-                  <p className="text-[14px] text-slate-600">Videollamada dentro de RAX con transcripción automática.</p>
+                  <p className="text-[14px] text-slate-600">Videollamada dentro de AdvisorMind con transcripción automática.</p>
                 </div>
               </motion.div>
             )}
@@ -544,7 +540,7 @@ export function CallScene() {
           step={5}
           title="Sesiones con"
           hi="llamada y transcripción."
-          body="Habla con tu mentor sin salir de RAX. La conversación se transcribe sola y queda guardada en el proyecto."
+          body="Habla con tu mentor sin salir de AdvisorMind. La conversación se transcribe sola y queda guardada en el proyecto."
         />
       }
     >
@@ -775,8 +771,8 @@ export function OutroScene() {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 1.6, duration: 0.7, ease: EASE }}
       >
-        <span className="text-[72px] font-black tracking-tight text-slate-900">
-          <span className="text-blue-600">R</span>AX
+        <span className="text-[64px] font-black tracking-tight text-slate-900">
+          <span>Advisor</span><span className="text-teal-600">Mind</span>
         </span>
         <span className="h-16 w-px bg-slate-300" />
         <span className="inline-flex h-16 items-center rounded-full bg-blue-600 px-10 text-[22px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_20px_50px_-15px_rgb(37_99_235/0.8)]">

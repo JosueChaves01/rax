@@ -6,7 +6,7 @@ import { listMentorProjects } from "@/lib/services/mentor-projects";
 import { PortfolioView } from "./portfolio-view";
 import { ClientsView } from "./clients-view";
 
-export const metadata = { title: "Cartera de Mentoría · RAX" };
+export const metadata = { title: "Cartera de Mentoría · AdvisorMind" };
 
 export default async function MentorPortfolioPage() {
   const d = await getDeps();

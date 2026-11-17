@@ -1,0 +1,27 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="am-bg" x1="15" y1="110" x2="105" y2="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#144282" />
+      <stop offset="50%" stopColor="#1a5cb8" />
+      <stop offset="100%" stopColor="#256cd8" />
+    </linearGradient>
+  </defs>
+  <!-- Rounded squircle container -->
+  <rect x="2" y="2" width="116" height="116" rx="28" fill="url(#am-bg)" />
+  <!-- Radio wave circles -->
+  <circle cx="60" cy="28" r="48" stroke="#ffffff" stroke-width="1.8" stroke-opacity="0.12" fill="none" />
+  <circle cx="60" cy="28" r="34" stroke="#ffffff" stroke-width="1.8" stroke-opacity="0.18" fill="none" />
+  <circle cx="60" cy="28" r="20" stroke="#ffffff" stroke-width="1.8" stroke-opacity="0.24" fill="none" />
+  <!-- Compass / A legs -->
+  <line x1="60" y1="28" x2="31" y2="94" stroke="#ffffff" stroke-width="10" stroke-linecap="round" />
+  <line x1="60" y1="28" x2="89" y2="94" stroke="#ffffff" stroke-width="10" stroke-linecap="round" />
+  <!-- Horizontal crossbar -->
+  <line x1="41" y1="74" x2="79" y2="74" stroke="#14b8a6" stroke-width="7" stroke-linecap="round" />
+  <!-- Apex circle -->
+  <circle cx="60" cy="28" r="9" fill="#14b8a6" stroke="#ffffff" stroke-width="3.5" />
+  <!-- Crossbar outer nodes -->
+  <circle cx="41" cy="74" r="5.5" fill="#14b8a6" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="79" cy="74" r="5.5" fill="#14b8a6" stroke="#ffffff" stroke-width="1.5" />
+  <!-- Center white dot -->
+  <circle cx="60" cy="74" r="2.8" fill="#ffffff" />
+</svg>

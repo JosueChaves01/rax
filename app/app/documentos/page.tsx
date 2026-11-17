@@ -4,7 +4,7 @@ import { listResources } from "@/lib/services/resources";
 import { listLibraryDocuments } from "@/lib/services/project-knowledge";
 import { DocumentsView } from "@/shared/ui/documents-view";
 
-export const metadata = { title: "Documentos · RAX" };
+export const metadata = { title: "Documentos · AdvisorMind" };
 
 export default async function DocumentsPage({ searchParams }: { searchParams: Promise<{ recurso?: string }> }) {
   const d = await getDeps();

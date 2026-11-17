@@ -1,11 +1,12 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { getActor, homeFor } from "@/lib/runtime";
 import { missingConfig } from "@/lib/supabase/config";
 import { AuthForm } from "./auth-form";
 
-export const metadata = { title: "Bienvenido a RAX · Acceso" };
+export const metadata = { title: "Bienvenido a AdvisorMind · Acceso" };
 
 export default async function EnterPage({ searchParams }: { searchParams: Promise<{ next?: string; modo?: string; error?: string }> }) {
   await connection();
@@ -31,10 +32,23 @@ export default async function EnterPage({ searchParams }: { searchParams: Promis
 
         {/* Encabezado con Logotipo */}
         <div className="relative z-10">
-          <Link href="/" className="inline-flex items-center gap-2 group">
-            <span className="text-3xl font-black tracking-tight text-white font-sans">
-              <span className="text-blue-500">R</span>AX
-            </span>
+          <Link href="/" className="inline-flex items-center gap-3 group">
+            <Image
+              src="/advisormind-icon.png"
+              alt="AdvisorMind"
+              width={42}
+              height={42}
+              className="rounded-xl shadow-md shrink-0"
+              priority
+            />
+            <div>
+              <span className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white font-sans leading-none block">
+                Advisor<span className="text-teal-400">Mind</span>
+              </span>
+              <span className="text-[10px] uppercase tracking-widest text-slate-400 font-medium block mt-1">
+                La memoria inteligente del asesor
+              </span>
+            </div>
           </Link>
         </div>
 
@@ -81,8 +95,14 @@ export default async function EnterPage({ searchParams }: { searchParams: Promis
       <section className="flex-1 flex items-center justify-center p-6 sm:p-10 lg:p-16 bg-[#f8fafc]">
         <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200/90 shadow-xl p-6 sm:p-8 text-slate-900">
           <div className="text-center sm:text-left mb-6">
+            <div className="sm:hidden flex items-center justify-center gap-2 mb-3">
+              <Image src="/advisormind-icon.png" alt="AdvisorMind" width={32} height={32} className="rounded-lg" />
+              <span className="text-xl font-bold tracking-tight text-slate-900">
+                Advisor<span className="text-teal-600">Mind</span>
+              </span>
+            </div>
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-              Bienvenido a RAX
+              Bienvenido a AdvisorMind
             </h2>
             <p className="text-xs text-slate-500 mt-1">
               Inicia sesión para continuar

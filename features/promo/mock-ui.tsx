@@ -80,7 +80,7 @@ export function AppFrame({
         </nav>
         <div className="border-t border-slate-800/80 p-3">
           <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/50 p-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600/30 text-[10px] font-bold text-blue-400">RAX</div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600/30 text-[10px] font-bold text-teal-400">AM</div>
             <div>
               <p className="text-xs font-semibold">Asistente IA</p>
               <p className="text-[10px] text-slate-400">Te guía paso a paso</p>

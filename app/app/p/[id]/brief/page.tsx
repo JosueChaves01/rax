@@ -5,7 +5,7 @@ import { isDomainError } from "@/lib/errors";
 import { getIntakeBriefsForMentor } from "@/lib/services/mentor-projects";
 import { BriefView } from "./brief-view";
 
-export const metadata = { title: "Brief del intake · RAX" };
+export const metadata = { title: "Brief del intake · AdvisorMind" };
 
 /** Brief del intake para el mentor (flujo B2B): lectura, contexto faltante y «Marcar revisado». */
 export default async function IntakeBriefPage({ params }: { params: Promise<{ id: string }> }) {

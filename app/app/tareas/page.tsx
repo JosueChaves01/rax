@@ -5,7 +5,7 @@ import { TasksView } from "@/shared/ui/tasks-view";
 import { ProjectPicker } from "@/shared/ui/project-picker";
 import type { Task } from "@/types/domain";
 
-export const metadata = { title: "Tareas y Accountability · RAX" };
+export const metadata = { title: "Tareas y Accountability · AdvisorMind" };
 
 export default async function TasksPage({ searchParams }: { searchParams?: Promise<{ proyecto?: string }> }) {
   const d = await getDeps();

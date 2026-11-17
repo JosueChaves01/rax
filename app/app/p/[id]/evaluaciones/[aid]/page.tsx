@@ -9,7 +9,7 @@ import { loadCycleOverview, sessionTitle } from "../../cycle-data";
 import { ASSESSMENT_STATUS_TAG, loadB2B } from "../data";
 import { AnswerForm, AssessmentEditor, AssessmentStatusButton, ReviewForm } from "../assessment-forms";
 
-export const metadata = { title: "Evaluación · RAX" };
+export const metadata = { title: "Evaluación · AdvisorMind" };
 
 /**
  * Una evaluación. La persona cliente la responde (borrador y envío) y, cuando el mentor la revisa, ve

@@ -16,7 +16,7 @@ import type { RoomSection } from "./room";
 import { PublishPanel } from "./publish-panel";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Sala de mentoría · RAX" };
+export const metadata = { title: "Sala de mentoría · AdvisorMind" };
 
 /**
  * Pantalla de la llamada, a pantalla completa y sin scroll: la videollamada ocupa el centro, el

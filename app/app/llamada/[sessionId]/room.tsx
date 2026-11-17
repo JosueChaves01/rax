@@ -370,7 +370,7 @@ function Room({
           )}
         >
           <Icon name="mic" className="h-4 w-4" />
-          RAX
+          AdvisorMind
         </button>}
       </header>
 

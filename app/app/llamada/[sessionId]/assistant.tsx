@@ -279,10 +279,10 @@ export function RoomAssistant({
   const chips = messages.length ? followUps : (b2b ? B2B_SUGGESTIONS : SUGGESTIONS)[mode];
 
   return (
-    <section aria-label="Asistente de RAX" className={cx("flex min-h-0 flex-col bg-white", className)}>
+    <section aria-label="Asistente de AdvisorMind" className={cx("flex min-h-0 flex-col bg-white", className)}>
       <header className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
         <div className="min-w-0">
-          <p className="text-sm font-bold text-slate-900">Asistente de RAX</p>
+          <p className="text-sm font-bold text-slate-900">Asistente de AdvisorMind</p>
           <p className="truncate text-[11px] text-slate-500">{mode === "cierre" ? "Te ayuda a cerrar: síntesis, acuerdo, compromisos" : "Conoce el proyecto y la agenda de esta sesión"}</p>
         </div>
         {onClose && (
@@ -332,7 +332,7 @@ export function RoomAssistant({
             </div>
           </div>
         ))}
-        {sending && <p className="text-xs text-slate-500">RAX está pensando…</p>}
+        {sending && <p className="text-xs text-slate-500">AdvisorMind está pensando…</p>}
         {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-800">{error}</p>}
       </div>
 
@@ -361,7 +361,7 @@ export function RoomAssistant({
       >
         <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1.5 pl-3 focus-within:border-blue-400">
           <label htmlFor={`sala-msg-${sessionId}`} className="sr-only">
-            Mensaje para RAX
+            Mensaje para AdvisorMind
           </label>
           <textarea
             id={`sala-msg-${sessionId}`}
@@ -377,7 +377,7 @@ export function RoomAssistant({
                 send(text);
               }
             }}
-            placeholder={dictation.listening ? "Escuchando…" : mode === "cierre" ? "Pedile un cambio al borrador…" : "Preguntale a RAX o dictá…"}
+            placeholder={dictation.listening ? "Escuchando…" : mode === "cierre" ? "Pedile un cambio al borrador…" : "Preguntale a AdvisorMind o dictá…"}
             className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
           />
           {dictation.supported && (

@@ -78,7 +78,7 @@ Describe brevemente tu modelo de negocio o fase actual...
 ### Desafío principal
 ¿Cuál es el obstáculo o decisión clave que enfrentas?
 
-### Preguntas para RAX
+### Preguntas para AdvisorMind
 - 1. ¿Cómo abordarías este problema?
 - 2. ¿Qué métrica o experimento validar primero?`,
   },
@@ -109,7 +109,7 @@ Definir y avanzar en las prioridades de los próximos 7 días:
 - [ ] Tarea prioritaria 2: 
 - [ ] Métrica a monitorear: 
 
-### Solicitud a RAX
+### Solicitud a AdvisorMind
 Revisa si este plan es realista o si detectas algún riesgo de ejecución.`,
   },
   {

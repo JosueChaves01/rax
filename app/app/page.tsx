@@ -13,7 +13,7 @@ import { ProjectCard } from "./project-card";
 import { getClientHome } from "@/lib/services/client-portal";
 import { ClientHomeView } from "./client-home";
 
-export const metadata = { title: "Inicio · RAX" };
+export const metadata = { title: "Inicio · AdvisorMind" };
 
 export default async function ProjectsPage({ searchParams }: { searchParams?: Promise<{ borrado?: string }> }) {
   const sp = (await searchParams) ?? {};
@@ -172,7 +172,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams?: Pr
             href={`/app/chat?project=${workspaces[0].project.id}`}
             className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700"
           >
-            Conversar con RAX
+            Conversar con AdvisorMind
           </Link>
         )}
       </header>
@@ -182,7 +182,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams?: Pr
       {workspaces.length === 0 ? (
         <section className="mx-auto max-w-xl rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
           <h2 className="text-lg font-bold text-slate-900">Crea tu primer proyecto</h2>
-          <p className="mt-1 text-xs text-slate-500">Solo necesitas un nombre. Después conversas con RAX para ordenar lo que sabes y lo que supones.</p>
+          <p className="mt-1 text-xs text-slate-500">Solo necesitas un nombre. Después conversas con AdvisorMind para ordenar lo que sabes y lo que supones.</p>
           <NewProjectForm />
         </section>
       ) : (

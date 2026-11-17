@@ -5,7 +5,7 @@ import { getMentorProfile } from "@/lib/services/mentor-profile";
 import { listMentorDocuments } from "@/lib/services/mentor-knowledge";
 import { MentorProfileView } from "./profile-view";
 
-export const metadata = { title: "Mi perfil de mentor · RAX" };
+export const metadata = { title: "Mi perfil de mentor · AdvisorMind" };
 
 export default async function MentorProfilePage() {
   if (!isB2BFlow()) redirect("/app");
@@ -19,5 +19,13 @@ export default async function MentorProfilePage() {
     d.repo.mentorResources.count({ authorMentorId: d.actor.id }).catch(() => 0),
   ]);
 
-  return <MentorProfileView initialProfile={profile} initialDocuments={documents} ownResources={ownResources} />;
+  return (
+    <MentorProfileView
+      actorName={d.actor.name}
+      actorEmail={d.actor.email}
+      initialProfile={profile}
+      initialDocuments={documents}
+      ownResources={ownResources}
+    />
+  );
 }

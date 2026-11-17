@@ -496,7 +496,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
           </div>
 
           <p className="mt-3 text-xs text-muted">
-            Principio RAX: <strong>No todos los problemas necesitan experimentos.</strong> Los objetivos pueden ser métricas,
+            Principio AdvisorMind: <strong>No todos los problemas necesitan experimentos.</strong> Los objetivos pueden ser métricas,
             mejoras cualitativas verificables, adquisición de capacidades o decisiones estratégicas clave. Cada objetivo
             debe documentar su línea base actual y su resultado esperado observable.
           </p>
@@ -756,7 +756,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-highlight">
-                  Asistente metodológico RAX
+                  Asistente metodológico AdvisorMind
                 </span>
                 <h3 className="display text-xl text-slate-900">Sugerencias de objetivos y términos</h3>
               </div>
@@ -771,7 +771,7 @@ export function AgreementsUI({ projectId, workspace: w, actor }: AgreementsUIPro
                   Analizando el diagnóstico confirmado, notas del mentor y problemas priorizados...
                 </p>
                 <p className="mt-1 text-xs text-muted">
-                  RAX distingue supuestos de evidencias para formular metas observables y términos realistas.
+                  AdvisorMind distingue supuestos de evidencias para formular metas observables y términos realistas.
                 </p>
               </div>
             ) : aiSuggestions ? (

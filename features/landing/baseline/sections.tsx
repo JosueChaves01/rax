@@ -25,13 +25,13 @@ import { useLanding } from "./shell";
 /* ═════════════════════════════ Contenido ═════════════════════════════ */
 
 const HERO_SLIDES = [
-  { img: "/landing/asistente.webp", brand: "Asistente IA", title: "Ordena hechos y supuestos", cta: "Ver producto", href: "#producto", alt: "Chat del asistente de RAX clasificando un hecho, un supuesto y una duda" },
+  { img: "/landing/asistente.webp", brand: "Asistente IA", title: "Ordena hechos y supuestos", cta: "Ver producto", href: "#producto", alt: "Chat del asistente de AdvisorMind clasificando un hecho, un supuesto y una duda" },
   { img: "/landing/mentor.webp", brand: "Mentoría", title: "Bandeja del mentor", cta: "Ver cómo funciona", href: "#como-funciona", alt: "Bandeja del mentor con proyectos pendientes" },
   { img: "/landing/llamada.webp", brand: "Sesiones", title: "Llamadas transcritas", cta: "Ver el video", href: "#video", alt: "Videollamada entre emprendedora y mentora con transcripción" },
 ];
 
 const PRINCIPLE_SLIDES = [
-  { headline: ["Primero", "Pregunta", "Después", "Opina"], img: "/landing/asistente.webp", name: "Asistente IA", role: "Una pregunta a la vez", alt: "El asistente de RAX haciendo una pregunta" },
+  { headline: ["Primero", "Pregunta", "Después", "Opina"], img: "/landing/asistente.webp", name: "Asistente IA", role: "Una pregunta a la vez", alt: "El asistente de AdvisorMind haciendo una pregunta" },
   { headline: ["Mentor", "Humano", "Contexto", "Completo"], img: "/landing/mentor.webp", name: "Tu mentor", role: "Ve todo tu proyecto", alt: "Bandeja del mentor con los proyectos asignados" },
   { headline: ["Prueba", "Pequeño", "Decide", "Mejor"], img: "/landing/notas.webp", name: "Notas de sesión", role: "Acuerdos y experimentos", alt: "Notas de sesión con acuerdos, experimento y tareas" },
 ];
@@ -84,7 +84,7 @@ const AUDIENCES = [
 ];
 
 const FAQ = [
-  { q: "¿Necesito tener la idea clara para empezar?", a: "No. RAX está pensado para ideas en etapa temprana. Empiezas contando lo que tienes, aunque sea poco, y el asistente te ayuda a ordenarlo. «No sé» también es una respuesta válida." },
+  { q: "¿Necesito tener la idea clara para empezar?", a: "No. AdvisorMind está pensado para ideas en etapa temprana. Empiezas contando lo que tienes, aunque sea poco, y el asistente te ayuda a ordenarlo. «No sé» también es una respuesta válida." },
   { q: "¿La IA decide por mí?", a: "No. La IA ordena y sugiere, pero tú confirmas o corriges cada interpretación y las decisiones importantes las tomas con tu mentor. Una sugerencia de IA no es validación." },
   { q: "¿Cómo se asigna mi mentor?", a: "Un administrador del programa asigna un mentor a tu proyecto. Mientras tanto puedes avanzar en la etapa Entender con el asistente." },
   { q: "¿Puedo ser mentor?", a: "Sí. Crea tu cuenta y elige «Mentor» en la bienvenida. Un administrador revisa tu postulación y, al aprobarla, empiezas a recibir proyectos." },
@@ -130,9 +130,9 @@ function SiteHeader() {
           Producto
         </AnchorLink>
       </nav>
-      <Link href="/" aria-label="RAX, inicio" className="flex flex-1 items-center gap-2 text-base font-medium uppercase tracking-[0.2em] lg:justify-center">
-        <RaxMark />
-        RAX
+      <Link href="/" aria-label="AdvisorMind, inicio" className="flex flex-1 items-center gap-2.5 text-xl font-bold tracking-tight lg:justify-center">
+        <RaxMark className="size-6 shrink-0" />
+        <span>Advisor<span className="text-teal-400">Mind</span></span>
       </Link>
       <div className="flex flex-1 items-center justify-end gap-4 sm:gap-5">
         <Link href="/entrar" className="hidden uppercase tracking-wide underline-offset-4 hover:underline sm:inline">
@@ -309,7 +309,7 @@ function Principles() {
           <div>
             <h3 className="text-lg font-medium">La IA ordena, tú decides</h3>
             <p className="mt-1 text-xs leading-relaxed text-(--bl-soft)">
-              Una sugerencia de IA no es validación. RAX ordena lo que sabes y tu mentor te ayuda a decidir con evidencia, no con intuiciones.
+              Una sugerencia de IA no es validación. AdvisorMind ordena lo que sabes y tu mentor te ayuda a decidir con evidencia, no con intuiciones.
             </p>
           </div>
         </Inview>
@@ -448,7 +448,7 @@ function Product() {
       <div className="grid items-end gap-10 md:grid-cols-2">
         <div className="max-w-sm">
           <Inview from={{ opacity: 0, scale: 0.85 }} to={{ opacity: 1, scale: 1 }} config={[240, 20]} className="relative size-16 overflow-hidden rounded-(--bl-r-card) bg-(--bl-surface)">
-            <Image src="/landing/asistente.webp" alt="Asistente de RAX" fill sizes="64px" className="object-cover object-left-top" />
+            <Image src="/landing/asistente.webp" alt="Asistente de AdvisorMind" fill sizes="64px" className="object-cover object-left-top" />
           </Inview>
           <StackedLines id="facilities-title" lines={["Todo tu", "proceso en", "un lugar"]} stagger={120} className={`mt-6 ${H2}`} />
           <FadeWords
@@ -479,7 +479,7 @@ function Video() {
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Eyebrow>Video · 1 minuto</Eyebrow>
-          <StackedLines id="video-title" lines={["Así se usa", "RAX"]} className={`mt-4 ${H2}`} />
+          <StackedLines id="video-title" lines={["Así se usa", "AdvisorMind"]} className={`mt-4 ${H2}`} />
         </div>
         <p className="max-w-sm text-sm text-(--bl-soft)">Del proyecto a la decisión: etapas, asistente IA, sesiones con tu mentor, llamadas con transcripción y notas.</p>
       </div>
@@ -497,7 +497,7 @@ function Video() {
 function Stats() {
   return (
     <section aria-labelledby="stats-title" className="mt-3 rounded-(--bl-r-card-lg) bg-(--bl-deep) px-6 py-20 text-white sm:px-10">
-      <Eyebrow tone="light">RAX en cifras</Eyebrow>
+      <Eyebrow tone="light">AdvisorMind en cifras</Eyebrow>
       <StackedLines id="stats-title" lines={["Un proceso", "con método"]} className={`mt-4 ${H2}`} />
       <dl className="mt-16 grid grid-cols-2 gap-x-8 gap-y-12 lg:grid-cols-4">
         {STATS.map(([v, l], i) => (
@@ -626,11 +626,14 @@ function SiteFooter() {
 
       <div className="grid gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="max-w-xs">
-          <p className="flex items-center gap-2 text-lg font-medium uppercase tracking-[0.2em]">
-            <RaxMark />
-            RAX
+          <p className="flex items-center gap-2.5 text-xl font-bold tracking-tight text-white">
+            <RaxMark className="size-6 shrink-0" />
+            <span>Advisor<span className="text-teal-400">Mind</span></span>
           </p>
-          <p className="mt-4 text-sm text-white/65">Diagnóstico, mentoría y validación de emprendimientos. IA para ordenar, personas para decidir.</p>
+          <p className="mt-2 text-[10px] uppercase tracking-widest text-teal-300 font-semibold">
+            La memoria inteligente del asesor
+          </p>
+          <p className="mt-3 text-sm text-white/65">Diagnóstico, mentoría y validación de emprendimientos. IA para ordenar, personas para decidir.</p>
         </div>
         <FooterCol title="Producto" links={[["Cómo funciona", "#como-funciona"], ["Producto", "#producto"], ["Video", "#video"], ["Preguntas", "#preguntas"]]} />
         <FooterCol title="Para quién" links={[["Emprendedores", "#para-quien"], ["Mentores", "#para-quien"], ["Programas", "#para-quien"]]} />
@@ -638,7 +641,7 @@ function SiteFooter() {
       </div>
 
       <div className="flex flex-col gap-5 border-t border-white/15 pt-8 text-sm text-white/60 sm:flex-row sm:items-center sm:justify-between">
-        <p>© {new Date().getFullYear()} RAX. Hecho para emprender con evidencia.</p>
+        <p>© {new Date().getFullYear()} AdvisorMind. La memoria inteligente del asesor.</p>
         <nav aria-label="Cuenta" className="flex gap-5">
           <Link href="/entrar" className="hover:text-white">
             Entrar

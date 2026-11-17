@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { PROPOSAL_TYPE_LABEL } from "@/lib/ai/step-actions";
 import { cx } from "@/shared/ui/primitives";
@@ -117,7 +118,7 @@ export function ProjectConversationClient({
             msgRes.data.messages.map((m) => ({
               id: m.id,
               sender: m.author === "user" ? "user" : "ai",
-              senderName: m.author === "user" ? "Tú" : "RAX Copilot",
+              senderName: m.author === "user" ? "Tú" : "AdvisorMind Copilot",
               text: m.content,
               time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               artifacts: m.artifacts,
@@ -146,7 +147,7 @@ export function ProjectConversationClient({
         res.data.messages.map((m) => ({
           id: m.id,
           sender: m.author === "user" ? "user" : "ai",
-          senderName: m.author === "user" ? "Tú" : "RAX Copilot",
+          senderName: m.author === "user" ? "Tú" : "AdvisorMind Copilot",
           text: m.content,
           time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           artifacts: m.artifacts,
@@ -213,7 +214,7 @@ export function ProjectConversationClient({
           {
             id: assistantMessage.id,
             sender: "ai",
-            senderName: "RAX Copilot",
+            senderName: "AdvisorMind Copilot",
             text: assistantMessage.content,
             time: new Date(assistantMessage.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             artifacts,
@@ -230,7 +231,7 @@ export function ProjectConversationClient({
           {
             id: `err-${Date.now()}`,
             sender: "ai",
-            senderName: "RAX Copilot",
+            senderName: "AdvisorMind Copilot",
             text: !res.ok ? res.error : "No se pudo procesar la respuesta.",
             time: "Aviso",
           },
@@ -242,7 +243,7 @@ export function ProjectConversationClient({
         {
           id: `err-${Date.now()}`,
           sender: "ai",
-          senderName: "RAX Copilot",
+          senderName: "AdvisorMind Copilot",
           text: `Error al comunicar con el agente: ${err instanceof Error ? err.message : String(err)}`,
           time: "Error",
         },
@@ -289,8 +290,8 @@ export function ProjectConversationClient({
         {/* Cabecera unificada con selector de hilos/sesiones */}
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50/70 px-5 py-3.5">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-              RAX
+            <div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-900 border border-teal-500/30 flex items-center justify-center shrink-0 shadow-2xs">
+              <Image src="/advisormind-icon.png" alt="AdvisorMind" width={28} height={28} className="rounded" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -571,7 +572,7 @@ export function ProjectConversationClient({
           {isLoading && (
             <div className="flex items-center gap-2 p-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-xl w-fit animate-pulse">
               <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-              <span>RAX Copilot está analizando el contexto de «{projectName}»...</span>
+              <span>AdvisorMind Copilot está analizando el contexto de «{projectName}»...</span>
             </div>
           )}
 
@@ -606,7 +607,7 @@ export function ProjectConversationClient({
                   handleSendMessage(inputText);
                 }
               }}
-              placeholder={`Escribe a RAX para ${projectName}. Enter envía, Shift+Enter para salto de línea...`}
+              placeholder={`Escribe a AdvisorMind para ${projectName}. Enter envía, Shift+Enter para salto de línea...`}
               className="flex-1 p-3 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none leading-relaxed"
             />
             <button
@@ -633,7 +634,7 @@ export function ProjectConversationClient({
           <div className="flex items-center gap-2">
             <span className="text-lg">🧭</span>
             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Ciclo RAX: Entender → Orientar
+              Ciclo AdvisorMind: Entender → Orientar
             </h4>
           </div>
           <p className="text-xs text-slate-600 leading-relaxed">

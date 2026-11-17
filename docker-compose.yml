@@ -22,6 +22,7 @@ services:
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-meta-llama/llama-3.3-70b-instruct:free}
       - RAX_API_URL=${NEXT_PUBLIC_APP_URL:-https://rax-red.vercel.app}
       - RAX_N8N_SHARED_SECRET=${RAX_N8N_SHARED_SECRET:-${SUPABASE_SERVICE_ROLE_KEY}}
+      - AGENT_API_SECRET=${AGENT_API_SECRET}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://rax-red.vercel.app}
       - N8N_DIAGNOSTICS_ENABLED=false
       - N8N_VERSION_NOTIFICATIONS_ENABLED=false

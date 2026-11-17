@@ -295,13 +295,31 @@ export function CarouselDots({ count, active, onSelect, tone = "dark", label }: 
   );
 }
 
-/** Marca de RAX: círculo con una flecha de avance (de la duda a la decisión). */
-export function RaxMark({ className = "size-5" }: { className?: string }) {
+/** Marca de AdvisorMind: icono squircle azul con compás/A y ondas concéntricas. */
+export function AdvisorMindMark({ className = "size-5" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M9 15l6-6M10 9h5v5" />
+    <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden>
+      <defs>
+        <linearGradient id="am-mark-grad" x1="15" y1="110" x2="105" y2="10" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#144282" />
+          <stop offset="50%" stopColor="#1a5cb8" />
+          <stop offset="100%" stopColor="#256cd8" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="116" height="116" rx="28" fill="url(#am-mark-grad)" />
+      <circle cx="60" cy="28" r="48" stroke="#ffffff" strokeWidth="2" strokeOpacity="0.14" fill="none" />
+      <circle cx="60" cy="28" r="34" stroke="#ffffff" strokeWidth="2" strokeOpacity="0.2" fill="none" />
+      <circle cx="60" cy="28" r="20" stroke="#ffffff" strokeWidth="2" strokeOpacity="0.26" fill="none" />
+      <line x1="60" y1="28" x2="31" y2="94" stroke="#ffffff" strokeWidth="10" strokeLinecap="round" />
+      <line x1="60" y1="28" x2="89" y2="94" stroke="#ffffff" strokeWidth="10" strokeLinecap="round" />
+      <line x1="41" y1="74" x2="79" y2="74" stroke="#14b8a6" strokeWidth="7" strokeLinecap="round" />
+      <circle cx="60" cy="28" r="9" fill="#14b8a6" stroke="#ffffff" strokeWidth="3.5" />
+      <circle cx="41" cy="74" r="5.5" fill="#14b8a6" stroke="#ffffff" strokeWidth="1.5" />
+      <circle cx="79" cy="74" r="5.5" fill="#14b8a6" stroke="#ffffff" strokeWidth="1.5" />
+      <circle cx="60" cy="74" r="2.8" fill="#ffffff" />
     </svg>
   );
 }
+
+export const RaxMark = AdvisorMindMark;
 

@@ -166,9 +166,11 @@ function Loader({ exiting }: { exiting: boolean }) {
       transition={{ duration: reduced ? 0 : 0.85, ease: EASE_IN_OUT_CUBIC }}
       aria-hidden
     >
-      <motion.div className="flex items-center gap-3" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={spring(200, 22)}>
-        <RaxMark className="size-7" />
-        <span className="text-2xl font-medium uppercase tracking-[0.2em]">RAX</span>
+      <motion.div className="flex items-center gap-3.5" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={spring(200, 22)}>
+        <RaxMark className="size-9" />
+        <span className="text-3xl font-extrabold tracking-tight">
+          Advisor<span className="text-teal-400">Mind</span>
+        </span>
       </motion.div>
       <div className="h-px w-40 overflow-hidden rounded-(--bl-r-pill) bg-white/20">
         <motion.div
@@ -237,9 +239,9 @@ function MenuOverlay({ open, onClose, onNavigate, onStart }: { open: boolean; on
       >
         <div className="flex h-full flex-col px-6 pb-6 pt-6 sm:px-10 sm:pb-10 sm:pt-8">
           <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2 text-base font-medium uppercase tracking-[0.2em]">
-              <RaxMark />
-              RAX
+            <span className="flex items-center gap-2.5 text-xl font-bold tracking-tight">
+              <RaxMark className="size-6" />
+              Advisor<span className="text-teal-400">Mind</span>
             </span>
             <CloseButton onClick={onClose} label="Cerrar menú" tone="light" />
           </div>

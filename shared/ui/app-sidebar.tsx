@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/types/domain";
 import { cx } from "./primitives";
@@ -29,14 +30,29 @@ export function AppSidebar({ role, b2b = false, clientProjectIds }: AppSidebarPr
       className="hidden md:flex flex-col w-56 shrink-0 bg-[#0b132b] text-slate-300 min-h-dvh border-r border-slate-800 select-none z-20"
       aria-label="Navegación principal"
     >
-      <div className="h-16 flex items-center px-6 border-b border-slate-800/80">
-        <Link href={home} className="flex items-center gap-2 group">
-          <span className="text-2xl font-black tracking-tight text-white font-sans">
-            <span className="text-blue-500">R</span>AX
-          </span>
-          <span className="text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
-            {ROLE_BADGE[role]}
-          </span>
+      <div className="h-16 flex items-center px-4 border-b border-slate-800/80">
+        <Link href={home} className="flex items-center gap-2.5 group min-w-0">
+          <Image
+            src="/advisormind-icon.png"
+            alt="AdvisorMind"
+            width={32}
+            height={32}
+            className="rounded-lg shrink-0 object-contain shadow-sm"
+            priority
+          />
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base font-bold tracking-tight text-white font-sans leading-none">
+                Advisor<span className="text-teal-400">Mind</span>
+              </span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/25 shrink-0">
+                {ROLE_BADGE[role]}
+              </span>
+            </div>
+            <span className="text-[9px] uppercase tracking-wider text-slate-400 mt-1 truncate">
+              Memoria inteligente
+            </span>
+          </div>
         </Link>
       </div>
 
@@ -52,11 +68,11 @@ export function AppSidebar({ role, b2b = false, clientProjectIds }: AppSidebarPr
             className="flex items-center gap-3 p-2 rounded-lg bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800 transition-colors group"
             title={currentProjectId ? "Abrir el asistente con este proyecto" : "Abrir el asistente"}
           >
-            <div className="w-8 h-8 rounded-full bg-blue-600/30 text-blue-400 group-hover:bg-blue-600/50 flex items-center justify-center font-bold text-xs shrink-0 transition-colors">
-              RAX
+            <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-900 border border-teal-500/30 flex items-center justify-center shrink-0">
+              <Image src="/advisormind-icon.png" alt="AdvisorMind" width={24} height={24} className="rounded" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-white truncate">Asistente IA</p>
+              <p className="text-xs font-semibold text-white truncate">AdvisorMind IA</p>
               <p className="text-[10px] text-slate-400 truncate">
                 {currentProjectId ? "Con este proyecto" : "Te guía paso a paso"}
               </p>

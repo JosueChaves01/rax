@@ -11,7 +11,7 @@ import { AssignmentControls } from "./assignment-controls";
 import { MentorReview } from "./mentor-review";
 import { AdminOperationsView } from "@/shared/ui/admin-operations-view";
 
-export const metadata = { title: "Administración · RAX" };
+export const metadata = { title: "Administración · AdvisorMind" };
 
 const AUDIT_LABEL: Record<string, string> = {
   "mentor.assigned": "asignó un mentor",

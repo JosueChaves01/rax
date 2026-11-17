@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { unstable_isUnrecognizedActionError } from "next/navigation";
 
 /** Texto para la persona cuando su pestaña quedó de un despliegue anterior. */
-export const STALE_DEPLOYMENT_MESSAGE = "RAX se actualizó mientras tenías esta página abierta. Recarga la página para seguir; lo que ya se guardó no se pierde.";
+export const STALE_DEPLOYMENT_MESSAGE = "AdvisorMind se actualizó mientras tenías esta página abierta. Recarga la página para seguir; lo que ya se guardó no se pierde.";
 
 /**
  * Una server action falló porque el navegador tiene la página de un despliegue anterior: el servidor

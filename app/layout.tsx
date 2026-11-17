@@ -8,8 +8,15 @@ const inter = localFont({ src: "./fonts/inter-latin-wght-normal.woff2", weight: 
 const mono = localFont({ src: "./fonts/jetbrains-mono-latin-wght-normal.woff2", weight: "100 800", variable: "--font-mono-face", display: "swap", fallback: ["ui-monospace", "monospace"] });
 
 export const metadata: Metadata = {
-  title: "RAX · Diagnóstico y validación de emprendimientos",
-  description: "Ordena lo que sabes de tu negocio, trabaja con un mentor y convierte tus dudas en experimentos pequeños y medibles.",
+  title: "AdvisorMind · La memoria inteligente del asesor",
+  description: "La memoria inteligente del asesor. Diagnóstico, mentoría y validación con IA para ordenar y personas para decidir.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/advisormind-icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/advisormind-icon.png",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

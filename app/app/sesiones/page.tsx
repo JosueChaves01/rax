@@ -5,7 +5,7 @@ import { listMyProjects } from "@/lib/services/projects";
 import { listSessionsForViewer } from "@/lib/services/session-visibility";
 import { SessionsView } from "@/shared/ui/sessions-view";
 
-export const metadata = { title: "Sesiones de mentoría · RAX" };
+export const metadata = { title: "Sesiones de mentoría · AdvisorMind" };
 
 /** Agenda de sesiones: un índice que lleva a cada proyecto, donde se trabaja la sesión. */
 export default async function SessionsPage() {

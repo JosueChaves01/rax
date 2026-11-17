@@ -49,19 +49,19 @@ function Title({ eyebrow, children }: { eyebrow: string; children: ReactNode }) 
 }
 
 const B2B_OPTIONS: Array<{ mode: Mode; title: string; body: string }> = [
-  { mode: "mentor", title: "Soy mentor", body: "Creas proyectos para tus clientes, cargas tu metodología y RAX prepara cada sesión contigo." },
+  { mode: "mentor", title: "Soy mentor", body: "Creas proyectos para tus clientes, cargas tu metodología y AdvisorMind prepara cada sesión contigo." },
   { mode: "entrepreneur", title: "Vengo a trabajar con un mentor", body: "Tu mentor te invita a su proyecto. Aceptas desde tu panel y respondes una entrevista corta antes de la primera sesión." },
 ];
 
 function Choose({ onPick, b2b = false }: { onPick: (m: Mode) => void; b2b?: boolean }) {
   const options: Array<{ mode: Mode; title: string; body: string }> = b2b ? B2B_OPTIONS : [
-    { mode: "entrepreneur", title: "Tengo un emprendimiento", body: "Una idea, algo que estás armando o un negocio que ya funciona. RAX te ayuda a ordenarlo y a decidir qué probar primero." },
+    { mode: "entrepreneur", title: "Tengo un emprendimiento", body: "Una idea, algo que estás armando o un negocio que ya funciona. AdvisorMind te ayuda a ordenarlo y a decidir qué probar primero." },
     { mode: "mentor", title: "Quiero acompañar como mentor/a", body: "Revisás diagnósticos, priorizás problemas y aprobás hipótesis. La administración valida tu perfil antes de asignarte proyectos." },
   ];
   return (
     <>
       <Title eyebrow="Bienvenida · 1 de 3">
-        ¿Cómo vas a <span className="text-highlight">usar RAX?</span>
+        ¿Cómo vas a <span className="text-highlight">usar AdvisorMind?</span>
       </Title>
       <ul className="mt-8 grid gap-3">
         {options.map((o) => (
@@ -173,7 +173,7 @@ function EntrepreneurFlow({ defaultName, onBack }: { defaultName: string; onBack
         )}
         {step === 2 && (
           <>
-            ¿Qué esperás <span className="text-highlight">de RAX?</span>
+            ¿Qué esperás <span className="text-highlight">de AdvisorMind?</span>
           </>
         )}
         {step === 3 && (
@@ -222,7 +222,7 @@ function EntrepreneurFlow({ defaultName, onBack }: { defaultName: string; onBack
         )}
         {step === 3 && (
           <>
-            <p className="text-muted">Ponele un nombre provisional. Después RAX te va a hacer preguntas para ordenar lo que sabés y lo que todavía no.</p>
+            <p className="text-muted">Ponele un nombre provisional. Después AdvisorMind te va a hacer preguntas para ordenar lo que sabés y lo que todavía no.</p>
             <Field id="ob-pname" label="Nombre provisional del proyecto">
               <input id="ob-pname" className={inputClass} value={projectName} onChange={(e) => setProjectName(e.target.value)} maxLength={80} placeholder="Ej.: Almuerzos para oficinas" />
             </Field>
@@ -308,7 +308,7 @@ function MentorFlow({ defaultName, alreadyMentor, onBack }: { defaultName: strin
       <Steps step={step} total={2} />
       {!alreadyMentor && step === 1 && (
         <div className="mt-6">
-          <Notice>La administración revisa cada solicitud antes de asignar proyectos. Te avisamos en RAX cuando esté aprobada.</Notice>
+          <Notice>La administración revisa cada solicitud antes de asignar proyectos. Te avisamos en AdvisorMind cuando esté aprobada.</Notice>
         </div>
       )}
       <div className="mt-8 space-y-5">
@@ -413,7 +413,7 @@ function AdminFlow({ defaultName }: { defaultName: string }) {
         <Field id="ad-org" label="Organización">
           <input id="ad-org" className={inputClass} value={organization} onChange={(e) => setOrganization(e.target.value)} maxLength={160} placeholder="Ej.: incubadora, universidad, fondo" />
         </Field>
-        <Field id="ad-prog" label="¿Qué programa acompañan con RAX?" hint="Cohorte, convocatoria o programa: a quién está dirigido y cuánto dura.">
+        <Field id="ad-prog" label="¿Qué programa acompañan con AdvisorMind?" hint="Cohorte, convocatoria o programa: a quién está dirigido y cuánto dura.">
           <textarea id="ad-prog" rows={3} className={inputClass} value={program} onChange={(e) => setProgram(e.target.value)} maxLength={600} />
         </Field>
       </div>

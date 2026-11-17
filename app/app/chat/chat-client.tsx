@@ -68,7 +68,7 @@ function toView(m: AgentMessage): MessageView {
   return {
     id: m.id,
     sender: m.author === "user" ? "user" : "ai",
-    senderName: m.author === "user" ? "Tú" : "RAX Copilot",
+    senderName: m.author === "user" ? "Tú" : "AdvisorMind Copilot",
     text: m.content,
     time: time(m.createdAt),
     artifacts: m.artifacts,
@@ -304,7 +304,7 @@ export default function ChatClient({
   };
 
   const showTurnError = (text: string, label = "Aviso") =>
-    setMessages((prev) => [...prev, { id: `err-${Date.now()}`, sender: "ai", senderName: "RAX Copilot", text, time: label }]);
+    setMessages((prev) => [...prev, { id: `err-${Date.now()}`, sender: "ai", senderName: "AdvisorMind Copilot", text, time: label }]);
 
   /**
    * Envía un mensaje y muestra la respuesta mientras se escribe: el mensaje de la persona aparece al
@@ -320,7 +320,7 @@ export default function ChatClient({
     const tempId = `tmp-${Date.now()}`;
     setMessages((prev) => [...prev, { id: tempId, sender: "user", senderName: "Tú", text, time: time(new Date().toISOString()) }]);
     setLive({ status: "Enviando…", text: "" });
-    const sessionContext = { location: "global_assistant" as const, pageTitle: "Asistente de IA de RAX (/app/chat)", ...(requestedTool ? { requestedTool } : {}) };
+    const sessionContext = { location: "global_assistant" as const, pageTitle: "Asistente de IA de AdvisorMind (/app/chat)", ...(requestedTool ? { requestedTool } : {}) };
     try {
       const res = await fetch("/api/agente/turno", {
         method: "POST",
@@ -732,7 +732,7 @@ export default function ChatClient({
               <div className="flex flex-col items-start space-y-1" aria-live="polite">
                 <span className="text-[10px] text-slate-400 font-mono px-1 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-orange-600 animate-ping" />
-                  RAX Copilot • {live?.status || "Pensando…"}
+                  AdvisorMind Copilot • {live?.status || "Pensando…"}
                 </span>
                 {live?.text ? (
                   <div className="max-w-[92%] @lg:max-w-[80%] bg-white text-slate-800 border border-slate-200/80 rounded-2xl rounded-tl-sm p-3.5 text-sm shadow-2xs">

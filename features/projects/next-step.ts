@@ -5,7 +5,7 @@ export type Viewer = "entrepreneur" | "mentor";
 /** Sugerencia del siguiente paso según la fase real y quién mira. `tab` es la página del proyecto donde se hace. */
 export const NEXT_STEP: Record<ProjectPhase, Record<Viewer, { text: string; tab: string }>> = {
   new: {
-    entrepreneur: { text: "Contale a RAX tu idea con tus palabras. No hace falta tenerla clara.", tab: "conversacion" },
+    entrepreneur: { text: "Contale a AdvisorMind tu idea con tus palabras. No hace falta tenerla clara.", tab: "conversacion" },
     mentor: { text: "El proyecto recién empieza. Todavía no hay contexto para revisar.", tab: "diagnostico" },
   },
   conversation: {

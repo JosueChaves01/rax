@@ -1,11 +1,12 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getActor, homeFor } from "@/lib/runtime";
 import { isB2BFlow } from "@/lib/flags";
 import { signOutAction } from "@/app/actions";
 import { OnboardingForm } from "./onboarding-form";
 
-export const metadata = { title: "Bienvenida · RAX" };
+export const metadata = { title: "Bienvenida · AdvisorMind" };
 
 export default async function WelcomePage({ searchParams }: { searchParams: Promise<{ repostular?: string }> }) {
   const actor = await getActor();
@@ -31,8 +32,11 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
     <main className="ambient min-h-dvh px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-2xl">
         <div className="flex items-center justify-between">
-          <Link href="/" className="display text-2xl">
-            <span className="text-accent">R</span>AX
+          <Link href="/" className="inline-flex items-center gap-2">
+            <Image src="/advisormind-icon.png" alt="AdvisorMind" width={32} height={32} className="rounded-lg shadow-xs" priority />
+            <span className="text-xl font-bold tracking-tight text-ink">
+              Advisor<span className="text-teal-600">Mind</span>
+            </span>
           </Link>
           <form action={signOutAction}>
             <button type="submit" className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted hover:text-ink">

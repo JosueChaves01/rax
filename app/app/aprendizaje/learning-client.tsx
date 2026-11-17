@@ -31,7 +31,7 @@ export default function LearningClient({ projects }: { projects: Array<{ id: str
         id: entry.id,
         sender: entry.author === "user" ? "user" : "ai",
         text: entry.content,
-        provider: entry.author === "assistant" && entry.status === "complete" ? "Agente RAX" : undefined,
+        provider: entry.author === "assistant" && entry.status === "complete" ? "Agente AdvisorMind" : undefined,
       })));
     });
     return () => { active = false; };
@@ -64,7 +64,7 @@ export default function LearningClient({ projects }: { projects: Array<{ id: str
             id: assistantMessage.id,
             sender: "ai",
             text: assistantMessage.content,
-            provider: cacheStatus === "simulated" ? "Respuesta simulada (IA sin configurar)" : cacheStatus === "unavailable" ? "IA no disponible" : "Agente RAX",
+            provider: cacheStatus === "simulated" ? "Respuesta simulada (IA sin configurar)" : cacheStatus === "unavailable" ? "IA no disponible" : "Agente AdvisorMind",
           },
         ]);
       } else if (!res.ok) {

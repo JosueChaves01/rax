@@ -175,7 +175,7 @@ function authMessage(code: string | undefined, fallback: string) {
 }
 
 export async function signInAction(_: AuthState, form: FormData): Promise<AuthState> {
-  if (missingConfig().length) return { error: "RAX todavía no está conectado a Supabase." };
+  if (missingConfig().length) return { error: "AdvisorMind todavía no está conectado a Supabase." };
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
   if (!email || !password) return { error: "Completá correo y contraseña.", email };
@@ -187,7 +187,7 @@ export async function signInAction(_: AuthState, form: FormData): Promise<AuthSt
 }
 
 export async function signUpAction(_: AuthState, form: FormData): Promise<AuthState> {
-  if (missingConfig().length) return { error: "RAX todavía no está conectado a Supabase." };
+  if (missingConfig().length) return { error: "AdvisorMind todavía no está conectado a Supabase." };
   const name = String(form.get("name") ?? "").trim();
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
@@ -211,7 +211,7 @@ export async function signUpAction(_: AuthState, form: FormData): Promise<AuthSt
  * el callback lleva a /bienvenida, que manda al onboarding o a la casa de cada rol.
  */
 export async function googleSignInAction(_: AuthState, form: FormData): Promise<AuthState> {
-  if (missingConfig().length) return { error: "RAX todavía no está conectado a Supabase." };
+  if (missingConfig().length) return { error: "AdvisorMind todavía no está conectado a Supabase." };
   // El origen del pedido sirve también en los despliegues de vista previa; Supabase solo acepta las URLs permitidas.
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host");
@@ -837,7 +837,7 @@ export async function sendMainAgentMessageAction(input: unknown) {
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .slice(-12)
       .map((m) => ({
-        author: m.author === "assistant" ? "RAX" : d.actor.name,
+        author: m.author === "assistant" ? "AdvisorMind" : d.actor.name,
         content: m.content.slice(0, 1200),
         createdAt: m.createdAt,
       }));

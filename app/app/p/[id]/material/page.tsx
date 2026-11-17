@@ -9,7 +9,7 @@ import { loadCycleOverview, sessionTitle } from "../cycle-data";
 import { loadB2B } from "../evaluaciones/data";
 import { CommentsThread } from "./comments-thread";
 
-export const metadata = { title: "Material · RAX" };
+export const metadata = { title: "Material · AdvisorMind" };
 
 const KIND_LABEL: Record<DocKind, string> = {
   material: "Material",
